@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Calais Info — Interactive Prototype (Demo data)</title>
+<style>
+/* ============================================================
+   Calais Info — Airtable-inspired tokens (DESIGN.md §2–§4)
+   Light is the source palette; dark is derived, same hierarchy.
+   ============================================================ */
+:root{
+  --canvas:#FFFFFF; --surface:#FFFFFF; --surface-subtle:#F8FAFC;
+  --ink:#181D26; --muted:#56606F;
+  --border:#E0E2E6; --border-strong:#B8C0CC;
+  --accent:#1B61C9; --accent-hover:#154EA3; --accent-soft:#EAF2FF;
+  --success:#16794B; --success-soft:#EAF7F0;
+  --warning:#9A6700; --warning-soft:#FFF4D6;
+  --danger:#B4232C; --danger-soft:#FDEBEC;
+  --neutral:#5F6876; --neutral-soft:#EEF0F3;
+  --cat-food:#D97706; --cat-water:#1677A8; --cat-clothing:#7C5CC4;
+  --cat-showers:#167C80; --cat-charging:#B25E09; --cat-health:#C13F5A;
+  --cat-legal:#4867B1; --cat-info:#52606D; --cat-shelter:#3E7A4E;
+  --cat-material:#6E7B3D; --cat-activities:#AD4A8E;
+  --shadow:0 1px 2px rgba(27,97,201,.06),0 4px 14px rgba(27,97,201,.07);
+  --r-btn:12px; --r-card:16px; --r-panel:24px;
+  color-scheme:light;
+}
+[data-theme="dark"]{
+  --canvas:#0F141C; --surface:#161C26; --surface-subtle:#1C2330;
+  --ink:#E7EAF0; --muted:#9AA4B4;
+  --border:#2A3242; --border-strong:#414D63;
+  --accent:#6FA3EF; --accent-hover:#8FB8F4; --accent-soft:#182A47;
+  --success:#4CC38A; --success-soft:#132A1E;
+  --warning:#E3B558; --warning-soft:#2C2310;
+  --danger:#F0808A; --danger-soft:#331519;
+  --neutral:#9AA4B4; --neutral-soft:#232B39;
+  --cat-food:#F0A045; --cat-water:#4FA8D8; --cat-clothing:#A78BE0;
+  --cat-showers:#4FB0B4; --cat-charging:#E09A4F; --cat-health:#E77B93;
+  --cat-legal:#7E9BE0; --cat-info:#94A3B4; --cat-shelter:#6FB183;
+  --cat-material:#A9B86A; --cat-activities:#D689BF;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0}
+html{height:100%}
+body{
+  font-family:Inter,"Helvetica Neue",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:var(--canvas);color:var(--ink);font-size:16px;line-height:1.5;
+  min-height:100%;
+}
+[dir="rtl"] body,[dir="rtl"] button,[dir="rtl"] input{letter-spacing:0}
+h1,h2,h3{line-height:1.2;font-weight:650}
+h1{font-size:30px}
+h2{font-size:22px}
+h3{font-size:17px;font-weight:600}
+a{color:var(--accent)}
+img,svg{max-width:100%}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.icon{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.icon.sm{width:16px;height:16px}.icon.lg{width:24px;height:24px}
+[dir="rtl"] .flip{transform:scaleX(-1)}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---------- Demo banner (prototype chrome, not product UI) ---------- */
+#demoBar{
+  position:sticky;top:0;z-index:60;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  padding:6px 12px;font-size:13px;font-weight:600;
+  background:repeating-linear-gradient(45deg,var(--warning-soft),var(--warning-soft) 12px,transparent 12px,transparent 24px),var(--surface-subtle);
+  border-bottom:1px solid var(--border);
+}
+#demoBar .grow{flex:1}
+#demoBar button{
+  border:1px solid var(--border-strong);border-radius:8px;padding:4px 10px;font-size:12.5px;font-weight:600;
+  background:var(--surface);display:inline-flex;align-items:center;gap:6px;min-height:28px;
+}
+#demoBar button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+[data-theme="dark"] #demoBar button[aria-pressed="true"]{color:#0F141C}
+
+/* ---------- Public shell ---------- */
+header.pub{
+  position:sticky;top:0;z-index:40;background:var(--canvas);border-bottom:1px solid var(--border);
+}
+.pubHead{max-width:1200px;margin:auto;display:flex;align-items:center;gap:12px;padding:10px 16px}
+.wordmark{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:var(--ink);text-decoration:none}
+.mark{display:grid;grid-template-columns:1fr 1fr;gap:2px;width:22px;height:22px}
+.mark i{border-radius:5px}
+.mark i:nth-child(1){background:var(--accent)}.mark i:nth-child(2){background:var(--success)}
+.mark i:nth-child(3){background:var(--warning)}.mark i:nth-child(4){background:var(--cat-clothing)}
+nav.desk{display:none;gap:2px;margin-inline-start:12px}
+nav.desk a{
+  text-decoration:none;color:var(--muted);font-weight:600;font-size:14px;padding:8px 12px;border-radius:10px;
+}
+nav.desk a[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
+nav.desk a:hover{color:var(--ink)}
+.headTools{margin-inline-start:auto;display:flex;gap:8px}
+.toolBtn{
+  display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:8px 12px;border:1px solid var(--border);
+  border-radius:var(--r-btn);background:var(--surface);font-weight:600;font-size:14px;
+}
+.toolBtn:hover{border-color:var(--border-strong)}
+main.pub{max-width:1200px;margin:auto;padding:20px 16px 96px}
+@media(min-width:768px){
+  nav.desk{display:flex}
+  main.pub{padding-bottom:48px}
+  .bottomNav{display:none!important}
+}
+
+/* ---------- Bottom nav (mobile) ---------- */
+.bottomNav{
+  position:fixed;bottom:0;inset-inline:0;z-index:50;display:grid;grid-template-columns:repeat(5,1fr);
+  background:var(--canvas);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);
+}
+.bottomNav button,.bottomNav a{
+  display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px 9px;min-height:56px;
+  font-size:11.5px;font-weight:600;color:var(--muted);text-decoration:none;
+}
+.bottomNav .on{color:var(--accent)}
+
+/* ---------- Buttons / chips / cards ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 18px;
+  border-radius:var(--r-btn);font-weight:600;font-size:15px;border:1px solid transparent;text-decoration:none;
+}
+.btn.primary{background:var(--accent);color:#fff}
+[data-theme="dark"] .btn.primary{color:#0F141C}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn.sec{background:var(--surface);border-color:var(--border-strong);color:var(--ink)}
+.btn.sec:hover{border-color:var(--accent)}
+.btn.ghost{color:var(--accent)}
+.btn.danger{background:var(--danger);color:#fff}
+.btn.smb{min-height:36px;padding:6px 12px;font-size:14px;border-radius:10px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);
+  background:var(--surface);font-size:13.5px;font-weight:600;min-height:34px;color:var(--ink);
+}
+button.chip:hover{border-color:var(--border-strong)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px;
+}
+@media(min-width:768px){.card{padding:20px}}
+a.card{display:block;text-decoration:none;color:inherit}
+a.card:hover{border-color:var(--border-strong);box-shadow:var(--shadow)}
+.stack{display:grid;gap:12px}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* ---------- Status + freshness ---------- */
+.status{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:650}
+.status.open{background:var(--success-soft);color:var(--success)}
+.status.closed{background:var(--neutral-soft);color:var(--neutral)}
+.status.cancelled{background:var(--danger-soft);color:var(--danger)}
+.status.uncertain{background:var(--warning-soft);color:var(--warning)}
+.liveDot{position:relative;width:8px;height:8px;border-radius:50%;background:var(--success);flex:none}
+.liveDot::after{content:"";position:absolute;inset:-4px;border:2px solid var(--success);border-radius:50%;animation:liveBeat 1.8s ease-out infinite}
+@keyframes liveBeat{0%{opacity:.7;transform:scale(.45)}70%,100%{opacity:0;transform:scale(1.35)}}
+.fresh{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--muted)}
+.fresh.bad{color:var(--warning);font-weight:600}
+.warnBox{
+  display:flex;gap:10px;padding:12px 14px;border-radius:12px;background:var(--warning-soft);
+  border:1px solid color-mix(in srgb,var(--warning) 35%,transparent);color:var(--ink);font-size:14.5px;
+}
+.warnBox .icon{color:var(--warning)}
+.dangerBox{background:var(--danger-soft);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+.dangerBox .icon{color:var(--danger)}
+.infoBox{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 35%,transparent)}
+.infoBox .icon{color:var(--accent)}
+.noteAI{display:inline-flex;gap:6px;align-items:flex-start;font-size:12.5px;color:var(--muted);border:1px dashed var(--border-strong);border-radius:10px;padding:6px 10px}
+
+/* ---------- Service cards ---------- */
+.svcGrid{display:grid;gap:12px}
+@media(min-width:900px){.svcGrid.cols{grid-template-columns:1fr 1fr}}
+.svc .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.svc h3{font-size:18px;margin-top:6px}
+.catBadge{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:650}
+.catBadge .dot{width:26px;height:26px;border-radius:8px;display:grid;place-items:center}
+.catBadge .dot .icon{width:15px;height:15px}
+.meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:14px;color:var(--muted)}
+.meta .it{display:inline-flex;align-items:center;gap:6px}
+.provider{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13.5px;font-weight:600}
+.avatar{
+  width:24px;height:24px;border-radius:7px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;flex:none;
+}
+.aud{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:650;color:var(--accent);
+  background:var(--accent-soft);border-radius:999px;padding:3px 10px}
+.cardFoot{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:8px}
+
+/* ---------- Tiles (Basic information) ---------- */
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:640px){.tiles{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:1024px){.tiles{grid-template-columns:repeat(5,1fr)}}
+.tile{
+  display:flex;flex-direction:column;gap:10px;padding:16px 14px;border:1px solid var(--border);
+  border-radius:var(--r-card);background:var(--surface);text-decoration:none;color:inherit;min-height:112px;
+}
+.tile:hover{border-color:var(--border-strong);box-shadow:var(--shadow)}
+.tile .dot{width:38px;height:38px;border-radius:11px;display:grid;place-items:center}
+.tile b{font-size:14.5px;line-height:1.25}
+.tile span{font-size:12px;color:var(--muted)}
+
+/* ---------- Inputs / segmented ---------- */
+.search{position:relative;display:flex;align-items:center}
+.search .icon{position:absolute;inset-inline-start:14px;color:var(--muted)}
+.search input{
+  width:100%;min-height:48px;padding:10px 14px;padding-inline-start:44px;border:1px solid var(--border-strong);
+  border-radius:var(--r-btn);font:inherit;background:var(--surface);color:var(--ink);
+}
+.search input:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:11px;overflow:hidden}
+.seg button{padding:8px 16px;font-weight:600;font-size:14px;display:inline-flex;gap:6px;align-items:center;min-height:40px;color:var(--muted);background:var(--surface)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+[data-theme="dark"] .seg button[aria-pressed="true"]{color:#0F141C}
+.field{display:grid;gap:6px;font-size:14px;font-weight:600}
+.field input,.field select,.field textarea{
+  font:inherit;font-weight:400;min-height:40px;border:1px solid var(--border-strong);border-radius:10px;
+  padding:8px 12px;background:var(--surface);color:var(--ink);width:100%;
+}
+
+/* ---------- Map placeholder ---------- */
+.mapBox{position:relative;border:1px solid var(--border);border-radius:var(--r-card);overflow:hidden;background:var(--surface-subtle)}
+.mapBox svg.bg{display:block;width:100%;height:340px}
+.pin{position:absolute;transform:translate(-50%,-100%);display:grid;place-items:center}
+.pin .pinDot{width:30px;height:30px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);display:grid;place-items:center;border:2px solid var(--canvas);box-shadow:var(--shadow)}
+.pin .pinDot .icon{transform:rotate(45deg);width:14px;height:14px;color:#fff}
+.mapNote{position:absolute;inset-inline:12px;bottom:12px;display:flex;gap:10px;align-items:center;justify-content:space-between;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px;font-size:13.5px}
+
+/* ---------- Detail page ---------- */
+.crumb{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--accent);text-decoration:none;margin-bottom:14px}
+.detailHead{display:grid;gap:8px}
+.factList{display:grid;gap:0;border:1px solid var(--border);border-radius:var(--r-card);overflow:hidden}
+.fact{display:flex;gap:12px;padding:13px 16px;background:var(--surface);border-top:1px solid var(--border);font-size:14.5px}
+.fact:first-child{border-top:none}
+.fact .icon{color:var(--muted);margin-top:2px}
+.fact b{display:block;font-size:12.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+[dir="rtl"] .fact b{letter-spacing:0}
+.schRow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px dashed var(--border);font-size:14.5px}
+.schRow:last-child{border:none}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+@media(min-width:640px){.actions{display:flex}}
+
+/* ---------- Simulator ---------- */
+.sim{max-width:560px;margin:auto}
+.progress{font-size:13px;font-weight:650;color:var(--muted);margin-bottom:8px}
+.simOpts{display:grid;gap:10px;margin-top:16px}
+.simOpt{
+  display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border-strong);
+  border-radius:var(--r-card);background:var(--surface);font-weight:600;font-size:15.5px;text-align:start;min-height:56px;
+}
+.simOpt:hover{border-color:var(--accent);background:var(--accent-soft)}
+.simFoot{display:flex;justify-content:space-between;margin-top:18px;gap:8px;flex-wrap:wrap}
+.simTrack{height:6px;background:var(--border);border-radius:999px;overflow:hidden}
+.simTrack>i{display:block;height:100%;background:var(--accent);border-radius:inherit;transition:width .25s ease}
+.simSummary{border-inline-start:4px solid var(--accent);background:var(--surface-subtle);padding:16px 18px}
+.summaryGrid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+.summaryFact{display:grid;grid-template-columns:24px 1fr;gap:9px;align-items:start}
+.summaryFact .icon{color:var(--accent);margin-top:2px}
+.summaryFact small{display:block;color:var(--muted);font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.35px}
+.recommendList{display:grid;gap:14px}
+.recommendCard{position:relative;display:grid;grid-template-columns:44px 1fr;border:1px solid var(--border);background:var(--surface);overflow:hidden;text-decoration:none;color:inherit}
+.recommendCard:hover{border-color:var(--accent);box-shadow:var(--shadow)}
+.recommendRank{display:grid;place-items:start center;padding-top:18px;background:var(--accent-soft);color:var(--accent);font-size:18px;font-weight:750}
+.recommendBody{padding:16px}
+.recommendWhy{display:flex;align-items:flex-start;gap:7px;margin:10px 0;padding:9px 10px;border-inline-start:3px solid var(--success);background:var(--success-soft);color:var(--success);font-size:13px;font-weight:650}
+.recommendMeta{display:grid;gap:7px;margin-top:10px;font-size:14px;color:var(--muted)}
+@media(min-width:560px){.summaryGrid{grid-template-columns:1fr 1fr}.recommendBody{padding:18px 20px}}
+@media(prefers-reduced-motion:reduce){.liveDot::after{animation:none;opacity:0}.simTrack>i{transition:none}}
+
+/* ---------- Listen control ---------- */
+.listen{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-card);background:var(--surface-subtle)}
+.playBtn{width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+[data-theme="dark"] .playBtn{color:#0F141C}
+.track{flex:1}
+.bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden}
+.bar i{display:block;height:100%;width:0%;background:var(--accent);transition:width .3s linear}
+
+/* ---------- Workspace shell ---------- */
+#wsShell{min-height:100vh;background:var(--surface-subtle)}
+.wsTop{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--canvas);border-bottom:1px solid var(--border)}
+.orgTag{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px}
+.roleChip{font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:3px 9px;border-radius:999px}
+.wsBody{display:grid;grid-template-columns:1fr;max-width:1280px;margin:auto}
+@media(min-width:900px){.wsBody{grid-template-columns:236px 1fr}}
+.wsNav{display:none;padding:16px 10px;gap:2px}
+@media(min-width:900px){.wsNav{display:grid;align-content:start}}
+.wsNav button{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;font-weight:600;font-size:14px;color:var(--muted);text-align:start;min-height:38px;
+}
+.wsNav button.on{background:var(--accent-soft);color:var(--accent)}
+.wsNav button:hover{color:var(--ink)}
+main.ws{padding:20px 16px 60px;display:grid;gap:16px;align-content:start}
+.wsGrid{display:grid;gap:16px}
+@media(min-width:1100px){.wsGrid{grid-template-columns:1.4fr 1fr}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card)}
+.panel>h3{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.panel .cnt{font-size:12px;font-weight:700;background:var(--warning-soft);color:var(--warning);border-radius:999px;padding:2px 9px}
+.attn{display:flex;gap:12px;padding:13px 16px;border-top:1px solid var(--border);font-size:14px;align-items:flex-start}
+.attn:first-of-type{border-top:none}
+.attn .icon{margin-top:2px}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{padding:9px 16px;text-align:start;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.4px;border-bottom:1px solid var(--border)}
+[dir="rtl"] .tbl th{letter-spacing:0}
+.tbl td{padding:9px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--surface-subtle)}
+.audit{padding:12px 16px;border-top:1px solid var(--border);font-size:13.5px;display:grid;gap:2px}
+.audit:first-of-type{border-top:none}
+
+/* ---------- Dialogs & toast ---------- */
+dialog{
+  border:1px solid var(--border);border-radius:var(--r-panel);background:var(--surface);color:var(--ink);
+  padding:0;max-width:min(560px,calc(100vw - 32px));width:100%;box-shadow:var(--shadow);
+}
+dialog::backdrop{background:rgba(15,20,28,.55);backdrop-filter:blur(2px)}
+.dlgHead{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border)}
+.dlgHead h3{flex:1}
+.dlgBody{padding:18px 20px;display:grid;gap:14px;max-height:70vh;overflow:auto}
+.dlgFoot{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border)}
+.langOpt{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--border-strong);border-radius:14px;font-weight:600;font-size:16px;background:var(--surface);text-align:start}
+.langOpt small{color:var(--muted);font-weight:500}
+.langOpt[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+#toast{
+  position:fixed;bottom:76px;inset-inline-start:50%;transform:translateX(-50%);z-index:80;
+  background:var(--ink);color:var(--canvas);padding:10px 18px;border-radius:12px;font-size:14px;font-weight:600;
+  opacity:0;pointer-events:none;transition:opacity .25s;max-width:calc(100vw - 40px);text-align:center;
+}
+[dir="rtl"] #toast{transform:translateX(50%)}
+#toast.show{opacity:1}
+pre.shareTxt{
+  font:13.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--surface-subtle);
+  border:1px solid var(--border);border-radius:12px;padding:14px;white-space:pre-wrap;direction:ltr;text-align:left;
+}
+.offBar{display:flex;gap:10px;align-items:center;background:var(--neutral-soft);border:1px solid var(--border);border-radius:12px;padding:10px 14px;font-size:14px;margin-bottom:14px}
+
+/* ---------- Demo state switcher ---------- */
+.stateSw{border:1px dashed var(--border-strong);border-radius:12px;padding:10px 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--muted)}
+.stateSw button{border:1px solid var(--border);border-radius:8px;padding:4px 9px;font-size:12px;font-weight:600;background:var(--surface)}
+.stateSw button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+[data-theme="dark"] .stateSw button[aria-pressed="true"]{color:#0F141C}
+
+@media print{
+  #demoBar,.bottomNav,header.pub,.actions,.stateSw,.cardFoot .btn,#toast{display:none!important}
+  body{background:#fff;color:#000}
+  .card,.factList{border-color:#999}
+}
+</style>
+</head>
+<body>
+
+<!-- Prototype control bar (not product UI) -->
+<div id="demoBar" role="region" aria-label="Prototype controls">
+  <span>⚠ <span data-t="demo.label">Demo data — do not publish</span></span>
+  <span class="grow"></span>
+  <button id="dbPublic" aria-pressed="true" onclick="go('#/home')">Public</button>
+  <button id="dbWs" aria-pressed="false" onclick="go('#/workspace')">Workspace</button>
+  <button id="dbTheme" onclick="cycleTheme()" aria-label="Theme">◐ Auto</button>
+  <button id="dbOffline" aria-pressed="false" onclick="toggleOffline()">Offline demo</button>
+  <button id="dbCity" aria-pressed="false" onclick="toggleCity()">+ Ville Démo B</button>
+</div>
+
+<!-- ================= PUBLIC SHELL ================= -->
+<div id="publicShell">
+  <header class="pub">
+    <div class="pubHead">
+      <a class="wordmark" href="#/home" aria-label="Calais Info — home">
+        <span class="mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Calais Info
+      </a>
+      <nav class="desk" id="deskNav" aria-label="Main"></nav>
+      <div class="headTools">
+        <button class="toolBtn" onclick="openLang()" id="langBtn"></button>
+      </div>
+    </div>
+  </header>
+  <main class="pub" id="pubView" tabindex="-1"></main>
+  <nav class="bottomNav" id="bottomNav" aria-label="Main"></nav>
+</div>
+
+<!-- ================= WORKSPACE SHELL ================= -->
+<div id="wsShell" hidden>
+  <div class="wsTop">
+    <span class="orgTag"><span class="avatar" style="background:var(--cat-food)">A</span> Association Démo A</span>
+    <span class="roleChip" id="wsRole">Editor</span>
+    <span class="grow" style="flex:1"></span>
+    <button class="toolBtn" style="min-height:36px" onclick="go('#/home')" id="wsExit"></button>
+  </div>
+  <div class="wsBody">
+    <nav class="wsNav" id="wsNav" aria-label="Workspace"></nav>
+    <main class="ws" id="wsView" tabindex="-1"></main>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<!-- Dialogs -->
+<dialog id="dlgLang" aria-label="Language">
+  <div class="dlgHead"><h3 data-t="lang.title">Language</h3><button class="toolBtn" style="min-height:36px" onclick="dlgLang.close()">✕</button></div>
+  <div class="dlgBody" id="langList"></div>
+</dialog>
+
+<dialog id="dlgShare">
+  <div class="dlgHead"><h3 id="shareTitle"></h3><button class="toolBtn" style="min-height:36px" onclick="dlgShare.close()">✕</button></div>
+  <div class="dlgBody">
+    <p class="small muted" id="shareHint"></p>
+    <pre class="shareTxt" id="shareBody"></pre>
+  </div>
+  <div class="dlgFoot"><button class="btn sec smb" onclick="dlgShare.close()" id="shareClose"></button>
+  <button class="btn primary smb" id="shareCopy" onclick="copyShare()"></button></div>
+</dialog>
+
+<dialog id="dlgClosure">
+  <div class="dlgHead"><h3 id="cloTitle">Publish an exceptional closure</h3><button class="toolBtn" style="min-height:36px" onclick="dlgClosure.close()">✕</button></div>
+  <div class="dlgBody">
+    <label class="field">Service
+      <select id="cloSvc"></select>
+    </label>
+    <label class="field">Affected occurrence
+      <select id="cloOcc"><option>Today — Friday 17 July 2026</option></select>
+    </label>
+    <label class="field">Public reason
+      <input id="cloReason" value="Demo operational reason">
+    </label>
+    <div class="noteAI" id="cloLangNote"></div>
+    <div>
+      <b class="small muted" style="text-transform:uppercase;letter-spacing:.4px">Public preview</b>
+      <div class="card" style="margin-top:6px" id="cloPreview"></div>
+    </div>
+  </div>
+  <div class="dlgFoot">
+    <button class="btn sec smb" onclick="dlgClosure.close()">Cancel</button>
+    <button class="btn primary smb" onclick="publishClosure()">Publish</button>
+  </div>
+</dialog>
+
+<script>
+/* =========================================================
+   Demo state, i18n, data — all fictional (Demo data)
+   ========================================================= */
+const state = {
+  lang: 'en', theme: 'auto', offline: false,
+  filters: { q:'', cat:'all', aud:'all', openNow:false, view:'list', city:'calais' },
+  sim: { step:0, need:null, location:null, sub:null, profile:null },
+  playing:false, playPct:0,
+};
+
+/* ---------- i18n (public: EN/FR/AR; workspace: EN/FR per PRD) ---------- */
+const I18N = {
+en:{
+  'demo.label':'Demo data — do not publish',
+  'nav.home':'Essential info','nav.services':'Services','nav.sim':'Info guide','nav.articles':'Articles','nav.assoc':'Associations','nav.lang':'Language','nav.more':'More',
+  'lang.title':'Language','lang.note':'Languages are shown in their own name. No account needed.',
+  'home.title':'What do you need?','home.sub':'Free · no account · no name. Information is checked with the associations that provide it.',
+  'home.seeAll':'See all services',
+  'tile.emergency':'Emergency help','tile.food':'Meals','tile.water':'Drinking water','tile.health':'Healthcare','tile.shelter':'Day services & shelter','tile.hygiene':'Clothing & showers','tile.charging':'Phone & connectivity','tile.legal':'Asylum & legal help','tile.activities':'Activities','tile.orient':'Orientation & safety',
+  'svc.title':'Find a service','svc.search':'Search a need, a place, an association…','svc.openNow':'Open now','svc.all':'All',
+  'view.list':'List','view.map':'Map','map.note':'The map is optional — the list always works.','map.uselist':'Use list view',
+  'status.open':'Open now','status.closed':'Closed','status.cancelled':'Cancelled','status.uncertain':'Information uncertain','status.next':'Next opening',
+  'fresh.verified':'Last verified','fresh.check':'May be outdated — check with the contact before relying on it.',
+  'aud.all_public':'All public','aud.women_only':'Women only','aud.children_only':'Children only','aud.under_18_only':'Under 18 only','aud.families_only':'Families only','aud.adult_men_only':'Adult men only',
+  'act.details':'Details','act.directions':'Get directions','act.schedule':'Show schedule','act.share':'Share','act.print':'Print','act.call':'Call','act.copy':'Copy text','act.copied':'Copied','act.close':'Close','act.clear':'Clear filters','act.listen':'Listen','act.back':'Back',
+  'detail.provider':'Provided by','detail.address':'Address','detail.schedule':'Schedule','detail.exceptions':'Exceptions','detail.audience':'Who can come','detail.contact':'Safe contact','detail.langs':'Spoken languages',
+  'empty.title':'No matching services','empty.sub':'Try removing a filter, or check the essential info page.',
+  'fallback.notice':'Not yet translated — shown in French.','ai.notice':'Translated from French to Arabic using AI — not yet reviewed by a person.',
+  'share.hint':'This text is designed to be forwarded (WhatsApp, SMS). It stays honest even if the link is never opened.',
+  'sim.title':'Info guide','sim.privacy':'Your answers stay on this device and disappear when you close the page. No account, no name. You can skip any question.',
+  'sim.source':'Source: demo editorial team · reviewed 16 July 2026','sim.start':'Start','sim.step':'Step {n} of {m}','sim.skip':'Skip this question','sim.restart':'Start again','sim.pnts':'I prefer not to say','sim.download':'Download my PDF','sim.downloading':'Preparing your PDF…','sim.downloaded':'PDF downloaded',
+  'sim.q1':'Which information would you like to see first?','sim.q1.food':'Food & drinks','sim.q1.health':'Healthcare','sim.q1.legal':'Asylum information','sim.q1.hygiene':'Shower & clothes','sim.q1.material':'Tent & sleeping','sim.q1.activities':'Activities','sim.q1.connect':'Phone, SIM & calls','sim.q1.other':'Something else',
+  'sim.q2f':'When do you need it?','sim.q2f.now':'Open now','sim.q2f.today':'Any time today',
+  'sim.q2h':'Is it urgent?','sim.q2h.yes':'Yes, urgent','sim.q2h.no':'Not urgent',
+  'sim.q2l':'Are you under 18?','sim.q2l.yes':'Yes','sim.q2l.no':'No',
+  'sim.qCity':'Which city are you in?','sim.city':'City','sim.qLoc':'Where are you now?','sim.loc.centre':'Calais centre','sim.loc.west':'West Calais','sim.loc.east':'East Calais','sim.loc.station':'Near Calais-Ville station','sim.loc.unknown':'I am not sure',
+  'sim.qTime':'How soon do you need this?','sim.time.now':'Right now','sim.time.today':'Today','sim.time.later':'In the next few days',
+  'sim.qProfile':'Who should this information work for?','sim.profile.self':'Just me','sim.profile.family':'Me and my family','sim.profile.under18':'Someone under 18','sim.profile.women':'A woman or women','sim.profile.pnts':'Prefer not to say',
+  'sim.result':'Information for you','sim.summary':'Your answers','sim.recommendations':'Recommended nearby services','sim.disclaimer':'This is reviewed information, not a decision and not legal advice.','sim.need':'Looking for','sim.location':'Current area','sim.timing':'Timing','sim.for':'Information for','sim.notAnswered':'Not answered','sim.noMatch':'No exact match was found. These are the closest useful options.','sim.why.near':'Near your current area','sim.why.open':'open now','sim.why.fit':'matches who the information is for','sim.pdfNote':'Made privately on this device. Demo information — verify before relying on it.',
+  'sim.urgent':'For a medical emergency call 112 (free, from any phone). For shelter tonight call 115.','sim.minor':'You are entitled to specific protection. The safe space below welcomes people under 18.',
+  'sim.legalInfo':'A legal information drop-in answers questions about your situation. Bring any documents you have — copies are enough.',
+  'sim.other':'Start from the essential information page — the main needs are listed there.',
+  'sim.hygieneInfo':'Showers, laundry, clothes and shoes are free. For shoes, give your size on site.',
+  'sim.materialInfo':'Tents and sleeping bags are given according to need — ask the demo team. Usually one per person.',
+  'sim.activitiesInfo':'Activities are free and open. Children’s sessions ask for a parent nearby.',
+  'sim.connectInfo':'Charging, wifi, SIM cards and calls to your family are free — no documents asked.',
+  'art.title':'Articles','art.updated':'Updated','art.owner':'Owner','art.transcript':'Show transcript','art.transcriptBody':'(Demo transcript) Water points remain open every day during the heat wave. Take shade during the afternoon…',
+  'assoc.title':'Associations','assoc.sub':'Verified organisations and what they do. Icons always have a text label.','assoc.specs':'Specialities','assoc.since':'Verified',
+  'off.banner':'You appear to be offline — showing saved information. Last updated 16 July at 14:20.',
+  'ws.exit':'View public site','ws.role':'Editor',
+  'more.title':'More',
+},
+fr:{
+  'demo.label':'Données de démonstration — ne pas publier',
+  'nav.home':'Infos essentielles','nav.services':'Services','nav.sim':"Guide d'info",'nav.articles':'Articles','nav.assoc':'Associations','nav.lang':'Langue','nav.more':'Plus',
+  'lang.title':'Langue','lang.note':'Chaque langue est affichée dans sa propre écriture. Aucun compte requis.',
+  'home.title':'De quoi avez-vous besoin ?','home.sub':'Gratuit · sans compte · sans nom. Les informations sont vérifiées avec les associations qui les fournissent.',
+  'home.seeAll':'Voir tous les services',
+  'tile.emergency':'Urgences','tile.food':'Repas','tile.water':'Eau potable','tile.health':'Santé','tile.shelter':'Accueil de jour','tile.hygiene':'Vêtements & douches','tile.charging':'Téléphone & connexion','tile.legal':'Asile & aide juridique','tile.activities':'Activités','tile.orient':'Orientation & sécurité',
+  'svc.title':'Trouver un service','svc.search':'Chercher un besoin, un lieu, une association…','svc.openNow':'Ouvert maintenant','svc.all':'Tout',
+  'view.list':'Liste','view.map':'Carte','map.note':'La carte est optionnelle — la liste fonctionne toujours.','map.uselist':'Utiliser la liste',
+  'status.open':'Ouvert','status.closed':'Fermé','status.cancelled':'Annulé','status.uncertain':'Information incertaine','status.next':'Prochaine ouverture',
+  'fresh.verified':'Vérifié le','fresh.check':'Peut être obsolète — vérifiez avec le contact avant de vous y fier.',
+  'aud.all_public':'Tout public','aud.women_only':'Femmes uniquement','aud.children_only':'Enfants uniquement','aud.under_18_only':'Moins de 18 ans','aud.families_only':'Familles uniquement','aud.adult_men_only':'Hommes adultes',
+  'act.details':'Détails','act.directions':'Itinéraire','act.schedule':'Voir les horaires','act.share':'Partager','act.print':'Imprimer','act.call':'Appeler','act.copy':'Copier le texte','act.copied':'Copié','act.close':'Fermer','act.clear':'Effacer les filtres','act.listen':'Écouter','act.back':'Retour',
+  'detail.provider':'Proposé par','detail.address':'Adresse','detail.schedule':'Horaires','detail.exceptions':'Exceptions','detail.audience':'Qui peut venir','detail.contact':'Contact sûr','detail.langs':'Langues parlées',
+  'empty.title':'Aucun service ne correspond','empty.sub':'Essayez de retirer un filtre, ou consultez les infos essentielles.',
+  'fallback.notice':'Pas encore traduit — affiché en français.','ai.notice':"Traduit du français vers l'arabe par IA — pas encore relu par une personne.",
+  'share.hint':'Ce texte est fait pour être transféré (WhatsApp, SMS). Il reste honnête même si le lien n’est jamais ouvert.',
+  'sim.title':"Guide d'info",'sim.privacy':'Vos réponses restent sur cet appareil et disparaissent quand vous fermez la page. Sans compte, sans nom. Vous pouvez passer chaque question.',
+  'sim.source':'Source : équipe éditoriale démo · relu le 16 juillet 2026','sim.start':'Commencer','sim.step':'Étape {n} sur {m}','sim.skip':'Passer cette question','sim.restart':'Recommencer','sim.pnts':'Je préfère ne pas répondre','sim.download':'Télécharger mon PDF','sim.downloading':'Préparation de votre PDF…','sim.downloaded':'PDF téléchargé',
+  'sim.q1':'Quelle information voulez-vous voir en premier ?','sim.q1.food':'Nourriture & boissons','sim.q1.health':'Santé','sim.q1.legal':'Information asile','sim.q1.hygiene':'Douche & vêtements','sim.q1.material':'Tente & couchage','sim.q1.activities':'Activités','sim.q1.connect':'Téléphone, SIM & appels','sim.q1.other':'Autre chose',
+  'sim.q2f':'Pour quand ?','sim.q2f.now':'Ouvert maintenant','sim.q2f.today':"N'importe quand aujourd'hui",
+  'sim.q2h':'Est-ce urgent ?','sim.q2h.yes':'Oui, urgent','sim.q2h.no':'Pas urgent',
+  'sim.q2l':'Avez-vous moins de 18 ans ?','sim.q2l.yes':'Oui','sim.q2l.no':'Non',
+  'sim.qCity':'Dans quelle ville êtes-vous ?','sim.city':'Ville','sim.qLoc':'Où êtes-vous maintenant ?','sim.loc.centre':'Centre de Calais','sim.loc.west':'Calais ouest','sim.loc.east':'Calais est','sim.loc.station':'Près de la gare Calais-Ville','sim.loc.unknown':'Je ne sais pas',
+  'sim.qTime':'Quand en avez-vous besoin ?','sim.time.now':'Tout de suite','sim.time.today':"Aujourd'hui",'sim.time.later':'Dans les prochains jours',
+  'sim.qProfile':'Pour qui ces informations doivent-elles convenir ?','sim.profile.self':'Pour moi','sim.profile.family':'Pour ma famille et moi','sim.profile.under18':'Pour une personne mineure','sim.profile.women':'Pour une ou plusieurs femmes','sim.profile.pnts':'Je préfère ne pas répondre',
+  'sim.result':'Informations pour vous','sim.summary':'Vos réponses','sim.recommendations':'Services recommandés à proximité','sim.disclaimer':'Ceci est une information relue, pas une décision ni un conseil juridique.','sim.need':'Besoin','sim.location':'Zone actuelle','sim.timing':'Moment','sim.for':'Informations pour','sim.notAnswered':'Non renseigné','sim.noMatch':'Aucune correspondance exacte. Voici les options utiles les plus proches.','sim.why.near':'Proche de votre zone','sim.why.open':'ouvert maintenant','sim.why.fit':'adapté aux personnes concernées','sim.pdfNote':'Créé de façon privée sur cet appareil. Informations de démo — à vérifier avant de vous y fier.',
+  'sim.urgent':'Urgence médicale : appelez le 112 (gratuit, depuis tout téléphone). Hébergement ce soir : 115.','sim.minor':'Vous avez droit à une protection spécifique. L’espace ci-dessous accueille les moins de 18 ans.',
+  'sim.legalInfo':'Une permanence juridique répond aux questions sur votre situation. Apportez vos documents — des copies suffisent.',
+  'sim.other':'Commencez par la page des infos essentielles — les besoins principaux y sont listés.',
+  'sim.hygieneInfo':'Douches, laverie, vêtements et chaussures sont gratuits. Pour les chaussures, donnez votre pointure sur place.',
+  'sim.materialInfo':'Tentes et sacs de couchage sont donnés selon les besoins — demandez à l’équipe démo. En général un par personne.',
+  'sim.activitiesInfo':'Les activités sont gratuites et ouvertes. Les séances enfants demandent un parent à proximité.',
+  'sim.connectInfo':'Recharge, wifi, cartes SIM et appels à votre famille gratuits — aucun document demandé.',
+  'art.title':'Articles','art.updated':'Mis à jour','art.owner':'Responsable','art.transcript':'Voir la transcription','art.transcriptBody':'(Transcription démo) Les points d’eau restent ouverts tous les jours pendant la canicule. Restez à l’ombre l’après-midi…',
+  'assoc.title':'Associations','assoc.sub':'Organisations vérifiées et leurs spécialités. Chaque icône a une étiquette texte.','assoc.specs':'Spécialités','assoc.since':'Vérifiée le',
+  'off.banner':'Vous semblez hors ligne — informations enregistrées affichées. Dernière mise à jour 16 juillet à 14:20.',
+  'ws.exit':'Voir le site public','ws.role':'Éditeur',
+  'more.title':'Plus',
+},
+ar:{
+  'demo.label':'بيانات تجريبية — لا تُنشر',
+  'nav.home':'معلومات أساسية','nav.services':'الخدمات','nav.sim':'دليل المعلومات','nav.articles':'مقالات','nav.assoc':'الجمعيات','nav.lang':'اللغة','nav.more':'المزيد',
+  'lang.title':'اللغة','lang.note':'كل لغة معروضة بكتابتها الخاصة. لا حاجة لأي حساب.',
+  'home.title':'ما الذي تحتاجه؟','home.sub':'مجاني · بلا حساب · بلا اسم. المعلومات يتم التحقق منها مع الجمعيات التي تقدّمها.',
+  'home.seeAll':'عرض كل الخدمات',
+  'tile.emergency':'مساعدة طارئة','tile.food':'وجبات','tile.water':'ماء الشرب','tile.health':'رعاية صحية','tile.shelter':'مأوى وخدمات نهارية','tile.hygiene':'ملابس واستحمام','tile.charging':'الهاتف والاتصال','tile.legal':'اللجوء والمساعدة القانونية','tile.activities':'أنشطة','tile.orient':'التوجيه والسلامة',
+  'svc.title':'ابحث عن خدمة','svc.search':'ابحث عن حاجة أو مكان أو جمعية…','svc.openNow':'مفتوح الآن','svc.all':'الكل',
+  'view.list':'قائمة','view.map':'خريطة','map.note':'الخريطة اختيارية — القائمة تعمل دائماً.','map.uselist':'استخدم القائمة',
+  'status.open':'مفتوح الآن','status.closed':'مغلق','status.cancelled':'ملغى','status.uncertain':'معلومات غير مؤكدة','status.next':'الفتح القادم',
+  'fresh.verified':'آخر تحقق','fresh.check':'قد تكون المعلومات قديمة — تحقّق مع جهة الاتصال قبل الاعتماد عليها.',
+  'aud.all_public':'للجميع','aud.women_only':'للنساء فقط','aud.children_only':'للأطفال فقط','aud.under_18_only':'لمن هم دون 18','aud.families_only':'للعائلات فقط','aud.adult_men_only':'للرجال البالغين',
+  'act.details':'التفاصيل','act.directions':'الاتجاهات','act.schedule':'عرض المواعيد','act.share':'مشاركة','act.print':'طباعة','act.call':'اتصال','act.copy':'نسخ النص','act.copied':'تم النسخ','act.close':'إغلاق','act.clear':'مسح عوامل التصفية','act.listen':'استمع','act.back':'رجوع',
+  'detail.provider':'مقدَّم من','detail.address':'العنوان','detail.schedule':'المواعيد','detail.exceptions':'استثناءات','detail.audience':'من يمكنه الحضور','detail.contact':'اتصال آمن','detail.langs':'اللغات المتحدَّث بها',
+  'empty.title':'لا توجد خدمات مطابقة','empty.sub':'جرّب إزالة أحد الفلاتر، أو راجع صفحة المعلومات الأساسية.',
+  'fallback.notice':'غير مترجم بعد — معروض بالفرنسية.','ai.notice':'تُرجم من الفرنسية إلى العربية بالذكاء الاصطناعي — لم يراجعه شخص بعد.',
+  'share.hint':'هذا النص مصمَّم لإعادة الإرسال (واتساب، رسائل). يبقى صادقاً حتى لو لم يُفتح الرابط.',
+  'sim.title':'دليل المعلومات','sim.privacy':'إجاباتك تبقى على هذا الجهاز وتختفي عند إغلاق الصفحة. بلا حساب وبلا اسم. يمكنك تخطي أي سؤال.',
+  'sim.source':'المصدر: فريق التحرير التجريبي · روجع في 16 يوليو 2026','sim.start':'ابدأ','sim.step':'الخطوة {n} من {m}','sim.skip':'تخطَّ هذا السؤال','sim.restart':'ابدأ من جديد','sim.pnts':'أفضّل عدم الإجابة','sim.download':'تنزيل ملف PDF الخاص بي','sim.downloading':'جارٍ إعداد ملف PDF…','sim.downloaded':'تم تنزيل ملف PDF',
+  'sim.q1':'أي معلومات تريد أن ترى أولاً؟','sim.q1.food':'طعام ومشروبات','sim.q1.health':'رعاية صحية','sim.q1.legal':'معلومات اللجوء','sim.q1.hygiene':'استحمام وملابس','sim.q1.material':'خيمة وأغطية نوم','sim.q1.activities':'أنشطة','sim.q1.connect':'هاتف وشريحة واتصالات','sim.q1.other':'شيء آخر',
+  'sim.q2f':'متى تحتاجه؟','sim.q2f.now':'مفتوح الآن','sim.q2f.today':'في أي وقت اليوم',
+  'sim.q2h':'هل الأمر عاجل؟','sim.q2h.yes':'نعم، عاجل','sim.q2h.no':'غير عاجل',
+  'sim.q2l':'هل عمرك أقل من 18؟','sim.q2l.yes':'نعم','sim.q2l.no':'لا',
+  'sim.qCity':'في أي مدينة أنت؟','sim.city':'المدينة','sim.qLoc':'أين أنت الآن؟','sim.loc.centre':'وسط كاليه','sim.loc.west':'غرب كاليه','sim.loc.east':'شرق كاليه','sim.loc.station':'قرب محطة كاليه-فيل','sim.loc.unknown':'لست متأكداً',
+  'sim.qTime':'متى تحتاج إلى هذه الخدمة؟','sim.time.now':'الآن','sim.time.today':'اليوم','sim.time.later':'خلال الأيام القادمة',
+  'sim.qProfile':'لمن يجب أن تناسب هذه المعلومات؟','sim.profile.self':'لي وحدي','sim.profile.family':'لي ولعائلتي','sim.profile.under18':'لشخص دون 18 عاماً','sim.profile.women':'لامرأة أو نساء','sim.profile.pnts':'أفضل عدم الإجابة',
+  'sim.result':'معلومات لك','sim.summary':'إجاباتك','sim.recommendations':'خدمات قريبة موصى بها','sim.disclaimer':'هذه معلومات مُراجَعة، وليست قراراً ولا استشارة قانونية.','sim.need':'أبحث عن','sim.location':'المنطقة الحالية','sim.timing':'الوقت','sim.for':'المعلومات لـ','sim.notAnswered':'لم تتم الإجابة','sim.noMatch':'لم نجد تطابقاً تاماً. هذه أقرب الخيارات المفيدة.','sim.why.near':'قريب من منطقتك','sim.why.open':'مفتوح الآن','sim.why.fit':'يناسب الأشخاص المعنيين','sim.pdfNote':'تم إنشاؤه بخصوصية على هذا الجهاز. معلومات تجريبية — تحقق منها قبل الاعتماد عليها.',
+  'sim.urgent':'للطوارئ الطبية اتصل بـ 112 (مجاني من أي هاتف). للمبيت الليلة اتصل بـ 115.','sim.minor':'لك الحق في حماية خاصة. المكان الآمن أدناه يستقبل من هم دون 18 عاماً.',
+  'sim.legalInfo':'تجيب المستشارية القانونية عن أسئلة وضعك. أحضر ما لديك من وثائق — النسخ تكفي.',
+  'sim.other':'ابدأ من صفحة المعلومات الأساسية — الاحتياجات الرئيسية مذكورة هناك.',
+  'sim.hygieneInfo':'الاستحمام والغسيل والملابس والأحذية مجانية. للأحذية، أعطِ مقاسك في الموقع.',
+  'sim.materialInfo':'تُعطى الخيام وأكياس النوم حسب الحاجة — اسأل الفريق التجريبي. عادة واحدة لكل شخص.',
+  'sim.activitiesInfo':'الأنشطة مجانية ومفتوحة. جلسات الأطفال تتطلب وجود أحد الوالدين قريباً.',
+  'sim.connectInfo':'الشحن والواي فاي وشرائح SIM والاتصال بعائلتك مجاناً — لا تُطلب وثائق.',
+  'art.title':'مقالات','art.updated':'حُدِّث','art.owner':'الجهة المسؤولة','art.transcript':'عرض النص المكتوب','art.transcriptBody':'(نص تجريبي) تبقى نقاط المياه مفتوحة كل يوم أثناء موجة الحر. ابقَ في الظل بعد الظهر…',
+  'assoc.title':'الجمعيات','assoc.sub':'منظمات موثَّقة وتخصصاتها. لكل أيقونة تسمية نصية دائماً.','assoc.specs':'التخصصات','assoc.since':'وُثِّقت في',
+  'off.banner':'يبدو أنك غير متصل — تُعرض المعلومات المحفوظة. آخر تحديث 16 يوليو الساعة 14:20.',
+  'ws.exit':'عرض الموقع العام','ws.role':'محرِّر',
+  'more.title':'المزيد',
+}};
+function t(k){
+  const L=I18N[state.lang]||{};
+  if(L[k]!=null) return L[k];
+  if(state.lang==='ar' && I18N.fr[k]!=null) return I18N.fr[k];
+  return I18N.en[k]??k;
+}
+/* content triples: returns {text, fb(true if fallback shown)} */
+function tx(o){
+  const l=state.lang;
+  if(o[l]) return {text:o[l],fb:false};
+  return {text:o.fr||o.en,fb:l==='ar'};
+}
+
+/* ---------- Icons (Lucide-style outline, inline) ---------- */
+const IC = {
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.4-3.4"/>',
+  globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/>',
+  home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/>',
+  map:'<path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2zM9 4v14M15 6v14"/>',
+  pin:'<path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
+  help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.1 1-1.1 1.7v.5"/><circle cx="12" cy="17" r=".5"/>',
+  file:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4.5-6.2"/>',
+  more:'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  checkC:'<circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5.5"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  xC:'<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
+  alert:'<path d="M10.3 4.1 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0z"/><path d="M12 9v5"/><circle cx="12" cy="17.5" r=".5"/>',
+  utensils:'<path d="M7 3v7a2 2 0 0 0 4 0V3M9 3v18M17 3c-1.7 0-3 2.2-3 5 0 2.2 1 3.5 2 4v9"/><path d="M17 3v9"/>',
+  droplet:'<path d="M12 3c3 3.6 6 6.7 6 9.9A6 6 0 1 1 6 12.9C6 9.7 9 6.6 12 3z"/>',
+  shirt:'<path d="m16.5 3 4 3.5-2 2.5-2-1.3V20a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V7.7l-2 1.3-2-2.5L7.5 3a4.5 4.5 0 0 0 9 0z"/>',
+  shower:'<path d="M5 7a6 6 0 0 1 12 0v1"/><path d="M3 10h20M6 14v1M10 14v2M14 14v1M18 14v2M8 19v1M12 19v2M16 19v1"/>',
+  zap:'<path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/>',
+  heart:'<path d="M19.5 13.6 12 21l-7.5-7.4A5.3 5.3 0 1 1 12 6.3a5.3 5.3 0 1 1 7.5 7.3z"/>',
+  scale:'<path d="M12 3v18M8 21h8M6 7l-3 6a3.5 3.5 0 0 0 6 0zM18 7l-3 6a3.5 3.5 0 0 0 6 0z"/><path d="M4 7h16"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r=".5"/>',
+  phone:'<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  share:'<circle cx="6" cy="12" r="2.5"/><circle cx="17" cy="6" r="2.5"/><circle cx="17" cy="18" r="2.5"/><path d="m8.3 10.8 6.4-3.6M8.3 13.2l6.4 3.6"/>',
+  printer:'<path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M7 14h10v6H7z"/>',
+  chevR:'<path d="m9 6 6 6-6 6"/>',
+  arrowL:'<path d="M19 12H5M11 18l-6-6 6-6"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r=".8"/><circle cx="4" cy="12" r=".8"/><circle cx="4" cy="18" r=".8"/>',
+  play:'<path d="M7 5v14l12-7z" fill="currentColor" stroke="none"/>',
+  pause:'<path d="M8 5v14M16 5v14" stroke-width="3"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  bell:'<path d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/>',
+  audit:'<path d="M8 3h8l4 4v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M16 3v4h4M10 13l2 2 3-4"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.5 4.5l2 2M17.5 17.5l2 2M4.5 19.5l2-2M17.5 6.5l2-2"/>',
+  down:'<path d="M12 3v12M6 11l6 6 6-6"/><path d="M4 21h16"/>',
+  stetho:'<path d="M5 3v6a5 5 0 0 0 10 0V3"/><path d="M12 14v2a4 4 0 0 0 8 0v-2"/><circle cx="20" cy="11" r="2"/>',
+  pill:'<rect x="3" y="9.5" width="18" height="6" rx="3" transform="rotate(-35 12 12)"/><path d="m9 8 5.5 8"/>',
+  brain:'<path d="M12 4a3 3 0 0 0-3 3v10a3 3 0 0 0 6 0V7a3 3 0 0 0-3-3z"/><path d="M9 8H7a3 3 0 0 0 0 6h2M15 8h2a3 3 0 0 1 0 6h-2"/>',
+  langs:'<path d="M4 5h8M8 3v2c0 4-2.5 7.5-5 9M6 9a10 10 0 0 0 5 5"/><path d="m13 21 4.5-10L22 21M14.7 17h5.6"/>',
+  tent:'<path d="M12 4 3 20h6l3-5.5 3 5.5h6z"/><path d="M12 4v4"/>',
+  sparkles:'<path d="M12 3l1.8 4.9L19 10l-5.2 2.1L12 17l-1.8-4.9L5 10l5.2-2.1z"/><path d="M18.5 14.5l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/>',
+};
+const icon=(n,cls='icon')=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]||IC.info}</svg>`;
+
+/* ---------- taxonomies ---------- */
+const CATS = {
+  food:{ic:'utensils',c:'var(--cat-food)',t:{en:'Food',fr:'Nourriture',ar:'طعام'}},
+  water:{ic:'droplet',c:'var(--cat-water)',t:{en:'Drinking water',fr:'Eau potable',ar:'ماء الشرب'}},
+  clothing:{ic:'shirt',c:'var(--cat-clothing)',t:{en:'Clothing & shoes',fr:'Vêtements & chaussures',ar:'ملابس وأحذية'}},
+  material:{ic:'tent',c:'var(--cat-material)',t:{en:'Tents & bedding',fr:'Tentes & couchage',ar:'خيام وأغطية'}},
+  showers:{ic:'shower',c:'var(--cat-showers)',t:{en:'Showers & hygiene',fr:'Douches & hygiène',ar:'استحمام ونظافة'}},
+  charging:{ic:'phone',c:'var(--cat-charging)',t:{en:'Phone & connectivity',fr:'Téléphone & connexion',ar:'الهاتف والاتصال'}},
+  health:{ic:'heart',c:'var(--cat-health)',t:{en:'Healthcare',fr:'Santé',ar:'رعاية صحية'}},
+  legal:{ic:'scale',c:'var(--cat-legal)',t:{en:'Asylum & legal info',fr:'Asile & info juridique',ar:'معلومات اللجوء والقانون'}},
+  shelter:{ic:'home',c:'var(--cat-shelter)',t:{en:'Day services',fr:'Accueil de jour',ar:'خدمات نهارية'}},
+  activities:{ic:'sparkles',c:'var(--cat-activities)',t:{en:'Activities',fr:'Activités',ar:'أنشطة'}},
+  info:{ic:'help',c:'var(--cat-info)',t:{en:'Information',fr:'Information',ar:'معلومات'}},
+};
+const SPECS = {
+  medical:{ic:'stetho',t:{en:'Medical care',fr:'Soins médicaux',ar:'رعاية طبية'}},
+  medication:{ic:'pill',t:{en:'Medication',fr:'Médicaments',ar:'أدوية'}},
+  mental:{ic:'brain',t:{en:'Mental-health support',fr:'Soutien psychologique',ar:'دعم نفسي'}},
+  food:{ic:'utensils',t:{en:'Food',fr:'Nourriture',ar:'طعام'}},
+  water:{ic:'droplet',t:{en:'Drinking water',fr:'Eau potable',ar:'ماء الشرب'}},
+  hygiene:{ic:'shower',t:{en:'Showers & hygiene',fr:'Douches & hygiène',ar:'استحمام ونظافة'}},
+  clothing:{ic:'shirt',t:{en:'Clothing',fr:'Vêtements',ar:'ملابس'}},
+  legal:{ic:'scale',t:{en:'Legal assistance',fr:'Aide juridique',ar:'مساعدة قانونية'}},
+  info:{ic:'help',t:{en:'Information & orientation',fr:'Information & orientation',ar:'معلومات وتوجيه'}},
+  mediation:{ic:'langs',t:{en:'Translation & mediation',fr:'Traduction & médiation',ar:'ترجمة ووساطة'}},
+  charging:{ic:'phone',t:{en:'Phone & connectivity',fr:'Téléphone & connexion',ar:'الهاتف والاتصال'}},
+  material:{ic:'tent',t:{en:'Tents & bedding',fr:'Tentes & couchage',ar:'خيام وأغطية'}},
+  activities:{ic:'sparkles',t:{en:'Activities & play',fr:'Activités & jeu',ar:'أنشطة ولعب'}},
+};
+
+/* ---------- organisations (fictional) ---------- */
+const ORGS = {
+  o1:{name:'Association Démo A',color:'var(--cat-food)',ini:'A',
+      purpose:{en:'Demo food and water distributions in Calais.',fr:'Distributions démo de nourriture et d’eau à Calais.',ar:'توزيعات تجريبية للطعام والماء في كاليه.'},
+      primary:null,specs:['food','water','material'],langs:['Français','English','العربية'],verified:'15/07/2026'},
+  o2:{name:'Demo Medical Association',color:'var(--cat-health)',ini:'M',
+      purpose:{en:'Demo physical and mental health care, with equal weight.',fr:'Soins physiques et psychologiques (démo), à part égale.',ar:'رعاية جسدية ونفسية (تجريبي) بالتساوي.'},
+      primary:null,specs:['medical','mental','medication'],langs:['Français','English','العربية','پښتو'],verified:'16/07/2026'},
+  o3:{name:'Collectif Démo Hygiène',color:'var(--cat-showers)',ini:'H',
+      purpose:{en:'Demo showers, laundry and clothing.',fr:'Douches, laverie et vêtements (démo).',ar:'استحمام وغسيل وملابس (تجريبي).'},
+      primary:null,specs:['hygiene','clothing'],langs:['Français','English'],verified:'06/06/2026'},
+  o4:{name:'Association Démo Info',color:'var(--cat-legal)',ini:'I',
+      purpose:{en:'Demo information point, legal drop-in and mediation.',fr:'Point info, permanence juridique et médiation (démo).',ar:'نقطة معلومات ومستشارية قانونية ووساطة (تجريبي).'},
+      primary:'info',specs:['legal','mediation','charging'],langs:['Français','English','العربية'],verified:'16/07/2026'},
+  o5:{name:'Demo Play Collective',color:'var(--cat-activities)',ini:'P',
+      purpose:{en:'Demo games, sport and creative workshops for children and adults.',fr:'Jeux, sport et ateliers créatifs démo pour enfants et adultes.',ar:'ألعاب ورياضة وورش إبداعية تجريبية للأطفال والكبار.'},
+      primary:'activities',specs:['mediation'],langs:['Français','English'],verified:'14/07/2026'},
+};
+
+/* ---------- services (fictional; demo "now" = Fri 17 July 2026, 18:30) ---------- */
+const SVCS = [
+ {id:'s1',org:'o1',cat:'food',status:'open',aud:'all_public',
+  name:{en:'Demo evening food distribution',fr:'Distribution démo de repas du soir',ar:'توزيع وجبات مسائي تجريبي'},
+  time:{en:'Today 18:00–20:00',fr:'Aujourd’hui 18:00–20:00',ar:'اليوم 18:00–20:00'},
+  place:{en:'Demo location east, Calais',fr:'Lieu démo est, Calais',ar:'موقع تجريبي شرق كاليه'},
+  verified:'16/07 · 14:20',days:1,mapX:66,mapY:38,
+  sched:[{d:{en:'Mon–Sat',fr:'Lun–sam',ar:'الاثنين–السبت'},h:'18:00–20:00'},{d:{en:'Sunday',fr:'Dimanche',ar:'الأحد'},h:'—'}],
+  exc:[{en:'Cancelled Monday 20 July — demo operational reason',fr:'Annulé lundi 20 juillet — raison opérationnelle démo',ar:'ملغى الاثنين 20 يوليو — سبب تشغيلي تجريبي'}],
+  contact:{en:'Ask on site — demo team, FR/EN/AR',fr:'Sur place — équipe démo, FR/EN/AR',ar:'في الموقع — فريق تجريبي FR/EN/AR'}},
+ {id:'s2',org:'o1',cat:'water',status:'open',aud:'all_public',
+  name:{en:'Demo drinking water point',fr:'Point d’eau potable démo',ar:'نقطة ماء شرب تجريبية'},
+  time:{en:'Every day 09:00–19:00',fr:'Tous les jours 09:00–19:00',ar:'كل يوم 09:00–19:00'},
+  place:{en:'Demo square, Calais centre',fr:'Place démo, centre de Calais',ar:'ساحة تجريبية، وسط كاليه'},
+  verified:'16/07 · 14:20',days:1,mapX:48,mapY:52,
+  sched:[{d:{en:'Every day',fr:'Tous les jours',ar:'كل يوم'},h:'09:00–19:00'}],exc:[],
+  contact:{en:'No contact needed',fr:'Aucun contact requis',ar:'لا حاجة للتواصل'}},
+ {id:'s3',org:'o2',cat:'health',status:'closed',aud:'all_public',
+  name:{en:'Demo mobile health clinic',fr:'Clinique mobile démo',ar:'عيادة متنقلة تجريبية'},
+  time:{en:'Tomorrow 10:00–13:00',fr:'Demain 10:00–13:00',ar:'غداً 10:00–13:00'},
+  place:{en:'Demo parking north, Calais',fr:'Parking démo nord, Calais',ar:'موقف تجريبي شمال كاليه'},
+  verified:'16/07 · 11:05',days:1,mapX:38,mapY:24,
+  sched:[{d:{en:'Tue, Thu, Sat',fr:'Mar, jeu, sam',ar:'الثلاثاء والخميس والسبت'},h:'10:00–13:00'}],exc:[],
+  contact:{en:'Demo phone (interpreting available)',fr:'Téléphone démo (interprétariat possible)',ar:'هاتف تجريبي (ترجمة متاحة)'}},
+ {id:'s4',org:'o2',cat:'health',status:'closed',aud:'women_only',
+  name:{en:'Demo women’s health space',fr:'Espace santé femmes démo'},
+  time:{en:'Tuesday 14:00–17:00',fr:'Mardi 14:00–17:00'},
+  place:{en:'Demo centre west, Calais',fr:'Centre démo ouest, Calais'},
+  audNote:{en:'Women and their children. No appointment needed.',fr:'Femmes et leurs enfants. Sans rendez-vous.'},
+  verified:'16/07 · 11:05',days:1,mapX:22,mapY:44,
+  sched:[{d:{en:'Tue & Fri',fr:'Mar & ven'},h:'14:00–17:00'}],exc:[],
+  contact:{en:'Demo phone — women’s team',fr:'Téléphone démo — équipe femmes'}},
+ {id:'s5',org:'o3',cat:'showers',status:'closed',aud:'all_public',
+  name:{en:'Demo showers & laundry',fr:'Douches & laverie démo',ar:'استحمام وغسيل تجريبي'},
+  time:{en:'Tomorrow 09:00–12:00',fr:'Demain 09:00–12:00',ar:'غداً 09:00–12:00'},
+  place:{en:'Demo hall south, Calais',fr:'Halle démo sud, Calais',ar:'قاعة تجريبية جنوب كاليه'},
+  verified:'12/07 · 09:30',days:5,mapX:55,mapY:74,
+  sched:[{d:{en:'Mon–Fri',fr:'Lun–ven',ar:'الاثنين–الجمعة'},h:'09:00–12:00'}],exc:[],
+  contact:{en:'Ask on site',fr:'Sur place',ar:'في الموقع'}},
+ {id:'s6',org:'o3',cat:'clothing',status:'uncertain',aud:'all_public',outdated:true,
+  name:{en:'Demo clothing distribution',fr:'Distribution de vêtements démo'},
+  time:{en:'Usually Wednesday 14:00',fr:'Habituellement mercredi 14:00'},
+  place:{en:'Demo hall south, Calais',fr:'Halle démo sud, Calais'},
+  verified:'06/06 · 10:00',days:41,mapX:57,mapY:70,
+  sched:[{d:{en:'Wednesday (to confirm)',fr:'Mercredi (à confirmer)'},h:'14:00'}],exc:[],
+  contact:{en:'Check with the demo collective before coming',fr:'Vérifiez avec le collectif démo avant de venir'}},
+ {id:'s7',org:'o4',cat:'charging',status:'open',aud:'all_public',
+  name:{en:'Demo charging & wifi point',fr:'Point recharge & wifi démo',ar:'نقطة شحن وواي فاي تجريبية'},
+  time:{en:'Today until 21:00',fr:'Aujourd’hui jusqu’à 21:00',ar:'اليوم حتى 21:00'},
+  place:{en:'Demo info point, Calais centre',fr:'Point info démo, centre de Calais',ar:'نقطة معلومات تجريبية، وسط كاليه'},
+  verified:'17/07 · 08:45',days:0,mapX:44,mapY:58,
+  sched:[{d:{en:'Every day',fr:'Tous les jours',ar:'كل يوم'},h:'10:00–21:00'}],exc:[],
+  contact:{en:'On site — free, no account',fr:'Sur place — gratuit, sans compte',ar:'في الموقع — مجاني وبلا حساب'}},
+ {id:'s8',org:'o4',cat:'legal',status:'cancelled',aud:'all_public',
+  name:{en:'Demo asylum information drop-in',fr:'Permanence info asile démo',ar:'مستشارية معلومات اللجوء تجريبية'},
+  time:{en:'Today’s session cancelled — next Monday 10:00',fr:'Séance du jour annulée — prochaine lundi 10:00',ar:'أُلغيت جلسة اليوم — التالية الاثنين 10:00'},
+  cancelNote:{en:'Demo team unavailable today. The Monday session is maintained.',fr:'Équipe démo indisponible aujourd’hui. La séance de lundi est maintenue.',ar:'الفريق التجريبي غير متاح اليوم. جلسة الاثنين مؤكدة.'},
+  place:{en:'Demo info point, Calais centre',fr:'Point info démo, centre de Calais',ar:'نقطة معلومات تجريبية، وسط كاليه'},
+  verified:'17/07 · 08:45',days:0,mapX:41,mapY:62,
+  sched:[{d:{en:'Mon & Thu',fr:'Lun & jeu',ar:'الاثنين والخميس'},h:'10:00–12:30'}],
+  exc:[{en:'Cancelled today, Friday 17 July',fr:'Annulé aujourd’hui, vendredi 17 juillet',ar:'ملغى اليوم، الجمعة 17 يوليو'}],
+  contact:{en:'Demo phone — bring copies of documents',fr:'Téléphone démo — apportez des copies',ar:'هاتف تجريبي — أحضر نسخاً من وثائقك'}},
+ {id:'s9',org:'o4',cat:'shelter',status:'open',aud:'under_18_only',
+  name:{en:'Demo safe space for minors',fr:'Espace sûr mineurs démo',ar:'مكان آمن للقاصرين تجريبي'},
+  time:{en:'Today until 20:00',fr:'Aujourd’hui jusqu’à 20:00',ar:'اليوم حتى 20:00'},
+  place:{en:'Demo centre west, Calais',fr:'Centre démo ouest, Calais',ar:'مركز تجريبي غرب كاليه'},
+  audNote:{en:'Under 18 only. Trained demo team, interpreting available.',fr:'Moins de 18 ans uniquement. Équipe démo formée, interprétariat.',ar:'لمن هم دون 18 فقط. فريق مدرَّب وترجمة متاحة.'},
+  verified:'16/07 · 16:00',days:1,mapX:26,mapY:36,
+  sched:[{d:{en:'Every day',fr:'Tous les jours',ar:'كل يوم'},h:'10:00–20:00'}],exc:[],
+  contact:{en:'Demo phone — minors team',fr:'Téléphone démo — équipe mineurs',ar:'هاتف تجريبي — فريق القاصرين'}},
+ {id:'sbf',org:'o1',cat:'food',status:'closed',aud:'all_public',
+  name:{en:'Demo breakfast distribution',fr:'Distribution démo du petit-déjeuner',ar:'توزيع فطور تجريبي'},
+  time:{en:'Tomorrow 08:30–10:00',fr:'Demain 08:30–10:00',ar:'غداً 08:30–10:00'},
+  place:{en:'Demo location east, Calais',fr:'Lieu démo est, Calais',ar:'موقع تجريبي شرق كاليه'},
+  verified:'16/07 · 14:20',days:1,mapX:64,mapY:34,
+  sched:[{d:{en:'Every day',fr:'Tous les jours',ar:'كل يوم'},h:'08:30–10:00'}],exc:[],
+  contact:{en:'Ask on site — demo team',fr:'Sur place — équipe démo',ar:'في الموقع — فريق تجريبي'}},
+ {id:'slu',org:'o1',cat:'food',status:'closed',aud:'all_public',
+  name:{en:'Demo hot lunch distribution',fr:'Distribution démo de repas chaud (midi)',ar:'توزيع غداء ساخن تجريبي'},
+  time:{en:'Tomorrow 12:30–14:00',fr:'Demain 12:30–14:00',ar:'غداً 12:30–14:00'},
+  place:{en:'Demo square, Calais centre',fr:'Place démo, centre de Calais',ar:'ساحة تجريبية، وسط كاليه'},
+  verified:'16/07 · 14:20',days:1,mapX:60,mapY:44,
+  sched:[{d:{en:'Every day',fr:'Tous les jours',ar:'كل يوم'},h:'12:30–14:00'}],exc:[],
+  contact:{en:'Ask on site — demo team',fr:'Sur place — équipe démo',ar:'في الموقع — فريق تجريبي'}},
+ {id:'ste',org:'o4',cat:'food',status:'open',aud:'all_public',
+  name:{en:'Demo tea & coffee point',fr:'Point démo thé & café',ar:'نقطة شاي وقهوة تجريبية'},
+  time:{en:'Today until 20:00',fr:'Aujourd’hui jusqu’à 20:00',ar:'اليوم حتى 20:00'},
+  place:{en:'Demo info point, Calais centre',fr:'Point info démo, centre de Calais',ar:'نقطة معلومات تجريبية، وسط كاليه'},
+  verified:'17/07 · 08:45',days:0,mapX:46,mapY:60,
+  sched:[{d:{en:'Every day',fr:'Tous les jours',ar:'كل يوم'},h:'10:00–20:00'}],exc:[],
+  contact:{en:'On site — free',fr:'Sur place — gratuit',ar:'في الموقع — مجاني'}},
+ {id:'stt',org:'o1',cat:'material',status:'closed',aud:'all_public',
+  name:{en:'Demo tent & sleeping bag distribution',fr:'Distribution démo tentes & sacs de couchage',ar:'توزيع خيام وأكياس نوم تجريبي'},
+  time:{en:'Thursday 15:00–17:00',fr:'Jeudi 15:00–17:00',ar:'الخميس 15:00–17:00'},
+  place:{en:'Demo warehouse north, Calais',fr:'Entrepôt démo nord, Calais',ar:'مستودع تجريبي شمال كاليه'},
+  verified:'15/07 · 17:00',days:2,mapX:70,mapY:28,
+  sched:[{d:{en:'Thursday',fr:'Jeudi',ar:'الخميس'},h:'15:00–17:00'}],exc:[],
+  contact:{en:'One per person — given by need (demo)',fr:'Un par personne — selon les besoins (démo)',ar:'واحدة لكل شخص — حسب الحاجة (تجريبي)'}},
+ {id:'ssh',org:'o3',cat:'clothing',status:'closed',aud:'all_public',
+  name:{en:'Demo shoe distribution',fr:'Distribution démo de chaussures'},
+  time:{en:'Saturday 10:00–12:00',fr:'Samedi 10:00–12:00'},
+  place:{en:'Demo hall south, Calais',fr:'Halle démo sud, Calais'},
+  verified:'16/07 · 09:00',days:1,mapX:58,mapY:72,
+  sched:[{d:{en:'Saturday',fr:'Samedi'},h:'10:00–12:00'}],exc:[],
+  contact:{en:'Give your size on site — demo list',fr:'Donnez votre pointure sur place — liste démo'}},
+ {id:'sga',org:'o5',cat:'activities',status:'open',aud:'children_only',
+  name:{en:'Demo games afternoon',fr:'Après-midi jeux démo',ar:'ألعاب للأطفال — تجريبي'},
+  time:{en:'Today until 19:00',fr:'Aujourd’hui jusqu’à 19:00',ar:'اليوم حتى 19:00'},
+  audNote:{en:'Children, with a parent nearby. Trained demo team.',fr:'Enfants, avec un parent à proximité. Équipe démo formée.',ar:'أطفال بوجود أحد الوالدين قريباً. فريق مدرَّب (تجريبي).'},
+  place:{en:'Demo park west, Calais',fr:'Parc démo ouest, Calais',ar:'حديقة تجريبية غرب كاليه'},
+  verified:'17/07 · 10:00',days:0,mapX:30,mapY:50,
+  sched:[{d:{en:'Mon, Wed, Fri',fr:'Lun, mer, ven',ar:'الاثنين والأربعاء والجمعة'},h:'16:00–19:00'}],exc:[],
+  contact:{en:'On site — demo play team',fr:'Sur place — équipe jeu démo',ar:'في الموقع — فريق الألعاب التجريبي'}},
+ {id:'sou',org:'o5',cat:'activities',status:'closed',aud:'all_public',
+  name:{en:'Demo outdoor sports session',fr:'Séance sport extérieur démo',ar:'حصة رياضة في الهواء الطلق تجريبية'},
+  time:{en:'Saturday 15:00–17:00',fr:'Samedi 15:00–17:00',ar:'السبت 15:00–17:00'},
+  place:{en:'Demo park west, Calais',fr:'Parc démo ouest, Calais',ar:'حديقة تجريبية غرب كاليه'},
+  verified:'14/07 · 12:00',days:3,mapX:34,mapY:66,
+  sched:[{d:{en:'Saturday',fr:'Samedi',ar:'السبت'},h:'15:00–17:00'}],exc:[],
+  contact:{en:'Just come — shoes lent if needed',fr:'Venez simplement — chaussures prêtées si besoin',ar:'تعالَ فحسب — تتوفر أحذية عند الحاجة'}},
+ {id:'sar',org:'o5',cat:'activities',status:'closed',aud:'all_public',
+  name:{en:'Demo art workshop',fr:'Atelier artistique démo',ar:'ورشة فنية تجريبية'},
+  time:{en:'Sunday 14:00–17:00',fr:'Dimanche 14:00–17:00',ar:'الأحد 14:00–17:00'},
+  place:{en:'Demo centre west, Calais',fr:'Centre démo ouest, Calais',ar:'مركز تجريبي غرب كاليه'},
+  verified:'14/07 · 12:00',days:3,mapX:26,mapY:58,
+  sched:[{d:{en:'Sunday',fr:'Dimanche',ar:'الأحد'},h:'14:00–17:00'}],exc:[],
+  contact:{en:'Materials provided — demo team',fr:'Matériel fourni — équipe démo',ar:'الأدوات متوفرة — فريق تجريبي'}},
+ {id:'sfa',org:'o4',cat:'shelter',status:'open',aud:'families_only',
+  name:{en:'Demo family day space',fr:'Espace familles démo',ar:'مساحة عائلية تجريبية'},
+  time:{en:'Today until 19:00',fr:'Aujourd’hui jusqu’à 19:00',ar:'اليوم حتى 19:00'},
+  audNote:{en:'Families with children. Quiet space, changing table, play corner.',fr:'Familles avec enfants. Espace calme, table à langer, coin jeux.',ar:'عائلات مع أطفال. مكان هادئ وركن ألعاب.'},
+  place:{en:'Demo centre west, Calais',fr:'Centre démo ouest, Calais',ar:'مركز تجريبي غرب كاليه'},
+  verified:'16/07 · 16:00',days:1,mapX:22,mapY:34,
+  sched:[{d:{en:'Mon–Sat',fr:'Lun–sam',ar:'الاثنين–السبت'},h:'10:00–19:00'}],exc:[],
+  contact:{en:'On site — demo family team',fr:'Sur place — équipe familles démo',ar:'في الموقع — فريق العائلات التجريبي'}},
+ {id:'ssi',org:'o4',cat:'charging',status:'closed',aud:'all_public',
+  name:{en:'Demo SIM card distribution',fr:'Distribution démo de cartes SIM',ar:'توزيع شرائح SIM تجريبي'},
+  time:{en:'Wednesday 14:00–16:00',fr:'Mercredi 14:00–16:00',ar:'الأربعاء 14:00–16:00'},
+  place:{en:'Demo info point, Calais centre',fr:'Point info démo, centre de Calais',ar:'نقطة معلومات تجريبية، وسط كاليه'},
+  verified:'16/07 · 09:30',days:1,mapX:43,mapY:56,
+  sched:[{d:{en:'Wednesday',fr:'Mercredi',ar:'الأربعاء'},h:'14:00–16:00'}],exc:[],
+  contact:{en:'Free SIM with credit — one per person (demo)',fr:'SIM gratuite avec crédit — une par personne (démo)',ar:'شريحة مجانية برصيد — واحدة لكل شخص (تجريبي)'}},
+ {id:'sfc',org:'o4',cat:'charging',status:'open',aud:'all_public',
+  name:{en:'Demo free calls to your family',fr:'Appels gratuits démo vers votre famille',ar:'اتصالات مجانية بعائلتك — تجريبي'},
+  time:{en:'Today until 20:00',fr:'Aujourd’hui jusqu’à 20:00',ar:'اليوم حتى 20:00'},
+  place:{en:'Demo info point, Calais centre',fr:'Point info démo, centre de Calais',ar:'نقطة معلومات تجريبية، وسط كاليه'},
+  verified:'17/07 · 08:45',days:0,mapX:45,mapY:63,
+  sched:[{d:{en:'Every day',fr:'Tous les jours',ar:'كل يوم'},h:'10:00–20:00'}],exc:[],
+  contact:{en:'Wifi calls and messages — no documents asked',fr:'Appels et messages wifi — aucun document demandé',ar:'مكالمات ورسائل عبر الواي فاي — لا تُطلب وثائق'}},
+ {id:'vb1',org:'o1',cat:'water',status:'open',aud:'all_public',city:'villeb',
+  name:{en:'Demo water point — Ville B',fr:'Point d’eau démo — Ville B',ar:'نقطة ماء تجريبية — مدينة ب'},
+  time:{en:'Every day 09:00–18:00',fr:'Tous les jours 09:00–18:00',ar:'كل يوم 09:00–18:00'},
+  place:{en:'Ville B centre (demo)',fr:'Centre de Ville B (démo)',ar:'وسط المدينة ب (تجريبي)'},
+  verified:'16/07 · 12:00',days:1,mapX:50,mapY:50,
+  sched:[{d:{en:'Every day',fr:'Tous les jours',ar:'كل يوم'},h:'09:00–18:00'}],exc:[],
+  contact:{en:'No contact needed',fr:'Aucun contact requis',ar:'لا حاجة للتواصل'}},
+ {id:'vb2',org:'o4',cat:'shelter',status:'closed',aud:'all_public',city:'villeb',
+  name:{en:'Demo day centre — Ville B',fr:'Accueil de jour démo — Ville B',ar:'مركز نهاري تجريبي — مدينة ب'},
+  time:{en:'Tomorrow 09:00–17:00',fr:'Demain 09:00–17:00',ar:'غداً 09:00–17:00'},
+  place:{en:'Port area, Ville B (demo)',fr:'Quartier du port, Ville B (démo)',ar:'منطقة الميناء، مدينة ب (تجريبي)'},
+  verified:'15/07 · 10:00',days:2,mapX:70,mapY:30,
+  sched:[{d:{en:'Mon–Fri',fr:'Lun–ven',ar:'الاثنين–الجمعة'},h:'09:00–17:00'}],exc:[],
+  contact:{en:'On site — demo team',fr:'Sur place — équipe démo',ar:'في الموقع — فريق تجريبي'}},
+];
+
+const ARTS=[
+ {id:'a1',owner:'o1',date:'15/07/2026',warn:true,ai:true,audio:true,
+  title:{en:'Demo: water points during the heat wave',fr:'Démo : points d’eau pendant la canicule',ar:'تجريبي: نقاط المياه أثناء موجة الحر'},
+  sum:{en:'Where to find drinking water every day this week, and what changes on Sunday.',fr:'Où trouver de l’eau potable chaque jour cette semaine, et ce qui change dimanche.',ar:'أين تجد ماء الشرب كل يوم هذا الأسبوع، وما الذي يتغير يوم الأحد.'},
+  body:{en:'(Demo body) All demo water points stay open 09:00–19:00. On Sunday the central point closes at 17:00. Take shade in the afternoon and drink regularly…',fr:'(Corps démo) Tous les points d’eau démo restent ouverts 09:00–19:00. Dimanche, le point central ferme à 17:00. Restez à l’ombre l’après-midi…',ar:'(نص تجريبي) تبقى جميع نقاط المياه مفتوحة 09:00–19:00. يوم الأحد تُغلق النقطة المركزية في 17:00. ابقَ في الظل بعد الظهر…'},
+  unreliable:'20/07/2026'},
+ {id:'a2',owner:'o4',date:'01/07/2026',warn:false,ai:false,audio:false,
+  title:{en:'Demo: how day services work',fr:'Démo : comment fonctionnent les accueils de jour',ar:'تجريبي: كيف تعمل خدمات الاستقبال النهاري'},
+  sum:{en:'What a day centre offers, who can come, and what to bring.',fr:'Ce qu’offre un accueil de jour, qui peut venir, quoi apporter.',ar:'ما الذي يقدمه مركز الاستقبال النهاري، ومن يمكنه الحضور، وماذا تُحضر.'},
+  body:{en:'(Demo body) Day services are free and open without appointment. You can rest, charge a phone, ask for information…',fr:'(Corps démo) Les accueils de jour sont gratuits et sans rendez-vous. Vous pouvez vous reposer, recharger un téléphone…',ar:'(نص تجريبي) الخدمات النهارية مجانية وبدون موعد. يمكنك الاستراحة وشحن هاتفك وطلب المعلومات…'}},
+];
+
+let AUDIT=[
+ {when:'17/07 · 08:45',who:'Demo Editor',what:'Cancelled today’s occurrence — Demo asylum information drop-in'},
+ {when:'16/07 · 14:20',who:'Demo Editor',what:'Verified — Demo evening food distribution'},
+ {when:'15/07 · 10:02',who:'Platform editor',what:'Published article (proxy — association approval recorded)'},
+];
+let ATTN=[
+ {id:'t1',type:'review',icon:'alert',cls:'var(--warning)',svc:'s6',
+  txt:'Review overdue (41 days) — Demo clothing distribution',act:['confirm','uncertain']},
+ {id:'t2',type:'translation',icon:'langs',cls:'var(--accent)',
+  txt:'Arabic translation is AI-generated — needs human review — “Demo: water points during the heat wave”',act:['open']},
+ {id:'t3',type:'info',icon:'checkC',cls:'var(--success)',
+  txt:'Today’s legal drop-in cancellation is published on the public site (08:45)',act:[]},
+];
+
+/* =========================================================
+   Rendering helpers
+   ========================================================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),2200)}
+
+const STATUS_META={open:['checkC','open'],closed:['clock','closed'],cancelled:['xC','cancelled'],uncertain:['alert','uncertain']};
+function statusChip(s){const[ic,cls]=STATUS_META[s];return `<span class="status ${cls}">${s==='open'?'<i class="liveDot" aria-hidden="true"></i>':icon(ic,'icon sm')}${t('status.'+s)}</span>`}
+function freshTag(svc){
+  const bad=svc.days>=30;
+  return `<span class="fresh${bad?' bad':''} num">${icon(bad?'alert':'check','icon sm')}${t('fresh.verified')} ${svc.verified}</span>`;
+}
+function audChip(a){return `<span class="aud">${icon('users','icon sm')}${t('aud.'+a)}</span>`}
+function catBadge(c){const k=CATS[c];return `<span class="catBadge" style="color:${k.c}"><span class="dot" style="background:color-mix(in srgb,${k.c} 15%,transparent)">${icon(k.ic)}</span>${tx(k.t).text}</span>`}
+function orgLine(oid){const o=ORGS[oid];return `<span class="provider"><span class="avatar" style="background:${o.color}">${o.ini}</span>${o.name}</span>`}
+function fbNotice(){return `<div class="noteAI">${icon('langs','icon sm')}<span>${t('fallback.notice')}</span></div>`}
+function specChips(o){
+  const prim=o.primary?`<span class="chip" style="background:var(--accent-soft);border-color:var(--accent);color:var(--accent)">${icon(SPECS[o.primary].ic,'icon sm')}${tx(SPECS[o.primary].t).text}</span>`:'';
+  return prim+o.specs.map(sp=>`<span class="chip">${icon(SPECS[sp].ic,'icon sm')}${tx(SPECS[sp].t).text}</span>`).join('');
+}
+
+function svcCard(s,compact=false){
+  const n=tx(s.name),p=tx(s.place),ti=tx(s.time);
+  return `<a class="card svc" href="#/service/${s.id}">
+    <div class="top">${statusChip(s.status)}${audChip(s.aud)}</div>
+    <h3>${esc(n.text)}</h3>
+    ${n.fb?fbNotice():''}
+    <div class="meta">
+      <span class="it num">${icon('clock','icon sm')}${s.status==='closed'?t('status.next')+' · ':''}${esc(ti.text)}</span>
+      <span class="it">${icon('pin','icon sm')}${esc(p.text)}</span>
+    </div>
+    <div class="row" style="margin-top:10px;justify-content:space-between">
+      ${orgLine(s.org)}${catBadge(s.cat)}
+    </div>
+    <div class="cardFoot">${freshTag(s)}<span class="btn ghost smb">${t('act.details')} ${icon('chevR','icon sm flip')}</span></div>
+  </a>`;
+}
+
+/* =========================================================
+   Views
+   ========================================================= */
+function vHome(){
+  const tiles=[
+    ['emergency','bell','var(--danger)','#/emergency'],
+    ['food','utensils','var(--cat-food)','#/services?cat=food'],
+    ['water','droplet','var(--cat-water)','#/services?cat=water'],
+    ['health','heart','var(--cat-health)','#/services?cat=health'],
+    ['shelter','home','var(--cat-shelter)','#/services?cat=shelter'],
+    ['hygiene','shower','var(--cat-showers)','#/services?cat=showers'],
+    ['charging','zap','var(--cat-charging)','#/services?cat=charging'],
+    ['legal','scale','var(--cat-legal)','#/services?cat=legal'],
+    ['activities','sparkles','var(--cat-activities)','#/services?cat=activities'],
+    ['orient','help','var(--cat-info)','#/article/a2'],
+  ];
+  return `${offBar()}
+  <div class="stack" style="gap:18px">
+    <div>
+      <h1>${t('home.title')}</h1>
+      <p class="muted" style="margin-top:6px;max-width:560px">${t('home.sub')}</p>
+    </div>
+    <div class="tiles">
+      ${tiles.map(([k,ic,c,href])=>`<a class="tile" href="${href}">
+        <span class="dot" style="background:color-mix(in srgb,${c} 14%,transparent);color:${c}">${icon(ic,'icon lg')}</span>
+        <b>${t('tile.'+k)}</b></a>`).join('')}
+    </div>
+    <a class="btn primary" style="justify-self:start" href="#/services">${icon('search','icon sm')}${t('home.seeAll')}</a>
+    <div class="card" style="display:flex;gap:12px;align-items:center">
+      ${icon('help','icon lg')} <div><b>${t('sim.title')}</b><div class="small muted">${t('sim.privacy')}</div></div>
+      <a class="btn sec smb" style="margin-inline-start:auto" href="#/simulator">${t('sim.start')}</a>
+    </div>
+  </div>`;
+}
+
+function vEmergency(){
+  return `${crumb('#/home')}<div class="stack sim">
+    <h1>${t('tile.emergency')}</h1>
+    <div class="card dangerBox warnBox">${icon('alert')}<div><b>112</b> — ${state.lang==='fr'?'Urgence médicale / police / pompiers (gratuit)':state.lang==='ar'?'الطوارئ الطبية / الشرطة / الإطفاء (مجاني)':'Medical / police / fire emergency (free)'}</div></div>
+    <div class="card warnBox">${icon('phone')}<div><b>115</b> — ${state.lang==='fr'?'Hébergement d’urgence (Samu social)':state.lang==='ar'?'مبيت طارئ (سامو الاجتماعي)':'Emergency shelter line'}</div></div>
+    <p class="small muted">Demo — ${state.lang==='fr'?'numéros à vérifier avant publication réelle.':state.lang==='ar'?'تُراجع الأرقام قبل النشر الفعلي.':'verify numbers before real publication.'}</p>
+  </div>`;
+}
+
+function offBar(){return state.offline?`<div class="offBar">${icon('alert','icon sm')}<span>${t('off.banner')}</span></div>`:''}
+
+function vServices(){
+  const f=state.filters;
+  let list=SVCS.filter(s=>{
+    if(svcCity(s)!==(f.city||'calais'))return false;
+    if(f.cat!=='all'&&s.cat!==f.cat)return false;
+    if(f.openNow&&s.status!=='open')return false;
+    if(f.aud!=='all'&&s.aud!==f.aud&&s.aud!=='all_public')return false;
+    if(f.q){const q=f.q.toLowerCase();
+      const hay=[tx(s.name).text,tx(s.place).text,ORGS[s.org].name,tx(CATS[s.cat].t).text].join(' ').toLowerCase();
+      if(!hay.includes(q))return false;}
+    return true;
+  });
+  const cats=['all',...Object.keys(CATS)];
+  return `${offBar()}
+  <div class="stack" style="gap:14px">
+    <h1>${t('svc.title')}</h1>
+    <div class="search">${icon('search')}<input id="q" type="search" value="${esc(f.q)}" placeholder="${t('svc.search')}" aria-label="${t('svc.search')}" oninput="state.filters.q=this.value;renderKeepFocus('q')"></div>
+    <div class="row" role="group" aria-label="Filters">
+      <button class="chip" aria-pressed="${f.openNow}" onclick="state.filters.openNow=!state.filters.openNow;render()">${icon('clock','icon sm')}${t('svc.openNow')}</button>
+      ${cats.map(c=>`<button class="chip" aria-pressed="${f.cat===c}" onclick="state.filters.cat='${c}';render()">${c==='all'?t('svc.all'):icon(CATS[c].ic,'icon sm')+tx(CATS[c].t).text}</button>`).join('')}
+    </div>
+    ${activeCities().length>1?`<div class="row" role="group" aria-label="City">
+      ${activeCities().map(([id,c])=>`<button class="chip" aria-pressed="${(f.city||'calais')===id}" onclick="state.filters.city='${id}';render()">${icon('map','icon sm')}${esc(tx(c.name).text)}</button>`).join('')}
+    </div>`:''}
+    <div class="row" role="group" aria-label="Audience">
+      ${['all','women_only','children_only','under_18_only','families_only','adult_men_only'].map(a=>`<button class="chip" aria-pressed="${f.aud===a}" onclick="state.filters.aud='${a}';render()">${icon('users','icon sm')}${a==='all'?t('svc.all'):t('aud.'+a)}</button>`).join('')}
+    </div>
+    <div class="row" style="justify-content:space-between">
+      <span class="muted small num">${list.length} / ${SVCS.length}</span>
+      <div class="seg" role="group" aria-label="View">
+        <button aria-pressed="${f.view==='list'}" onclick="state.filters.view='list';render()">${icon('list','icon sm')}${t('view.list')}</button>
+        <button aria-pressed="${f.view==='map'}" onclick="state.filters.view='map';render()">${icon('map','icon sm')}${t('view.map')}</button>
+      </div>
+    </div>
+    ${f.view==='map'?vMap(list):`<div class="svcGrid cols">${list.map(s=>svcCard(s)).join('')||emptyState()}</div>`}
+  </div>`;
+}
+function emptyState(){
+  return `<div class="card" style="grid-column:1/-1;text-align:center;padding:40px 20px">
+    <div style="display:grid;place-items:center;margin-bottom:10px;color:var(--muted)">${icon('search','icon lg')}</div>
+    <h3>${t('empty.title')}</h3><p class="muted small" style="margin:6px 0 14px">${t('empty.sub')}</p>
+    <button class="btn sec smb" onclick="state.filters={q:'',cat:'all',aud:'all',openNow:false,view:'list',city:state.filters.city||'calais'};render()">${t('act.clear')}</button>
+  </div>`;
+}
+function vMap(list){
+  return `<div class="mapBox">
+    <svg class="bg" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
+      <rect width="100" height="60" fill="var(--surface-subtle)"/>
+      <path d="M0 14 Q30 8 55 13 T100 10" stroke="var(--cat-water)" stroke-width="3" fill="none" opacity=".35"/>
+      <g stroke="var(--border)" stroke-width=".8">
+        <path d="M10 60 V20 M24 60 V16 M40 60 V18 M58 60 V15 M74 60 V17 M90 60 V14"/>
+        <path d="M0 28 H100 M0 40 H100 M0 52 H100"/>
+      </g>
+      <rect x="44" y="30" width="9" height="7" rx="1" fill="var(--border)" opacity=".7"/>
+      <rect x="18" y="44" width="7" height="6" rx="1" fill="var(--border)" opacity=".7"/>
+      <rect x="66" y="46" width="10" height="6" rx="1" fill="var(--border)" opacity=".7"/>
+    </svg>
+    ${list.map(s=>`<button class="pin" style="left:${s.mapX}%;top:${s.mapY}%" onclick="go('#/service/${s.id}')" aria-label="${esc(tx(s.name).text)}">
+      <span class="pinDot" style="background:${CATS[s.cat].c}">${icon(CATS[s.cat].ic)}</span></button>`).join('')}
+    <div class="mapNote"><span class="row" style="gap:8px">${icon('info','icon sm')}${t('map.note')}</span>
+      <button class="btn sec smb" onclick="state.filters.view='list';render()">${t('map.uselist')}</button></div>
+  </div>`;
+}
+
+function crumb(href){return `<a class="crumb" href="${href}">${icon('arrowL','icon sm flip')}${t('act.back')}</a>`}
+
+function vServiceDetail(id){
+  const s=SVCS.find(x=>x.id===id); if(!s)return vServices();
+  const n=tx(s.name),p=tx(s.place),ti=tx(s.time);const o=ORGS[s.org];
+  const outd=s.days>=30;
+  return `${crumb('#/services')}${offBar()}
+  <div class="stack" style="max-width:720px">
+    <div class="detailHead">
+      <div class="row">${statusChip(s.status)}${audChip(s.aud)}${catBadge(s.cat)}</div>
+      <h1 style="font-size:26px">${esc(n.text)}</h1>
+      ${n.fb?fbNotice():''}
+      <div class="row" style="gap:14px"><span class="it row num" style="font-weight:600">${icon('clock','icon sm')}${s.status==='closed'?t('status.next')+' · ':''}${esc(ti.text)}</span>${freshTag(s)}</div>
+    </div>
+    ${s.status==='cancelled'&&s.cancelNote?`<div class="warnBox dangerBox">${icon('xC')}<div>${esc(tx(s.cancelNote).text)}</div></div>`:''}
+    ${s.status==='uncertain'||outd?`<div class="warnBox">${icon('alert')}<div>${t('fresh.check')}</div></div>`:''}
+    <div class="actions">
+      <button class="btn primary" onclick="toast('Demo — maps would open')">${icon('pin','icon sm')}${t('act.directions')}</button>
+      <button class="btn sec" onclick="openShare('${s.id}')">${icon('share','icon sm')}${t('act.share')}</button>
+      <button class="btn sec" onclick="window.print()">${icon('printer','icon sm')}${t('act.print')}</button>
+    </div>
+    <div class="factList">
+      <div class="fact">${icon('pin')}<div><b>${t('detail.address')}</b>${esc(p.text)}</div></div>
+      <div class="fact">${icon('cal')}<div style="flex:1"><b>${t('detail.schedule')}</b>
+        ${s.sched.map(r=>`<div class="schRow"><span>${esc(tx(r.d).text)}</span><b class="num" style="font-size:14px;color:var(--ink);text-transform:none;letter-spacing:0">${r.h}</b></div>`).join('')}
+      </div></div>
+      ${s.exc.length?`<div class="fact">${icon('alert')}<div><b>${t('detail.exceptions')}</b>${s.exc.map(e=>esc(tx(e).text)).join('<br>')}</div></div>`:''}
+      <div class="fact">${icon('users')}<div><b>${t('detail.audience')}</b>${t('aud.'+s.aud)}${s.audNote?' — '+esc(tx(s.audNote).text):''}</div></div>
+      <div class="fact">${icon('phone')}<div><b>${t('detail.contact')}</b>${esc(tx(s.contact).text)}</div></div>
+      <div class="fact"><span class="avatar" style="background:${o.color};width:22px;height:22px">${o.ini}</span><div><b>${t('detail.provider')}</b><a href="#/association/${s.org}">${o.name}</a></div></div>
+    </div>
+    <div class="stateSw" role="group" aria-label="Prototype state switcher">
+      <span>Demo states:</span>
+      ${['open','closed','cancelled','uncertain'].map(st=>`<button aria-pressed="${s.status===st}" onclick="demoState('${s.id}','${st}')">${t('status.'+st)}</button>`).join('')}
+      <button aria-pressed="${s.days>=30}" onclick="demoOutdated('${s.id}')">Outdated</button>
+    </div>
+  </div>`;
+}
+
+function vAssociations(){
+  return `${offBar()}<div class="stack" style="gap:14px">
+    <h1>${t('assoc.title')}</h1><p class="muted" style="max-width:560px">${t('assoc.sub')}</p>
+    <div class="svcGrid cols">
+    ${Object.entries(ORGS).map(([id,o])=>{
+      const pu=tx(o.purpose);
+      return `<a class="card" href="#/association/${id}">
+        <div class="row" style="justify-content:space-between">
+          <span class="provider" style="margin:0;font-size:16px"><span class="avatar" style="background:${o.color};width:34px;height:34px;font-size:14px;border-radius:10px">${o.ini}</span>${o.name}</span>
+          <span class="fresh num">${icon('check','icon sm')}${t('assoc.since')} ${o.verified}</span>
+        </div>
+        <p class="small muted" style="margin:10px 0 12px">${esc(pu.text)}</p>
+        ${pu.fb?fbNotice():''}
+        <div class="row">${specChips(o)}</div>
+      </a>`;}).join('')}
+    </div></div>`;
+}
+function vOrg(id){
+  const o=ORGS[id]; if(!o)return vAssociations();
+  const svcs=SVCS.filter(s=>s.org===id);
+  return `${crumb('#/associations')}<div class="stack" style="max-width:720px">
+    <div class="row" style="gap:14px">
+      <span class="avatar" style="background:${o.color};width:52px;height:52px;font-size:20px;border-radius:14px">${o.ini}</span>
+      <div><h1 style="font-size:24px">${o.name}</h1><span class="fresh num">${icon('check','icon sm')}${t('assoc.since')} ${o.verified}</span></div>
+    </div>
+    <p class="muted">${esc(tx(o.purpose).text)}</p>
+    <div><h3 style="margin-bottom:8px">${t('assoc.specs')}</h3><div class="row">${specChips(o)}</div></div>
+    <div><h3 style="margin-bottom:8px">${t('detail.langs')}</h3><div class="row">${o.langs.map(l=>`<span class="chip">${l}</span>`).join('')}</div></div>
+    <div><h3 style="margin-bottom:8px">${t('nav.services')}</h3><div class="svcGrid">${svcs.map(s=>svcCard(s)).join('')}</div></div>
+  </div>`;
+}
+
+function vArticles(){
+  return `${offBar()}<div class="stack" style="gap:14px"><h1>${t('art.title')}</h1>
+  <div class="svcGrid cols">
+  ${ARTS.map(a=>{const ti=tx(a.title),su=tx(a.sum);return `<a class="card" href="#/article/${a.id}">
+    <div class="row" style="justify-content:space-between">
+      <span class="fresh num">${icon('cal','icon sm')}${t('art.updated')} ${a.date}</span>
+      ${a.warn?`<span class="status uncertain">${icon('alert','icon sm')}${t('status.uncertain').split('—')[0]}</span>`:`<span class="status open">${icon('checkC','icon sm')}OK</span>`}
+    </div>
+    <h3 style="margin-top:8px">${esc(ti.text)}</h3>
+    <p class="small muted" style="margin-top:6px">${esc(su.text)}</p>
+    ${ti.fb?fbNotice():''}
+  </a>`;}).join('')}
+  </div></div>`;
+}
+function vArticle(id){
+  const a=ARTS.find(x=>x.id===id); if(!a)return vArticles();
+  const ti=tx(a.title),su=tx(a.sum),bo=tx(a.body);const o=ORGS[a.owner];
+  return `${crumb('#/articles')}<div class="stack" style="max-width:720px">
+    <h1 style="font-size:26px">${esc(ti.text)}</h1>
+    <div class="row" style="gap:14px">
+      <span class="fresh num">${icon('cal','icon sm')}${t('art.updated')} ${a.date}</span>
+      <span class="provider" style="margin:0">${t('art.owner')}: <span class="avatar" style="background:${o.color}">${o.ini}</span>${o.name}</span>
+    </div>
+    ${a.warn?`<div class="warnBox">${icon('alert')}<div>${state.lang==='fr'?`Ces informations peuvent être obsolètes à partir du 20 juillet 2026. Vérifiez avec le contact indiqué avant de vous y fier.`:state.lang==='ar'?`قد تصبح هذه المعلومات قديمة اعتباراً من 20 يوليو 2026. تحقّق مع جهة الاتصال قبل الاعتماد عليها.`:`This information may be outdated from 20 July 2026. Check with the listed contact before relying on it.`}</div></div>`:''}
+    <div class="card infoBox warnBox" style="align-items:center"><b style="font-size:15px">${esc(su.text)}</b></div>
+    ${a.audio?`<div class="listen">
+      <button class="playBtn" id="playBtn" onclick="togglePlay()" aria-label="${t('act.listen')}">${icon(state.playing?'pause':'play')}</button>
+      <div class="track"><b class="small">${t('act.listen')} · ${state.lang==='ar'?'العربية':state.lang==='fr'?'Français':'English'}</b>
+        <div class="bar" style="margin-top:6px"><i id="playBar" style="width:${state.playPct}%"></i></div>
+        <span class="small muted num">1:32 · 0.8 MB</span></div>
+      <button class="btn ghost smb" onclick="const e=$('#transcript');e.hidden=!e.hidden">${t('art.transcript')}</button>
+    </div>
+    <p id="transcript" class="small muted" hidden style="border-inline-start:3px solid var(--border);padding-inline-start:12px">${t('art.transcriptBody')}</p>`:''}
+    ${a.ai&&state.lang==='ar'?`<div class="noteAI">${icon('langs','icon sm')}<span>${t('ai.notice')}</span></div>`:''}
+    <p>${esc(bo.text)}</p>
+    ${ti.fb?fbNotice():''}
+    <div class="actions"><button class="btn sec" onclick="window.print()">${icon('printer','icon sm')}${t('act.print')}</button>
+    <button class="btn sec" onclick="toast('Demo')">${icon('share','icon sm')}${t('act.share')}</button></div>
+  </div>`;
+}
+
+/* ---------- Simulator ---------- */
+const SIMQ={
+  1:{q:'sim.q1',opts:[['food','sim.q1.food','utensils'],['health','sim.q1.health','heart'],['legal','sim.q1.legal','scale'],['hygiene','sim.q1.hygiene','shower'],['material','sim.q1.material','tent'],['activities','sim.q1.activities','sparkles'],['connect','sim.q1.connect','phone'],['other','sim.q1.other','help']]},
+  food:{q:'sim.q2f',opts:[['now','sim.q2f.now','clock'],['today','sim.q2f.today','cal']]},
+  health:{q:'sim.q2h',opts:[['yes','sim.q2h.yes','bell'],['no','sim.q2h.no','heart']]},
+  legal:{q:'sim.q2l',opts:[['yes','sim.q2l.yes','users'],['no','sim.q2l.no','users']],pnts:true},
+  timing:{q:'sim.qTime',opts:[['now','sim.time.now','clock'],['today','sim.time.today','cal'],['later','sim.time.later','cal']]},
+  profile:{q:'sim.qProfile',opts:[['self','sim.profile.self','users'],['family','sim.profile.family','users'],['under18','sim.profile.under18','users'],['women','sim.profile.women','users'],['pnts','sim.profile.pnts','help']]},
+};
+/* Cities are data: activating one surfaces it in the simulator and filters (no code change) */
+const CITIES={
+  calais:{active:true,name:{en:'Calais',fr:'Calais',ar:'كاليه'},areas:{
+    centre:{x:45,y:57,label:{en:'Calais centre',fr:'Centre de Calais',ar:'وسط كاليه'}},
+    west:{x:23,y:42,label:{en:'West Calais',fr:'Calais ouest',ar:'غرب كاليه'}},
+    east:{x:72,y:50,label:{en:'East Calais',fr:'Calais est',ar:'شرق كاليه'}},
+    station:{x:51,y:43,label:{en:'Near Calais-Ville station',fr:'Près de la gare Calais-Ville',ar:'قرب محطة كاليه-فيل'}}}},
+  villeb:{active:false,name:{en:'Ville Démo B',fr:'Ville Démo B',ar:'مدينة ب التجريبية'},areas:{
+    centre:{x:50,y:50,label:{en:'Ville B centre',fr:'Centre de Ville B',ar:'وسط المدينة ب'}},
+    port:{x:70,y:30,label:{en:'Port area (demo)',fr:'Quartier du port (démo)',ar:'منطقة الميناء (تجريبي)'}}}},
+};
+const activeCities=()=>Object.entries(CITIES).filter(([,c])=>c.active);
+const simCity=()=>state.sim.city||activeCities()[0]?.[0]||'calais';
+const svcCity=s=>s.city||'calais';
+function simFlow(){return [...(activeCities().length>1?['city']:[]),'need','location','sub','profile']}
+const simReset=()=>({step:0,city:null,need:null,location:null,sub:null,profile:null});
+function vSimulator(){
+  const s=state.sim;
+  if(s.step===0){
+    return `<div class="sim stack">
+      <h1>${t('sim.title')}</h1>
+      <div class="card infoBox warnBox">${icon('info')}<div>${t('sim.privacy')}<br><span class="small muted">${t('sim.source')}</span></div></div>
+      <button class="btn primary" onclick="state.sim={...simReset(),step:1};render()">${t('sim.start')} ${icon('chevR','icon sm flip')}</button>
+    </div>`;
+  }
+  const flow=simFlow();
+  if(s.step>flow.length) return vSimResult();
+  const stage=flow[s.step-1];
+  const node=stage==='city'?{q:'sim.qCity',opts:activeCities().map(([id,c])=>[id,{raw:tx(c.name).text},'map'])}
+    :stage==='need'?SIMQ[1]
+    :stage==='location'?{q:'sim.qLoc',opts:[...Object.entries(CITIES[simCity()].areas).map(([id,a])=>[id,{raw:tx(a.label).text},'pin']),['unknown','sim.loc.unknown','help']]}
+    :stage==='sub'?(SIMQ[s.need]||SIMQ.timing):SIMQ.profile;
+  const prog=t('sim.step').replace('{n}',s.step).replace('{m}',String(flow.length));
+  return `<div class="sim stack">
+    <div class="progress num">${prog}</div>
+    <div class="simTrack" aria-hidden="true"><i style="width:${s.step/flow.length*100}%"></i></div>
+    <h2>${t(node.q)}</h2>
+    <div class="simOpts">
+      ${node.opts.map(([v,k,ic])=>`<button class="simOpt" onclick="simAnswer('${v}')">${icon(ic)}<span>${k&&k.raw?esc(k.raw):t(k)}</span></button>`).join('')}
+      ${node.pnts?`<button class="simOpt" style="border-style:dashed" onclick="simAnswer(null)">${icon('help')}<span>${t('sim.pnts')}</span></button>`:''}
+    </div>
+    <div class="simFoot">
+      <button class="btn ghost smb" onclick="simBack()">${icon('arrowL','icon sm flip')}${t('act.back')}</button>
+      <div class="row">
+        <button class="btn sec smb" onclick="simAnswer(null)">${t('sim.skip')}</button>
+        <button class="btn ghost smb" onclick="state.sim=simReset();render()">${t('sim.restart')}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function simAnswer(v){
+  const s=state.sim,stage=simFlow()[s.step-1];
+  if(stage==='city')s.city=v||activeCities()[0][0];
+  else if(stage==='need')s.need=v||'other';
+  else if(stage==='location')s.location=v||'unknown';
+  else if(stage==='sub')s.sub=v;
+  else if(stage==='profile')s.profile=v||'pnts';
+  s.step++;
+  render();
+}
+function simBack(){const s=state.sim;if(s.step>1)s.step--;else s.step=0;render()}
+function simAnswerLabel(){
+  const s=state.sim;
+  if(s.need==='health')return s.sub?t('sim.q2h.'+s.sub):t('sim.notAnswered');
+  if(s.need==='legal')return s.sub?t('sim.q2l.'+s.sub):t('sim.notAnswered');
+  if(s.need==='food')return s.sub?t('sim.q2f.'+s.sub):t('sim.notAnswered');
+  return s.sub?t('sim.time.'+s.sub):t('sim.notAnswered');
+}
+function simSummaryData(){const s=state.sim;const area=CITIES[simCity()].areas[s.location];return [
+  ...(activeCities().length>1?[['map','sim.city',tx(CITIES[simCity()].name).text]]:[]),
+  ['help','sim.need',s.need?t('sim.q1.'+s.need):t('sim.notAnswered')],
+  ['pin','sim.location',area?tx(area.label).text:(s.location?t('sim.loc.unknown'):t('sim.notAnswered'))],
+  ['clock','sim.timing',simAnswerLabel()],
+  ['users','sim.for',s.profile?t('sim.profile.'+s.profile):t('sim.notAnswered')],
+]}
+function simBaseItems(){
+  const s=state.sim;let items=[];
+  if(s.need==='food'){items=SVCS.filter(x=>['food','water'].includes(x.cat)&&(s.sub!=='now'||x.status==='open'));}
+  else if(s.need==='health'){
+    if(s.sub==='yes')items=[];
+    else items=SVCS.filter(x=>x.cat==='health');
+  }else if(s.need==='legal'){items=SVCS.filter(x=>x.cat==='legal');if(s.sub==='yes')items=[...items,...SVCS.filter(x=>x.id==='s9')];}
+  else if(s.need==='hygiene')items=SVCS.filter(x=>['showers','clothing'].includes(x.cat));
+  else if(s.need==='material')items=SVCS.filter(x=>x.cat==='material');
+  else if(s.need==='activities')items=SVCS.filter(x=>x.cat==='activities');
+  else if(s.need==='connect')items=SVCS.filter(x=>x.cat==='charging');
+  else items=SVCS.filter(x=>x.status==='open');
+  return items.filter(x=>svcCity(x)===simCity());
+}
+function simAudienceFit(svc){
+  const p=state.sim.profile;if(!p||p==='pnts')return true;
+  if(svc.aud==='all_public')return true;
+  if(p==='family')return ['families_only','children_only'].includes(svc.aud);
+  if(p==='under18')return ['under_18_only','children_only'].includes(svc.aud);
+  if(p==='women')return svc.aud==='women_only';
+  return false;
+}
+function simRankedItems(){
+  const base=simBaseItems(),eligible=base.filter(simAudienceFit),pool=eligible.length?eligible:base,area=CITIES[simCity()].areas[state.sim.location],loc=area?{x:area.x,y:area.y}:null;
+  return pool.map(svc=>{const dist=loc?Math.hypot(svc.mapX-loc.x,svc.mapY-loc.y):50;const fit=simAudienceFit(svc);return {svc,dist,fit,score:(svc.status==='open'?35:0)+(fit?25:0)+(loc?Math.max(0,30-dist):0)};}).sort((a,b)=>b.score-a.score);
+}
+function simNote(){const s=state.sim;
+  if(s.need==='health'&&s.sub==='yes')return `<div class="warnBox dangerBox">${icon('bell')}<div><b>${t('sim.urgent')}</b></div></div>`;
+  if(s.need==='legal')return `<div class="warnBox infoBox">${icon('scale')}<div>${t('sim.legalInfo')}</div></div>${s.sub==='yes'?`<div class="warnBox" style="margin-top:10px">${icon('users')}<div>${t('sim.minor')}</div></div>`:''}`;
+  const key={hygiene:'hygieneInfo',material:'materialInfo',activities:'activitiesInfo',connect:'connectInfo'}[s.need];
+  if(key)return `<div class="warnBox infoBox">${icon(CATS[s.need==='hygiene'?'showers':s.need==='connect'?'charging':s.need].ic)}<div>${t('sim.'+key)}</div></div>`;
+  if(s.need==='other')return `<div class="warnBox infoBox">${icon('home')}<div>${t('sim.other')} <a href="#/home">${t('nav.home')}</a></div></div>`;
+  return '';
+}
+function simRecommendationCard(item,index){const s=item.svc,n=tx(s.name),p=tx(s.place),ti=tx(s.time);const why=[];
+  if(state.sim.location!=='unknown'&&item.dist<=30)why.push(t('sim.why.near'));if(s.status==='open')why.push(t('sim.why.open'));if(item.fit)why.push(t('sim.why.fit'));
+  return `<a class="recommendCard" href="#/service/${s.id}"><span class="recommendRank num">${index+1}</span><div class="recommendBody">
+    <div class="row" style="justify-content:space-between">${statusChip(s.status)}${catBadge(s.cat)}</div>
+    <h3 style="font-size:18px;margin-top:10px">${esc(n.text)}</h3>
+    <div class="recommendWhy">${icon('checkC','icon sm')}<span>${why.join(' · ')}</span></div>
+    <div class="recommendMeta"><span class="it row">${icon('clock','icon sm')}${esc(ti.text)}</span><span class="it row">${icon('pin','icon sm')}${esc(p.text)}</span></div>
+    <div class="cardFoot">${orgLine(s.org)}<span class="btn ghost smb">${t('act.details')} ${icon('chevR','icon sm flip')}</span></div>
+  </div></a>`;
+}
+function vSimResult(){
+  const items=simRankedItems(),summary=simSummaryData();
+  return `<div class="sim stack">
+    <div class="progress">${t('sim.result')}</div>
+    <h2>${t('sim.result')}</h2>
+    <section class="simSummary" aria-labelledby="sim-summary-title"><h3 id="sim-summary-title">${t('sim.summary')}</h3><div class="summaryGrid">${summary.map(([ic,k,v])=>`<div class="summaryFact">${icon(ic,'icon sm')}<div><small>${t(k)}</small><b>${esc(v)}</b></div></div>`).join('')}</div></section>
+    ${simNote()}
+    ${items.length?`<h3 style="margin-top:8px">${t('sim.recommendations')}</h3><div class="recommendList">${items.map(simRecommendationCard).join('')}</div>`:`<div class="warnBox">${icon('info')}<div>${t('sim.noMatch')}</div></div>`}
+    <div class="noteAI">${icon('info','icon sm')}<span>${t('sim.disclaimer')} · ${t('sim.source')}</span></div>
+    <div class="simFoot"><button class="btn sec" onclick="state.sim=simReset();render()">${t('sim.restart')}</button><button class="btn primary" onclick="downloadSimPdf()">${icon('down','icon sm')}${t('sim.download')}</button></div>
+  </div>`;
+}
+
+function wrapCanvasText(ctx,text,maxWidth){const words=String(text).split(/\s+/),lines=[];let line='';for(const word of words){const test=line?line+' '+word:word;if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=word}else line=test}if(line)lines.push(line);return lines}
+function downloadSimPdf(){
+  toast(t('sim.downloading'));const canvas=document.createElement('canvas');canvas.width=1240;canvas.height=1754;const ctx=canvas.getContext('2d');const rtl=state.lang==='ar';
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.textAlign=rtl?'right':'left';ctx.direction=rtl?'rtl':'ltr';const x=rtl?1120:120,max=1000;let y=130;
+  const draw=(text,size=26,color='#181D26',weight=400,gap=12)=>{ctx.font=`${weight} ${size}px Arial, sans-serif`;ctx.fillStyle=color;const lines=wrapCanvasText(ctx,text,max);for(const line of lines){ctx.fillText(line,x,y);y+=size*1.35}y+=gap};
+  draw('Calais Info',30,'#1B61C9',700,8);draw(t('sim.result'),48,'#181D26',700,36);draw(t('sim.summary'),28,'#56606F',700,14);
+  simSummaryData().forEach(([,k,v])=>draw(`${t(k)}: ${v}`,25,'#181D26',600,5));y+=24;draw(t('sim.recommendations'),30,'#181D26',700,16);
+  const ranked=simRankedItems().slice(0,4);if(!ranked.length)draw(t('sim.noMatch'),24,'#56606F',400,18);ranked.forEach(({svc},i)=>{draw(`${i+1}. ${tx(svc.name).text}`,27,'#1B61C9',700,2);draw(`${t('status.'+svc.status)} · ${tx(svc.time).text}`,22,'#16794B',600,0);draw(tx(svc.place).text,22,'#56606F',400,18)});
+  y=Math.min(y+20,1600);draw(t('sim.pdfNote'),20,'#56606F',400,4);draw(t('sim.source'),18,'#56606F',400,0);
+  const data=canvas.toDataURL('image/jpeg',.9),jpg=Uint8Array.from(atob(data.split(',')[1]),c=>c.charCodeAt(0)),enc=new TextEncoder(),parts=[];let offset=0;const offsets=[0];
+  const add=v=>{const b=typeof v==='string'?enc.encode(v):v;parts.push(b);offset+=b.length};const obj=(n,body)=>{offsets[n]=offset;add(`${n} 0 obj\n${body}\nendobj\n`)};
+  add('%PDF-1.4\n%PDFJS\n');obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,'<< /Type /Pages /Kids [3 0 R] /Count 1 >>');obj(3,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');
+  offsets[4]=offset;add(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`);add(jpg);add('\nendstream\nendobj\n');
+  const content='q\n595 0 0 842 0 0 cm\n/Im0 Do\nQ';obj(5,`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);const xref=offset;add('xref\n0 6\n0000000000 65535 f \n');for(let i=1;i<=5;i++)add(String(offsets[i]).padStart(10,'0')+' 00000 n \n');add(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  const blob=new Blob(parts,{type:'application/pdf'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`calais-info-guide-${new Date().toISOString().slice(0,10)}.pdf`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast(t('sim.downloaded'));
+}
+
+/* =========================================================
+   Workspace (W-01) — FR/EN only per PRD
+   ========================================================= */
+const WT={
+  en:{overview:'Overview',places:'Places & services',events:'Events & schedules',articles:'Articles',contacts:'Contacts',downloads:'Downloads',audit:'Audit log',settings:'Organisation settings',
+      attn:'Needs attention',today:'Today’s public services',recent:'Recent changes',closure:'Publish exceptional closure',
+      confirm:'Confirm still correct',uncertain:'Mark uncertain',open:'Open',service:'Service',time:'Today',verified:'Last verified',action:'Action',
+      langNote:'Workspace available in French and English. Public content has its own 15-language rules.',
+      notProto:'Not in this prototype — Overview only',verifiedNow:'Verified — thank you. Public page updated.',uncertainSet:'Marked uncertain — the public page now explains it.',
+      published:'Published — the public page is updated.',fallback:'FR ✓ · EN ✓ · AR: visible fallback will be shown (urgent-change policy)'},
+  fr:{overview:'Vue d’ensemble',places:'Lieux & services',events:'Événements & horaires',articles:'Articles',contacts:'Contacts',downloads:'Fichiers',audit:'Journal d’audit',settings:'Paramètres',
+      attn:'À traiter',today:'Services publics du jour',recent:'Changements récents',closure:'Publier une fermeture exceptionnelle',
+      confirm:'Confirmer (toujours correct)',uncertain:'Marquer incertain',open:'Ouvrir',service:'Service',time:'Aujourd’hui',verified:'Vérifié le',action:'Action',
+      langNote:'Espace de travail en français et anglais. Le contenu public suit ses propres règles (15 langues).',
+      notProto:'Hors prototype — Vue d’ensemble uniquement',verifiedNow:'Vérifié — merci. Page publique mise à jour.',uncertainSet:'Marqué incertain — la page publique l’explique désormais.',
+      published:'Publié — la page publique est à jour.',fallback:'FR ✓ · EN ✓ · AR : repli visible affiché (politique d’urgence)'},
+};
+function wt(k){const l=state.lang==='fr'?'fr':'en';return WT[l][k]}
+
+function vWorkspace(){
+  const l=state.lang==='fr'?'fr':'en';
+  const navItems=[['overview','home'],['places','pin'],['events','cal'],['articles','file'],['contacts','phone'],['downloads','down'],['audit','audit'],['settings','gear']];
+  $('#wsNav').innerHTML=navItems.map(([k,ic],i)=>`<button class="${i===0?'on':''}" onclick="${i===0?'render()':`toast('${wt('notProto')}')`}">${icon(ic,'icon sm')}${wt(k)}</button>`).join('');
+  $('#wsRole').textContent=t('ws.role');
+  $('#wsExit').innerHTML=icon('chevR','icon sm flip')+t('ws.exit');
+  return `
+  <div class="row" style="justify-content:space-between">
+    <h2>${wt('overview')}</h2>
+    <button class="btn primary smb" onclick="openClosure('s1')">${icon('alert','icon sm')}${wt('closure')}</button>
+  </div>
+  <div class="noteAI">${icon('langs','icon sm')}<span>${wt('langNote')}</span></div>
+  <div class="wsGrid">
+    <div class="stack">
+      <section class="panel" aria-label="${wt('attn')}">
+        <h3>${wt('attn')} <span class="cnt num">${ATTN.filter(a=>a.act.length).length}</span></h3>
+        ${ATTN.map(a=>`<div class="attn">
+          <span style="color:${a.cls}">${icon(a.icon)}</span>
+          <div style="flex:1">${esc(a.txt)}
+            ${a.act.length?`<div class="row" style="margin-top:8px">
+              ${a.act.includes('confirm')?`<button class="btn sec smb" onclick="attnConfirm('${a.id}')">${icon('check','icon sm')}${wt('confirm')}</button>`:''}
+              ${a.act.includes('uncertain')?`<button class="btn sec smb" onclick="attnUncertain('${a.id}')">${wt('uncertain')}</button>`:''}
+              ${a.act.includes('open')?`<button class="btn sec smb" onclick="toast(wt('notProto'))">${wt('open')}</button>`:''}
+            </div>`:''}
+          </div></div>`).join('')}
+      </section>
+      <section class="panel" aria-label="${wt('today')}">
+        <h3>${wt('today')}</h3>
+        <div style="overflow-x:auto"><table class="tbl">
+          <thead><tr><th>${wt('service')}</th><th></th><th>${wt('time')}</th><th>${wt('verified')}</th><th>${wt('action')}</th></tr></thead>
+          <tbody>${SVCS.slice(0,6).map(s=>`<tr>
+            <td style="font-weight:600">${esc(tx(s.name).text)}</td>
+            <td>${statusChip(s.status)}</td>
+            <td class="num">${esc(tx(s.time).text)}</td>
+            <td class="num muted">${s.verified}</td>
+            <td><button class="btn ghost smb" onclick="openClosure('${s.id}')">${wt('closure').split(' ')[0]}…</button></td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </section>
+    </div>
+    <section class="panel" aria-label="${wt('recent')}" style="align-self:start">
+      <h3>${wt('recent')}</h3>
+      ${AUDIT.map(e=>`<div class="audit"><span class="num small muted">${e.when} — ${esc(e.who)}</span><span>${esc(e.what)}</span></div>`).join('')}
+    </section>
+  </div>`;
+}
+function attnConfirm(id){
+  const a=ATTN.find(x=>x.id===id);if(!a)return;
+  const s=SVCS.find(x=>x.id===a.svc);
+  if(s){s.days=0;s.verified='17/07 · 09:12';if(s.status==='uncertain')s.status='closed';delete s.outdated;}
+  ATTN=ATTN.filter(x=>x.id!==id);
+  AUDIT.unshift({when:'17/07 · 09:12',who:'Demo Editor',what:'Verified — Demo clothing distribution'});
+  toast(wt('verifiedNow'));render();
+}
+function attnUncertain(id){
+  const a=ATTN.find(x=>x.id===id);const s=a&&SVCS.find(x=>x.id===a.svc);
+  if(s)s.status='uncertain';
+  ATTN=ATTN.filter(x=>x.id!==id);
+  AUDIT.unshift({when:'17/07 · 09:12',who:'Demo Editor',what:'Marked uncertain — Demo clothing distribution'});
+  toast(wt('uncertainSet'));render();
+}
+let closureTarget='s1';
+function openClosure(id){
+  closureTarget=id;
+  $('#cloSvc').innerHTML=SVCS.map(s=>`<option value="${s.id}" ${s.id===id?'selected':''}>${esc(tx(s.name).text)}</option>`).join('');
+  $('#cloSvc').onchange=e=>{closureTarget=e.target.value;updClosurePreview()};
+  $('#cloReason').oninput=updClosurePreview;
+  $('#cloLangNote').innerHTML=icon('langs','icon sm')+`<span>${wt('fallback')}</span>`;
+  updClosurePreview();
+  dlgClosure.showModal();
+}
+function updClosurePreview(){
+  const s=SVCS.find(x=>x.id===closureTarget);
+  $('#cloPreview').innerHTML=`
+    <div class="row">${statusChip('cancelled')}${audChip(s.aud)}</div>
+    <h3 style="margin-top:6px">${esc(tx(s.name).text)}</h3>
+    <p class="small" style="margin-top:6px">${esc($('#cloReason').value)} — Friday 17 July 2026</p>
+    <span class="fresh num">${icon('check','icon sm')}${t('fresh.verified')} 17/07 · 09:15</span>`;
+}
+function publishClosure(){
+  const s=SVCS.find(x=>x.id===closureTarget);
+  const reason=$('#cloReason').value||'Demo reason';
+  s.status='cancelled';s.days=0;s.verified='17/07 · 09:15';
+  s.cancelNote={en:reason,fr:reason,ar:reason};
+  s.time={en:'Today’s occurrence cancelled',fr:'Occurrence du jour annulée',ar:'أُلغيت مناسبة اليوم'};
+  s.exc=[...(s.exc||[]),{en:'Cancelled today, Friday 17 July — '+reason,fr:'Annulé aujourd’hui, vendredi 17 juillet — '+reason,ar:'ملغى اليوم الجمعة 17 يوليو — '+reason}];
+  AUDIT.unshift({when:'17/07 · 09:15',who:'Demo Editor',what:'Published exceptional closure — '+tx(s.name).text});
+  dlgClosure.close();toast(wt('published'));render();
+}
+
+/* ---------- demo state switcher (detail page) ---------- */
+function demoState(id,st){const s=SVCS.find(x=>x.id===id);s.status=st;render()}
+function demoOutdated(id){const s=SVCS.find(x=>x.id===id);s.days=s.days>=30?0:41;s.verified=s.days?'06/06 · 10:00':'17/07 · 09:20';render()}
+
+/* ---------- share ---------- */
+function openShare(id){
+  const s=SVCS.find(x=>x.id===id);const n=tx(s.name),p=tx(s.place),ti=tx(s.time);
+  $('#shareTitle').textContent=t('act.share');
+  $('#shareHint').textContent=t('share.hint');
+  $('#shareClose').textContent=t('act.close');
+  $('#shareCopy').textContent=t('act.copy');
+  $('#shareBody').textContent=
+`${n.text} — ${t('status.'+s.status).toUpperCase()}
+${ti.text}
+${p.text}
+${t('fresh.verified')} ${s.verified} · ${t('aud.'+s.aud)}
+https://demo.calais.info/s/${s.id}`;
+  dlgShare.showModal();
+}
+function copyShare(){
+  const txt=$('#shareBody').textContent;
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast(t('act.copied'))).catch(()=>toast(t('act.copied')+' (demo)'));
+}
+
+/* ---------- listen (fake player, no autoplay) ---------- */
+let playTimer=null;
+function togglePlay(){
+  state.playing=!state.playing;
+  clearInterval(playTimer);
+  if(state.playing){playTimer=setInterval(()=>{state.playPct=Math.min(100,state.playPct+2);
+    const b=$('#playBar');if(b)b.style.width=state.playPct+'%';
+    if(state.playPct>=100){state.playing=false;state.playPct=0;clearInterval(playTimer);const p=$('#playBtn');if(p)p.innerHTML=icon('play')}
+  },300)}
+  const p=$('#playBtn');if(p)p.innerHTML=icon(state.playing?'pause':'play');
+}
+
+/* =========================================================
+   Language / theme / router / shell
+   ========================================================= */
+const LANGS=[['en','English','English'],['fr','Français','French'],['ar','العربية','Arabic']];
+function openLang(){
+  $('#langList').innerHTML=`<p class="small muted">${t('lang.note')}</p>`+
+   LANGS.map(([c,nat,en])=>`<button class="langOpt" aria-pressed="${state.lang===c}" onclick="setLang('${c}')">
+     ${icon('globe','icon sm')}<span style="flex:1">${nat}</span><small>${en}</small>${state.lang===c?icon('check','icon sm'):''}</button>`).join('');
+  dlgLang.showModal();
+}
+function setLang(c){
+  state.lang=c;dlgLang.close();
+  document.documentElement.lang=c;
+  document.documentElement.dir=c==='ar'?'rtl':'ltr';
+  render();
+}
+const mq=matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(){
+  const mode=state.theme==='auto'?(mq.matches?'dark':'light'):state.theme;
+  document.documentElement.dataset.theme=mode;
+  $('#dbTheme').textContent=({auto:'◐ Auto',light:'☀ Light',dark:'● Dark'})[state.theme];
+}
+mq.addEventListener('change',()=>{if(state.theme==='auto')applyTheme()});
+function cycleTheme(){state.theme={auto:'light',light:'dark',dark:'auto'}[state.theme];applyTheme()}
+function toggleOffline(){state.offline=!state.offline;$('#dbOffline').setAttribute('aria-pressed',state.offline);render()}
+function toggleCity(){
+  const on=!CITIES.villeb.active;CITIES.villeb.active=on;
+  $('#dbCity').setAttribute('aria-pressed',on);
+  state.sim=simReset();
+  if(!on&&state.filters.city==='villeb')state.filters.city='calais';
+  toast(on?'City added — the simulator now asks which city':'City removed — single-city mode');
+  render();
+}
+
+function go(h){location.hash=h}
+function route(){
+  let h=location.hash||'#/home';
+  const qi=h.indexOf('?');
+  if(qi>-1){const ps=new URLSearchParams(h.slice(qi+1));if(ps.get('cat'))state.filters.cat=ps.get('cat');h=h.slice(0,qi);history.replaceState(null,'','#/services');}
+  return h;
+}
+const PUB_NAV=[['#/home','nav.home','home'],['#/services','nav.services','map'],['#/simulator','nav.sim','help'],['#/articles','nav.articles','file'],['#/associations','nav.assoc','users']];
+function render(){
+  const h=route();
+  const ws=h.startsWith('#/workspace');
+  $('#publicShell').hidden=ws; $('#wsShell').hidden=!ws;
+  $('#dbPublic').setAttribute('aria-pressed',!ws);
+  $('#dbWs').setAttribute('aria-pressed',ws);
+  document.querySelector('[data-t="demo.label"]').textContent=t('demo.label');
+  if(ws){$('#wsView').innerHTML=vWorkspace();return}
+  /* desktop nav */
+  $('#deskNav').innerHTML=PUB_NAV.map(([href,k])=>`<a href="${href}" ${h===href||h.startsWith(href+'/')?'aria-current="page"':''}>${t(k)}</a>`).join('');
+  $('#langBtn').innerHTML=icon('globe','icon sm')+(LANGS.find(l=>l[0]===state.lang)[1]);
+  /* bottom nav: Home, Services, Guide, Language, More (PRD 10.2) */
+  const bn=[
+    ['#/home','nav.home','home'],['#/services','nav.services','map'],['#/simulator','nav.sim','help'],
+  ];
+  $('#bottomNav').innerHTML=
+    bn.map(([href,k,ic])=>`<a href="${href}" class="${h===href||h.startsWith(href.replace('#/','#/').slice(0)+'/')?'on':''}">${icon(ic)}<span>${t(k)}</span></a>`).join('')+
+    `<button onclick="openLang()">${icon('globe')}<span>${t('nav.lang')}</span></button>
+     <button onclick="moreSheet()">${icon('more')}<span>${t('nav.more')}</span></button>`;
+  let view;
+  if(h.startsWith('#/service/'))view=vServiceDetail(h.split('/')[2]);
+  else if(h==='#/services')view=vServices();
+  else if(h==='#/associations')view=vAssociations();
+  else if(h.startsWith('#/association/'))view=vOrg(h.split('/')[2]);
+  else if(h==='#/articles')view=vArticles();
+  else if(h.startsWith('#/article/'))view=vArticle(h.split('/')[2]);
+  else if(h==='#/simulator')view=vSimulator();
+  else if(h==='#/emergency')view=vEmergency();
+  else view=vHome();
+  $('#pubView').innerHTML=view;
+}
+function renderKeepFocus(id){
+  const el=document.getElementById(id);const pos=el?el.selectionStart:0;
+  render();
+  const el2=document.getElementById(id);if(el2){el2.focus();el2.setSelectionRange(pos,pos)}
+}
+function moreSheet(){
+  $('#langList').innerHTML=`<p class="small muted" style="margin-bottom:4px">${t('more.title')}</p>
+   <button class="langOpt" onclick="dlgLang.close();go('#/articles')">${icon('file','icon sm')}<span style="flex:1">${t('nav.articles')}</span>${icon('chevR','icon sm flip')}</button>
+   <button class="langOpt" onclick="dlgLang.close();go('#/associations')">${icon('users','icon sm')}<span style="flex:1">${t('nav.assoc')}</span>${icon('chevR','icon sm flip')}</button>`;
+  dlgLang.showModal();
+}
+addEventListener('hashchange',render);
+applyTheme();render();
+</script>
+</body>
+</html>
