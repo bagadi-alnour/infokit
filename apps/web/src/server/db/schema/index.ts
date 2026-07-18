@@ -1,7 +1,10 @@
 /**
- * Slice 0 schema — the single source of truth.
- * Implements the docs/DATABASE-SCHEMA.md subset for PRODUCT.md §8.1 Slice 0;
- * later slices extend this additively (simulator, editorial, publishing…).
+ * Phase 0/1 schema — the single source of truth.
+ * Implements the docs/DATABASE-SCHEMA.md subset for PRODUCT.md Phases 0–1;
+ * later slices extend this additively. Deliberately absent, waiting for
+ * their evidence triggers (PRODUCT.md §8.1): the sealed-revision
+ * joint-publication engine (§11 of the schema doc), the notifications
+ * outbox, tags, and everything Phase 2+ (operations, documents, inventory).
  */
 export * from "./schemas";
 export * from "./auth";
@@ -10,3 +13,10 @@ export * from "./taxonomies";
 export * from "./organizations";
 export * from "./places";
 export * from "./services";
+export * from "./access";
+export * from "./assets";
+export * from "./editorial";
+export * from "./events";
+export * from "./search";
+export * from "./simulator";
+export * from "./audit-log";

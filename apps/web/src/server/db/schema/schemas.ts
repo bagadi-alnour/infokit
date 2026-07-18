@@ -8,6 +8,8 @@ import { pgSchema, timestamp } from "drizzle-orm/pg-core";
 export const authSchema = pgSchema("auth");
 export const core = pgSchema("core");
 export const content = pgSchema("content");
+export const simulator = pgSchema("simulator");
+export const audit = pgSchema("audit");
 
 /* ------------------------------------------------------------------ */
 /* Shared lifecycle column basics — spread these instead of redefining */
@@ -110,4 +112,110 @@ export const contactKind = content.enum("contact_kind", [
 export const contactVisibility = content.enum("contact_visibility", [
   "public",
   "workspace",
+]);
+
+/* Phase 0/1 access control (docs/DATABASE-SCHEMA.md §4–§5) */
+export const memberStatus = core.enum("member_status", [
+  "invited",
+  "active",
+  "inactive",
+  "offboarded",
+]);
+export const invitationKind = core.enum("invitation_kind", [
+  "association_publisher",
+  "organization_admin",
+  "member",
+]);
+export const verificationStatus = core.enum("verification_status", [
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+/* Editorial (docs/DATABASE-SCHEMA.md §8) */
+export const editorialKind = content.enum("editorial_kind", [
+  "article",
+  "fixed_information",
+  "basic_information",
+]);
+export const editorialWorkflowState = content.enum("editorial_workflow_state", [
+  "draft",
+  "in_review",
+  "published",
+  "unpublished",
+  "archived",
+]);
+export const custodianKind = content.enum("custodian_kind", [
+  "organization",
+  "platform",
+]);
+export const attributionRole = content.enum("attribution_role", [
+  "factual_owner",
+  "publisher",
+  "mentioned",
+]);
+export const reviewTaskStatus = content.enum("review_task_status", [
+  "open",
+  "done",
+  "dismissed",
+]);
+
+/* Assets and media (docs/DATABASE-SCHEMA.md §9) */
+export const mediaKind = content.enum("media_kind", [
+  "image",
+  "video",
+  "audio",
+  "document",
+  "other",
+]);
+export const assetVisibility = content.enum("asset_visibility", [
+  "public",
+  "workspace",
+]);
+export const malwareScanState = content.enum("malware_scan_state", [
+  "pending",
+  "clean",
+  "flagged",
+]);
+export const assetVariantKind = content.enum("asset_variant_kind", [
+  "thumbnail",
+  "optimized_image",
+  "poster",
+  "low_bandwidth_video",
+  "low_bandwidth_audio",
+  "printable_pdf",
+  "other",
+]);
+export const textTrackKind = content.enum("text_track_kind", [
+  "transcript",
+  "captions",
+  "subtitles",
+  "description",
+]);
+
+/* Public events (docs/DATABASE-SCHEMA.md §7) */
+export const occurrenceState = content.enum("occurrence_state", [
+  "scheduled",
+  "cancelled",
+  "uncertain",
+]);
+
+/* Simulator graph (docs/DATABASE-SCHEMA.md §10) */
+export const simulatorNodeKind = simulator.enum("node_kind", [
+  "question",
+  "information",
+  "result",
+]);
+export const flowVersionStatus = simulator.enum("flow_version_status", [
+  "draft",
+  "published",
+  "retired",
+]);
+
+/* Audit (docs/DATABASE-SCHEMA.md §17) */
+export const auditActorType = audit.enum("actor_type", [
+  "user",
+  "system",
+  "provider",
+  "support",
 ]);

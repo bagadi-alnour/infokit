@@ -9,5 +9,5 @@ export default {
   dbCredentials: {
     url: env.DATABASE_URL,
   },
-  schemaFilter: ["public", "auth", "core", "content"],
+  schemaFilter: ["public", "auth", "core", "content", "simulator", "audit"],
 } satisfies Config;
