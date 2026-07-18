@@ -32,19 +32,21 @@ For Calais Info: `packages/tokens` is the single encoding of `DESIGN.md` §2 (bo
 ## 3. i18n pipeline — adopt, with one Calais-specific split
 
 EP-next mechanism (`scripts/generate-shared-i18n-resources.mjs`):
+
 - `packages/shared/src/locales.json` is the locale registry; `messages/{locale}.json` are the catalogs.
 - A generator compiles them into a typed TS module consumed by web **and** mobile — one source of truth, two runtimes.
 - The generator **fails the build if a registered locale is missing its catalog**; `check:i18n` and `check-locale-branches` validate drift; `scaffold-locale` bootstraps a new language.
 
-Calais Info split to respect: this pipeline is for **UI strings only**. Public *content* translations (services, articles) live in the database with per-language review states and fallback rules (`DATABASE-SCHEMA.md` §2) — never in code catalogs. The registry maps to `core.languages`; the fail-on-missing-catalog behavior implements §17's "a language is an operational commitment."
+Calais Info split to respect: this pipeline is for **UI strings only**. Public _content_ translations (services, articles) live in the database with per-language review states and fallback rules (`DATABASE-SCHEMA.md` §2) — never in code catalogs. The registry maps to `core.languages`; the fail-on-missing-catalog behavior implements §17's "a language is an operational commitment."
 
 Cautionary tale from the same repo: `fix-missing-translations.mjs`, `fix-tour-search-translations.mjs` — one-off repair scripts accumulating means catalog debt crept in. Prevention: the check scripts run in CI from day one, and RTL (Arabic) is in the catalog from the first commit, not retrofitted.
 
 ## 4. Database migration discipline — adopt (this is the best find)
 
 kawa `drizzle/README.md` workflow:
+
 - `0000_baseline_schema.sql` + named, numbered SQL migrations; `meta/_journal.json` validated by a migration wrapper.
-- **Custom SQL migrations for DB-level enforcement** — kawa's `0001_invoice_immutability_triggers.sql` enforces French e-invoicing immutability *in the database*. Calais Info has the identical need three times over: append-only inventory ledger, immutable publication revisions, audit events. Triggers, not application promises.
+- **Custom SQL migrations for DB-level enforcement** — kawa's `0001_invoice_immutability_triggers.sql` enforces French e-invoicing immutability _in the database_. Calais Info has the identical need three times over: append-only inventory ledger, immutable publication revisions, audit events. Triggers, not application promises.
 - `db:migrate:verify` runs the full migration chain against a **disposable database** in CI/pre-release.
 - **Never `db:push` against persistent environments**; guarded one-time baseline/rebase via explicit env flags (`ALLOW_MIGRATION_BASELINE=true`) with automatic backup of prior journal rows.
 - `drizzle/seed/` folder for seed data — Calais Info's taxonomy catalogs (categories, specialities, audiences, cities, languages) are seeds.
@@ -53,7 +55,7 @@ kawa `drizzle/README.md` workflow:
 
 - Split runners (EP-next `scripts/run-{unit,integration,api,e2e}-tests.mjs`; Playwright for e2e; Vitest workspaces).
 - **Coverage gate** (kawa): `test:coverage:gate` with a strict env flag and a summary script with `--enforce` — coverage is a CI gate, not a report. For Calais Info, the strict set starts with the boundaries: tenant isolation, publish gates, never-public invariants (`SUSTAINABILITY.md` AI practices).
-- `dependency-cruiser` with a config enforcing package boundaries (EP-next `deps:check`) — mechanical enforcement of "domain never imports app code, api-client never imports server code". This is the tool that makes the monorepo layout *stay* the layout.
+- `dependency-cruiser` with a config enforcing package boundaries (EP-next `deps:check`) — mechanical enforcement of "domain never imports app code, api-client never imports server code". This is the tool that makes the monorepo layout _stay_ the layout.
 - Env validation exists in EP-next (`SKIP_ENV_VALIDATION` flag implies a validated env schema) — adopt validated env (t3-env style); avoid normalizing the skip flag.
 
 ## 6. AGENTS.md — adopt, merged and improved
@@ -61,6 +63,7 @@ kawa `drizzle/README.md` workflow:
 Both repos keep standing AI instructions at the repo root; kawa's points to a **mandatory** `docs/UI_DESIGN_REFERENCE.md`, EP-next's is a full design contract ("build in the spirit of Linear/Stripe; when a choice feels like a generic AI UI move, pick the harder, cleaner option"; component defaults; accent policy; token paths).
 
 Calais Info's AGENTS.md (written at repo bootstrap) should contain:
+
 - `DESIGN.md` and `DESIGN-BRIEF.md` are mandatory, not inspiration; tokens only via `packages/tokens`; reuse before inventing.
 - The suite's own rules AI sessions must carry: demo-data labeling, never-public invariants, the cross-doc consistency pass after doc edits, context packs per slice (`SUSTAINABILITY.md`).
 - The anti-generic rule, adapted: when a choice feels like a default AI dashboard, take the calmer option from `DESIGN.md` — public pages are calm under stress, not impressive.
@@ -83,7 +86,7 @@ EP-next's scripted EAS pipeline: named build profiles (`development-device`, `pr
 
 ## 10. Slice 0 bootstrap order (when coding starts)
 
-> **Status 18 July 2026:** coding started from a create-t3-app scaffold (Next 15, Drizzle, NextAuth v5, Tailwind 4) at the repo root — the single-app form of this blueprint. Steps 1, 3 (Slice 0 subset), and 4 (AGENTS.md, check:ci, hooks) are done in that form; the §1 monorepo split (`apps/web` + `packages/*`) happens when mobile work begins, before app code accumulates.
+> **Status 18 July 2026:** coding started from a create-t3-app scaffold (Next 15, Drizzle, NextAuth v5, Tailwind 4) and was converted to the §1 monorepo the same day: `apps/web` + `packages/tokens` (DESIGN.md encoded) under pnpm workspaces + Turborepo, with lint-staged configs per package. Steps 1–4 done; still pending: `apps/mobile` (Expo) scaffold, and `packages/{shared,api-client,validation,config}` created as they gain real content — never as empty shells.
 
 1. `git init`, initial commit of this suite + prototype.
 2. Scaffold the monorepo (§1) with `packages/tokens` from `DESIGN.md` + prototype CSS variables, and the i18n registry (fr, en, ar) with the fail-on-missing generator (§3).

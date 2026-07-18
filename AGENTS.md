@@ -8,7 +8,7 @@ A multilingual public-information platform for people seeking help in Calais, an
 
 ## Hard rules
 
-1. **The schema is the single source of truth.** `src/server/db/schema/` implements `docs/DATABASE-SCHEMA.md` as additive per-slice subsets. Never edit an applied migration; corrections are new migrations. Never `db:push` against a persistent environment.
+1. **The schema is the single source of truth.** `apps/web/src/server/db/schema/` implements `docs/DATABASE-SCHEMA.md` as additive per-slice subsets. Never edit an applied migration; corrections are new migrations. Never `db:push` against a persistent environment.
 2. **Design is a contract, not inspiration.** `docs/DESIGN.md` (tokens, type scale, components, anti-patterns) and `docs/DESIGN-BRIEF.md` (screens, states) are mandatory. No color decisions in JSX/component CSS — semantic tokens only. When a choice feels like a default AI dashboard move, take the calmer option: public pages are calm under stress, not impressive.
 3. **Every user-facing string goes through the i18n catalog** (fr, en, ar from day one; RTL is a designed state, not a retrofit). Public _content_ translations live in the database with review states — never in code catalogs.
 4. **Never-public invariants:** unverified organisations, member personal data, coordination events, draft content, simulator answers (session-only, never persisted, never logged). Any query feeding a public surface goes through the public read model, not authoring tables.
@@ -20,7 +20,7 @@ A multilingual public-information platform for people seeking help in Calais, an
 
 - `pnpm check:ci` — format check + lint (cached) + typecheck; the health question.
 - `pnpm db:generate --name <slug>` — new migration from schema changes.
-- `pnpm dev` — Next.js dev server. `./start-database.sh` — local Postgres.
+- `pnpm dev:web` — Next.js dev server. `apps/web/start-database.sh` — local Postgres.
 
 ## Current slice
 

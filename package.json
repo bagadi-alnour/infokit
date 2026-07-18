@@ -4,68 +4,36 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "next build",
+    "build": "turbo run build",
     "check": "pnpm lint && pnpm typecheck",
-    "check:ci": "pnpm format:check && pnpm lint && pnpm typecheck",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio",
-    "dev": "next dev --turbo",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
-    "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
-    "lint": "eslint . --cache --cache-location .cache/eslint",
-    "lint:fix": "eslint . --fix --cache --cache-location .cache/eslint",
+    "check:ci": "pnpm format:check && turbo run lint typecheck",
+    "db:generate": "pnpm --filter @calais/web db:generate",
+    "db:migrate": "pnpm --filter @calais/web db:migrate",
+    "db:push": "pnpm --filter @calais/web db:push",
+    "db:studio": "pnpm --filter @calais/web db:studio",
+    "dev": "turbo run dev --parallel",
+    "dev:web": "pnpm --filter @calais/web dev",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx,json,md,css}\" --cache",
+    "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx,json,md,css}\" --cache",
+    "lint": "turbo run lint",
     "prepare": "simple-git-hooks",
-    "preview": "next build && next start",
-    "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "turbo run typecheck"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged",
     "pre-push": "pnpm typecheck"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,mjs}": [
-      "eslint --fix --cache --cache-location .cache/eslint",
-      "prettier --write --cache"
-    ],
-    "*.{json,md,css}": [
+    "*.{json,md,mdx,css}": [
       "prettier --write --cache"
     ]
   },
-  "dependencies": {
-    "@auth/drizzle-adapter": "^1.7.2",
-    "@t3-oss/env-nextjs": "^0.12.0",
-    "drizzle-orm": "^0.41.0",
-    "next": "^15.2.3",
-    "next-auth": "5.0.0-beta.25",
-    "postgres": "^3.4.4",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "zod": "^3.24.2"
-  },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.1",
-    "@tailwindcss/postcss": "^4.0.15",
-    "@types/node": "^20.14.10",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "drizzle-kit": "^0.30.5",
-    "eslint": "^9.23.0",
-    "eslint-config-next": "^15.2.3",
-    "eslint-plugin-drizzle": "^0.2.3",
     "lint-staged": "^17.1.0",
-    "postcss": "^8.5.3",
     "prettier": "^3.5.3",
     "prettier-plugin-tailwindcss": "^0.6.11",
     "simple-git-hooks": "^2.13.1",
-    "tailwindcss": "^4.0.15",
-    "typescript": "^5.8.2",
-    "typescript-eslint": "^8.27.0"
-  },
-  "ct3aMetadata": {
-    "initVersion": "7.40.0"
+    "turbo": "^2.5.4"
   },
   "packageManager": "pnpm@10.12.1"
 }

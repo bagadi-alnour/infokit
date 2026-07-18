@@ -1,0 +1,24 @@
+{
+  "name": "@calais/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --cache --cache-location .cache/eslint",
+    "typecheck": "tsc --noEmit"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --cache --cache-location .cache/eslint",
+      "prettier --write --cache"
+    ]
+  },
+  "devDependencies": {
+    "eslint": "^9.23.0",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.27.0"
+  }
+}
