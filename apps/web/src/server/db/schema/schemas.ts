@@ -1,4 +1,4 @@
-import { pgSchema, timestamp } from "drizzle-orm/pg-core";
+import { pgEnum, pgSchema, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * PostgreSQL schemas as domain boundaries (docs/DATABASE-SCHEMA.md §1).
@@ -55,129 +55,134 @@ export const verification = {
 
 /* ------------------------------------------------------------------ */
 /* Enums — reserved for stable state machines; taxonomies are rows.   */
+/* Enums live in the public schema: drizzle-kit push does not emit    */
+/* schema-qualified enum types; table placement carries the domain    */
+/* boundaries instead.                                                */
 /* ------------------------------------------------------------------ */
 
-export const textDirection = core.enum("text_direction", ["ltr", "rtl"]);
-export const organizationStatus = core.enum("organization_status", [
+export const textDirection = pgEnum("text_direction", ["ltr", "rtl"]);
+export const organizationStatus = pgEnum("organization_status", [
   "draft",
   "verified",
   "suspended",
   "archived",
 ]);
-export const translationState = content.enum("translation_state", [
+export const translationState = pgEnum("translation_state", [
   "draft",
   "machine_generated",
   "needs_review",
   "verified",
   "rejected",
 ]);
-export const translationMethod = content.enum("translation_method", [
+export const translationMethod = pgEnum("translation_method", [
   "human",
   "ai",
   "ai_then_human_review",
 ]);
 /** RISKS.md R5: how precisely a place may be published. */
-export const locationPrecision = content.enum("location_precision", [
+export const locationPrecision = pgEnum("location_precision", [
   "exact",
   "area_only",
   "contact_to_learn",
 ]);
-export const serviceManualStatus = content.enum("service_manual_status", [
+export const serviceManualStatus = pgEnum("service_manual_status", [
   "normal",
   "cancelled",
   "uncertain",
 ]);
-export const scheduleExceptionKind = content.enum("schedule_exception_kind", [
+export const scheduleExceptionKind = pgEnum("schedule_exception_kind", [
   "closure",
   "cancellation",
   "exceptional_opening",
   "uncertain",
 ]);
-export const holidayBehavior = content.enum("holiday_behavior", [
+export const holidayBehavior = pgEnum("holiday_behavior", [
   "closed",
   "open",
   "unchanged",
 ]);
-export const specialityAssignmentState = content.enum(
-  "speciality_assignment_state",
-  ["requested", "verified", "rejected", "retired"],
-);
-export const contactKind = content.enum("contact_kind", [
+export const specialityAssignmentState = pgEnum("speciality_assignment_state", [
+  "requested",
+  "verified",
+  "rejected",
+  "retired",
+]);
+export const contactKind = pgEnum("contact_kind", [
   "phone",
   "whatsapp",
   "email",
   "on_site",
   "url",
 ]);
-export const contactVisibility = content.enum("contact_visibility", [
+export const contactVisibility = pgEnum("contact_visibility", [
   "public",
   "workspace",
 ]);
 
 /* Phase 0/1 access control (docs/DATABASE-SCHEMA.md §4–§5) */
-export const memberStatus = core.enum("member_status", [
+export const memberStatus = pgEnum("member_status", [
   "invited",
   "active",
   "inactive",
   "offboarded",
 ]);
-export const invitationKind = core.enum("invitation_kind", [
+export const invitationKind = pgEnum("invitation_kind", [
   "association_publisher",
   "organization_admin",
   "member",
 ]);
-export const verificationStatus = core.enum("verification_status", [
+export const verificationStatus = pgEnum("verification_status", [
   "pending",
   "approved",
   "rejected",
 ]);
 
 /* Editorial (docs/DATABASE-SCHEMA.md §8) */
-export const editorialKind = content.enum("editorial_kind", [
+export const editorialKind = pgEnum("editorial_kind", [
   "article",
   "fixed_information",
   "basic_information",
 ]);
-export const editorialWorkflowState = content.enum("editorial_workflow_state", [
+export const editorialWorkflowState = pgEnum("editorial_workflow_state", [
   "draft",
   "in_review",
   "published",
   "unpublished",
   "archived",
 ]);
-export const custodianKind = content.enum("custodian_kind", [
+export const custodianKind = pgEnum("custodian_kind", [
   "organization",
   "platform",
 ]);
-export const attributionRole = content.enum("attribution_role", [
+export const attributionRole = pgEnum("attribution_role", [
   "factual_owner",
   "publisher",
   "mentioned",
 ]);
-export const reviewTaskStatus = content.enum("review_task_status", [
+export const reviewTaskStatus = pgEnum("review_task_status", [
   "open",
   "done",
   "dismissed",
 ]);
 
 /* Assets and media (docs/DATABASE-SCHEMA.md §9) */
-export const mediaKind = content.enum("media_kind", [
+export const mediaKind = pgEnum("media_kind", [
   "image",
   "video",
   "audio",
   "document",
   "other",
 ]);
-export const assetVisibility = content.enum("asset_visibility", [
+export const assetVisibility = pgEnum("asset_visibility", [
   "public",
   "workspace",
 ]);
-export const malwareScanState = content.enum("malware_scan_state", [
+export const malwareScanState = pgEnum("malware_scan_state", [
   "pending",
   "clean",
   "flagged",
 ]);
-export const assetVariantKind = content.enum("asset_variant_kind", [
+export const assetVariantKind = pgEnum("asset_variant_kind", [
   "thumbnail",
   "optimized_image",
   "poster",
@@ -186,7 +191,7 @@ export const assetVariantKind = content.enum("asset_variant_kind", [
   "printable_pdf",
   "other",
 ]);
-export const textTrackKind = content.enum("text_track_kind", [
+export const textTrackKind = pgEnum("text_track_kind", [
   "transcript",
   "captions",
   "subtitles",
@@ -194,26 +199,26 @@ export const textTrackKind = content.enum("text_track_kind", [
 ]);
 
 /* Public events (docs/DATABASE-SCHEMA.md §7) */
-export const occurrenceState = content.enum("occurrence_state", [
+export const occurrenceState = pgEnum("occurrence_state", [
   "scheduled",
   "cancelled",
   "uncertain",
 ]);
 
 /* Simulator graph (docs/DATABASE-SCHEMA.md §10) */
-export const simulatorNodeKind = simulator.enum("node_kind", [
+export const simulatorNodeKind = pgEnum("node_kind", [
   "question",
   "information",
   "result",
 ]);
-export const flowVersionStatus = simulator.enum("flow_version_status", [
+export const flowVersionStatus = pgEnum("flow_version_status", [
   "draft",
   "published",
   "retired",
 ]);
 
 /* Audit (docs/DATABASE-SCHEMA.md §17) */
-export const auditActorType = audit.enum("actor_type", [
+export const auditActorType = pgEnum("actor_type", [
   "user",
   "system",
   "provider",

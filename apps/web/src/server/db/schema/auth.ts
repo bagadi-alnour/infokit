@@ -7,9 +7,11 @@ import {
   timestamp,
   varchar,
 } from "drizzle-orm/pg-core";
-import { type AdapterAccount } from "next-auth/adapters";
-
 import { authSchema } from "./schemas";
+
+/** Mirrors AdapterAccount["type"] from @auth/core — inlined so the schema
+ *  stays importable by drizzle-kit without resolving next-auth's exports. */
+type AdapterAccountType = "email" | "oauth" | "oidc" | "webauthn";
 
 /**
  * NextAuth (Auth.js) tables, moved into the `auth` PostgreSQL schema.
@@ -41,7 +43,7 @@ export const accounts = authSchema.table(
       .notNull()
       .references(() => users.id),
     type: varchar("type", { length: 255 })
-      .$type<AdapterAccount["type"]>()
+      .$type<AdapterAccountType>()
       .notNull(),
     provider: varchar("provider", { length: 255 }).notNull(),
     providerAccountId: varchar("provider_account_id", {
