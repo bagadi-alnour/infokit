@@ -11,6 +11,7 @@ import {
 import { cities, cityAreas, languages } from "./catalog";
 import { organizations } from "./organizations";
 import {
+  archival,
   content,
   locationPrecision,
   timestamps,
@@ -37,6 +38,7 @@ export const places = content.table(
     lng: doublePrecision("lng"),
     precision: locationPrecision("precision").notNull().default("exact"),
     active: boolean("active").notNull().default(true),
+    ...archival,
     ...timestamps,
   },
   (t) => [index("places_city_idx").on(t.cityId)],

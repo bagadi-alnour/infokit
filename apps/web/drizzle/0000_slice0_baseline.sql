@@ -253,6 +253,7 @@ CREATE TABLE "content"."places" (
 	"lng" double precision,
 	"precision" "content"."location_precision" DEFAULT 'exact' NOT NULL,
 	"active" boolean DEFAULT true NOT NULL,
+	"archived_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -334,10 +335,10 @@ CREATE TABLE "content"."services" (
 	"max_age" smallint,
 	"manual_status" "content"."service_manual_status" DEFAULT 'normal' NOT NULL,
 	"published" boolean DEFAULT false NOT NULL,
-	"last_verified_at" timestamp with time zone,
 	"verified_by_id" varchar(255),
-	"review_due_at" timestamp with time zone,
 	"source_note" text,
+	"last_verified_at" timestamp with time zone,
+	"review_due_at" timestamp with time zone,
 	"archived_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL

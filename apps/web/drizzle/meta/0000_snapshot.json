@@ -1,5 +1,5 @@
 {
-  "id": "99d2cd43-d8ec-49ad-8a30-8c80f8094767",
+  "id": "7d02a8f3-19d6-4dc2-9529-beb8045cc29a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -98,8 +98,12 @@
           "tableFrom": "accounts",
           "tableTo": "users",
           "schemaTo": "auth",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -107,7 +111,10 @@
       "compositePrimaryKeys": {
         "accounts_provider_provider_account_id_pk": {
           "name": "accounts_provider_provider_account_id_pk",
-          "columns": ["provider", "provider_account_id"]
+          "columns": [
+            "provider",
+            "provider_account_id"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -161,8 +168,12 @@
           "tableFrom": "sessions",
           "tableTo": "users",
           "schemaTo": "auth",
-          "columnsFrom": ["user_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -244,7 +255,10 @@
       "compositePrimaryKeys": {
         "verification_tokens_identifier_token_pk": {
           "name": "verification_tokens_identifier_token_pk",
-          "columns": ["identifier", "token"]
+          "columns": [
+            "identifier",
+            "token"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -305,7 +319,9 @@
         "cities_code_unique": {
           "name": "cities_code_unique",
           "nullsNotDistinct": false,
-          "columns": ["code"]
+          "columns": [
+            "code"
+          ]
         }
       },
       "policies": {},
@@ -342,8 +358,12 @@
           "tableFrom": "city_area_translations",
           "tableTo": "city_areas",
           "schemaTo": "core",
-          "columnsFrom": ["city_area_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "city_area_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -352,8 +372,12 @@
           "tableFrom": "city_area_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -361,7 +385,10 @@
       "compositePrimaryKeys": {
         "city_area_translations_city_area_id_language_code_pk": {
           "name": "city_area_translations_city_area_id_language_code_pk",
-          "columns": ["city_area_id", "language_code"]
+          "columns": [
+            "city_area_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -462,8 +489,12 @@
           "tableFrom": "city_areas",
           "tableTo": "cities",
           "schemaTo": "core",
-          "columnsFrom": ["city_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "city_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -504,8 +535,12 @@
           "tableFrom": "city_translations",
           "tableTo": "cities",
           "schemaTo": "core",
-          "columnsFrom": ["city_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "city_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -514,8 +549,12 @@
           "tableFrom": "city_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -523,7 +562,10 @@
       "compositePrimaryKeys": {
         "city_translations_city_id_language_code_pk": {
           "name": "city_translations_city_id_language_code_pk",
-          "columns": ["city_id", "language_code"]
+          "columns": [
+            "city_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -609,8 +651,12 @@
           "tableFrom": "languages",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["fallback_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "fallback_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -680,7 +726,9 @@
         "audience_categories_code_unique": {
           "name": "audience_categories_code_unique",
           "nullsNotDistinct": false,
-          "columns": ["code"]
+          "columns": [
+            "code"
+          ]
         }
       },
       "policies": {},
@@ -731,8 +779,12 @@
           "tableFrom": "audience_category_translations",
           "tableTo": "audience_categories",
           "schemaTo": "content",
-          "columnsFrom": ["audience_category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "audience_category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -741,8 +793,12 @@
           "tableFrom": "audience_category_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -750,7 +806,10 @@
       "compositePrimaryKeys": {
         "audience_category_translations_audience_category_id_language_code_pk": {
           "name": "audience_category_translations_audience_category_id_language_code_pk",
-          "columns": ["audience_category_id", "language_code"]
+          "columns": [
+            "audience_category_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -823,7 +882,9 @@
         "service_categories_code_unique": {
           "name": "service_categories_code_unique",
           "nullsNotDistinct": false,
-          "columns": ["code"]
+          "columns": [
+            "code"
+          ]
         }
       },
       "policies": {},
@@ -866,8 +927,12 @@
           "tableFrom": "service_category_translations",
           "tableTo": "service_categories",
           "schemaTo": "content",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -876,8 +941,12 @@
           "tableFrom": "service_category_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -885,7 +954,10 @@
       "compositePrimaryKeys": {
         "service_category_translations_category_id_language_code_pk": {
           "name": "service_category_translations_category_id_language_code_pk",
-          "columns": ["category_id", "language_code"]
+          "columns": [
+            "category_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -952,7 +1024,9 @@
         "specialities_code_unique": {
           "name": "specialities_code_unique",
           "nullsNotDistinct": false,
-          "columns": ["code"]
+          "columns": [
+            "code"
+          ]
         }
       },
       "policies": {},
@@ -995,8 +1069,12 @@
           "tableFrom": "speciality_translations",
           "tableTo": "specialities",
           "schemaTo": "content",
-          "columnsFrom": ["speciality_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "speciality_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1005,8 +1083,12 @@
           "tableFrom": "speciality_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1014,7 +1096,10 @@
       "compositePrimaryKeys": {
         "speciality_translations_speciality_id_language_code_pk": {
           "name": "speciality_translations_speciality_id_language_code_pk",
-          "columns": ["speciality_id", "language_code"]
+          "columns": [
+            "speciality_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -1058,8 +1143,12 @@
           "tableFrom": "contact_translations",
           "tableTo": "contacts",
           "schemaTo": "content",
-          "columnsFrom": ["contact_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "contact_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1068,8 +1157,12 @@
           "tableFrom": "contact_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1077,7 +1170,10 @@
       "compositePrimaryKeys": {
         "contact_translations_contact_id_language_code_pk": {
           "name": "contact_translations_contact_id_language_code_pk",
-          "columns": ["contact_id", "language_code"]
+          "columns": [
+            "contact_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -1159,8 +1255,12 @@
           "tableFrom": "contacts",
           "tableTo": "organizations",
           "schemaTo": "core",
-          "columnsFrom": ["organization_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1201,8 +1301,12 @@
           "tableFrom": "organization_languages",
           "tableTo": "organizations",
           "schemaTo": "core",
-          "columnsFrom": ["organization_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1211,8 +1315,12 @@
           "tableFrom": "organization_languages",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1220,7 +1328,10 @@
       "compositePrimaryKeys": {
         "organization_languages_organization_id_language_code_pk": {
           "name": "organization_languages_organization_id_language_code_pk",
-          "columns": ["organization_id", "language_code"]
+          "columns": [
+            "organization_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -1280,8 +1391,12 @@
           "tableFrom": "organization_profile_translations",
           "tableTo": "organization_profiles",
           "schemaTo": "content",
-          "columnsFrom": ["organization_id"],
-          "columnsTo": ["organization_id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "organization_id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1290,8 +1405,12 @@
           "tableFrom": "organization_profile_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1299,7 +1418,10 @@
       "compositePrimaryKeys": {
         "organization_profile_translations_organization_id_language_code_pk": {
           "name": "organization_profile_translations_organization_id_language_code_pk",
-          "columns": ["organization_id", "language_code"]
+          "columns": [
+            "organization_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -1377,8 +1499,12 @@
           "tableFrom": "organization_profiles",
           "tableTo": "organizations",
           "schemaTo": "core",
-          "columnsFrom": ["organization_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1500,8 +1626,12 @@
           "tableFrom": "organization_specialities",
           "tableTo": "organizations",
           "schemaTo": "core",
-          "columnsFrom": ["organization_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1510,8 +1640,12 @@
           "tableFrom": "organization_specialities",
           "tableTo": "specialities",
           "schemaTo": "content",
-          "columnsFrom": ["speciality_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "speciality_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1595,7 +1729,9 @@
         "organizations_slug_unique": {
           "name": "organizations_slug_unique",
           "nullsNotDistinct": false,
-          "columns": ["slug"]
+          "columns": [
+            "slug"
+          ]
         }
       },
       "policies": {},
@@ -1646,8 +1782,12 @@
           "tableFrom": "place_translations",
           "tableTo": "places",
           "schemaTo": "content",
-          "columnsFrom": ["place_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "place_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1656,8 +1796,12 @@
           "tableFrom": "place_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1665,7 +1809,10 @@
       "compositePrimaryKeys": {
         "place_translations_place_id_language_code_pk": {
           "name": "place_translations_place_id_language_code_pk",
-          "columns": ["place_id", "language_code"]
+          "columns": [
+            "place_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -1741,6 +1888,12 @@
           "notNull": true,
           "default": true
         },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1779,8 +1932,12 @@
           "tableFrom": "places",
           "tableTo": "organizations",
           "schemaTo": "core",
-          "columnsFrom": ["organization_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1789,8 +1946,12 @@
           "tableFrom": "places",
           "tableTo": "cities",
           "schemaTo": "core",
-          "columnsFrom": ["city_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "city_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1799,8 +1960,12 @@
           "tableFrom": "places",
           "tableTo": "city_areas",
           "schemaTo": "core",
-          "columnsFrom": ["city_area_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "city_area_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1849,8 +2014,12 @@
           "tableFrom": "schedule_exception_translations",
           "tableTo": "schedule_exceptions",
           "schemaTo": "content",
-          "columnsFrom": ["exception_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "exception_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1859,8 +2028,12 @@
           "tableFrom": "schedule_exception_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1868,7 +2041,10 @@
       "compositePrimaryKeys": {
         "schedule_exception_translations_exception_id_language_code_pk": {
           "name": "schedule_exception_translations_exception_id_language_code_pk",
-          "columns": ["exception_id", "language_code"]
+          "columns": [
+            "exception_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -1968,8 +2144,12 @@
           "tableFrom": "schedule_exceptions",
           "tableTo": "services",
           "schemaTo": "content",
-          "columnsFrom": ["service_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "service_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1978,8 +2158,12 @@
           "tableFrom": "schedule_exceptions",
           "tableTo": "users",
           "schemaTo": "auth",
-          "columnsFrom": ["created_by_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "created_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2090,8 +2274,12 @@
           "tableFrom": "schedule_rules",
           "tableTo": "services",
           "schemaTo": "content",
-          "columnsFrom": ["service_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "service_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -2149,8 +2337,12 @@
           "tableFrom": "service_audience_translations",
           "tableTo": "services",
           "schemaTo": "content",
-          "columnsFrom": ["service_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "service_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2159,8 +2351,12 @@
           "tableFrom": "service_audience_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2168,7 +2364,10 @@
       "compositePrimaryKeys": {
         "service_audience_translations_service_id_language_code_pk": {
           "name": "service_audience_translations_service_id_language_code_pk",
-          "columns": ["service_id", "language_code"]
+          "columns": [
+            "service_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -2257,8 +2456,12 @@
           "tableFrom": "service_providers",
           "tableTo": "services",
           "schemaTo": "content",
-          "columnsFrom": ["service_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "service_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2267,8 +2470,12 @@
           "tableFrom": "service_providers",
           "tableTo": "organizations",
           "schemaTo": "core",
-          "columnsFrom": ["organization_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2343,8 +2550,12 @@
           "tableFrom": "service_translations",
           "tableTo": "services",
           "schemaTo": "content",
-          "columnsFrom": ["service_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "service_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2353,8 +2564,12 @@
           "tableFrom": "service_translations",
           "tableTo": "languages",
           "schemaTo": "core",
-          "columnsFrom": ["language_code"],
-          "columnsTo": ["code"],
+          "columnsFrom": [
+            "language_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2362,7 +2577,10 @@
       "compositePrimaryKeys": {
         "service_translations_service_id_language_code_pk": {
           "name": "service_translations_service_id_language_code_pk",
-          "columns": ["service_id", "language_code"]
+          "columns": [
+            "service_id",
+            "language_code"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -2438,27 +2656,27 @@
           "notNull": true,
           "default": false
         },
-        "last_verified_at": {
-          "name": "last_verified_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "verified_by_id": {
           "name": "verified_by_id",
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
-        "review_due_at": {
-          "name": "review_due_at",
+        "source_note": {
+          "name": "source_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_verified_at": {
+          "name": "last_verified_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
-        "source_note": {
-          "name": "source_note",
-          "type": "text",
+        "review_due_at": {
+          "name": "review_due_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -2536,8 +2754,12 @@
           "tableFrom": "services",
           "tableTo": "organizations",
           "schemaTo": "core",
-          "columnsFrom": ["organization_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2546,8 +2768,12 @@
           "tableFrom": "services",
           "tableTo": "places",
           "schemaTo": "content",
-          "columnsFrom": ["place_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "place_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2556,8 +2782,12 @@
           "tableFrom": "services",
           "tableTo": "cities",
           "schemaTo": "core",
-          "columnsFrom": ["city_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "city_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2566,8 +2796,12 @@
           "tableFrom": "services",
           "tableTo": "service_categories",
           "schemaTo": "content",
-          "columnsFrom": ["category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2576,8 +2810,12 @@
           "tableFrom": "services",
           "tableTo": "audience_categories",
           "schemaTo": "content",
-          "columnsFrom": ["audience_category_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "audience_category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2586,8 +2824,12 @@
           "tableFrom": "services",
           "tableTo": "users",
           "schemaTo": "auth",
-          "columnsFrom": ["verified_by_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "verified_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2603,52 +2845,95 @@
     "content.contact_kind": {
       "name": "contact_kind",
       "schema": "content",
-      "values": ["phone", "whatsapp", "email", "on_site", "url"]
+      "values": [
+        "phone",
+        "whatsapp",
+        "email",
+        "on_site",
+        "url"
+      ]
     },
     "content.contact_visibility": {
       "name": "contact_visibility",
       "schema": "content",
-      "values": ["public", "workspace"]
+      "values": [
+        "public",
+        "workspace"
+      ]
     },
     "content.holiday_behavior": {
       "name": "holiday_behavior",
       "schema": "content",
-      "values": ["closed", "open", "unchanged"]
+      "values": [
+        "closed",
+        "open",
+        "unchanged"
+      ]
     },
     "content.location_precision": {
       "name": "location_precision",
       "schema": "content",
-      "values": ["exact", "area_only", "contact_to_learn"]
+      "values": [
+        "exact",
+        "area_only",
+        "contact_to_learn"
+      ]
     },
     "core.organization_status": {
       "name": "organization_status",
       "schema": "core",
-      "values": ["draft", "verified", "suspended", "archived"]
+      "values": [
+        "draft",
+        "verified",
+        "suspended",
+        "archived"
+      ]
     },
     "content.schedule_exception_kind": {
       "name": "schedule_exception_kind",
       "schema": "content",
-      "values": ["closure", "cancellation", "exceptional_opening", "uncertain"]
+      "values": [
+        "closure",
+        "cancellation",
+        "exceptional_opening",
+        "uncertain"
+      ]
     },
     "content.service_manual_status": {
       "name": "service_manual_status",
       "schema": "content",
-      "values": ["normal", "cancelled", "uncertain"]
+      "values": [
+        "normal",
+        "cancelled",
+        "uncertain"
+      ]
     },
     "content.speciality_assignment_state": {
       "name": "speciality_assignment_state",
       "schema": "content",
-      "values": ["requested", "verified", "rejected", "retired"]
+      "values": [
+        "requested",
+        "verified",
+        "rejected",
+        "retired"
+      ]
     },
     "core.text_direction": {
       "name": "text_direction",
       "schema": "core",
-      "values": ["ltr", "rtl"]
+      "values": [
+        "ltr",
+        "rtl"
+      ]
     },
     "content.translation_method": {
       "name": "translation_method",
       "schema": "content",
-      "values": ["human", "ai", "ai_then_human_review"]
+      "values": [
+        "human",
+        "ai",
+        "ai_then_human_review"
+      ]
     },
     "content.translation_state": {
       "name": "translation_state",

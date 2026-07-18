@@ -9,7 +9,6 @@ import {
   smallint,
   text,
   time,
-  timestamp,
   uniqueIndex,
   uuid,
   varchar,
@@ -20,6 +19,7 @@ import { cities, languages } from "./catalog";
 import { organizations } from "./organizations";
 import { places } from "./places";
 import {
+  archival,
   content,
   holidayBehavior,
   scheduleExceptionKind,
@@ -27,6 +27,7 @@ import {
   timestamps,
   translationMethod,
   translationState,
+  verification,
 } from "./schemas";
 import { audienceCategories, serviceCategories } from "./taxonomies";
 
@@ -61,13 +62,12 @@ export const services = content.table(
       .notNull()
       .default("normal"),
     published: boolean("published").notNull().default(false),
-    lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
     verifiedById: varchar("verified_by_id", { length: 255 }).references(
       () => users.id,
     ),
-    reviewDueAt: timestamp("review_due_at", { withTimezone: true }),
     sourceNote: text("source_note"),
-    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    ...verification,
+    ...archival,
     ...timestamps,
   },
   (t) => [

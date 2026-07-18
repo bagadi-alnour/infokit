@@ -9,6 +9,10 @@ export const authSchema = pgSchema("auth");
 export const core = pgSchema("core");
 export const content = pgSchema("content");
 
+/* ------------------------------------------------------------------ */
+/* Shared lifecycle column basics — spread these instead of redefining */
+/* ------------------------------------------------------------------ */
+
 export const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -19,7 +23,38 @@ export const timestamps = {
     .$onUpdate(() => new Date()),
 };
 
-/* Enums are reserved for stable state machines; taxonomies are rows. */
+/**
+ * Recoverable content removal (docs/DATABASE-SCHEMA.md §2): archived rows
+ * disappear from public surfaces but keep history. Prefer this over hard
+ * deletes for anything that was ever published.
+ */
+export const archival = {
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+};
+
+/**
+ * Soft deletion. Use only where no explicit business lifecycle exists —
+ * docs/DATABASE-SCHEMA.md §2 prefers explicit statuses (e.g. organisation
+ * status) over `deleted_at`, and forbids hard-deleting published revision
+ * history or audit evidence from application code.
+ */
+export const softDeletion = {
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+};
+
+/**
+ * Freshness/verification metadata (PRODUCT.md §14.1) — the product's core
+ * mechanic. Tables that also record *who* verified add their own FK column.
+ */
+export const verification = {
+  lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
+  reviewDueAt: timestamp("review_due_at", { withTimezone: true }),
+};
+
+/* ------------------------------------------------------------------ */
+/* Enums — reserved for stable state machines; taxonomies are rows.   */
+/* ------------------------------------------------------------------ */
+
 export const textDirection = core.enum("text_direction", ["ltr", "rtl"]);
 export const organizationStatus = core.enum("organization_status", [
   "draft",

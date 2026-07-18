@@ -21,6 +21,7 @@ import {
   timestamps,
   translationMethod,
   translationState,
+  verification,
 } from "./schemas";
 import { specialities } from "./taxonomies";
 
@@ -49,8 +50,7 @@ export const organizationProfiles = content.table("organization_profiles", {
     .notNull()
     .default(false),
   published: boolean("published").notNull().default(false),
-  lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
-  reviewDueAt: timestamp("review_due_at", { withTimezone: true }),
+  ...verification,
   ...timestamps,
 });
 
