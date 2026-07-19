@@ -11,7 +11,10 @@ const recipientSchema = z.object({
   phone: z
     .string()
     .trim()
-    .regex(/^\+[1-9]\d{7,14}$/),
+    // Humans format numbers with spaces/dots/dashes; normalize before the
+    // strict E.164 check instead of rejecting the whole allowlist.
+    .transform((value) => value.replace(/[\s().-]/g, ""))
+    .pipe(z.string().regex(/^\+[1-9]\d{7,14}$/)),
 });
 
 export type EditorRecipient = z.infer<typeof recipientSchema>;

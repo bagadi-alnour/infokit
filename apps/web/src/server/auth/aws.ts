@@ -40,6 +40,10 @@ export async function sendMagicLinkEmail({
   // Auth.js still completes the generic verification-request response for an
   // unapproved address, but no recipient data leaves this process.
   if (!editorRecipient(email)) return;
+  if (env.AUTH_DEV_LOG_DELIVERY) {
+    console.warn(`\n[auth:dev] Magic link for ${email}:\n${url}\n`);
+    return;
+  }
   if (!env.AUTH_EMAIL_FROM) {
     throw new Error(
       "AUTH_EMAIL_FROM must be configured before an editor can sign in",
@@ -81,6 +85,10 @@ export async function sendSmsCode({
   code: string;
   locale: Locale;
 }) {
+  if (env.AUTH_DEV_LOG_DELIVERY) {
+    console.warn(`\n[auth:dev] SMS code for ${phone}: ${code}\n`);
+    return;
+  }
   const messages = await loadCatalog(locale, "auth-delivery");
   await sns.send(
     new PublishCommand({

@@ -22,6 +22,11 @@ export const env = createEnv({
       .regex(/^[A-Za-z0-9]{1,11}$/)
       .optional(),
     SITE_URL: z.string().url().default("http://localhost:3030"),
+    /** Dev/test only: log magic links + SMS codes to the server console instead of AWS. */
+    AUTH_DEV_LOG_DELIVERY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     DATABASE_URL: z.string().url(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
@@ -50,6 +55,7 @@ export const env = createEnv({
     AWS_REGION: process.env.AWS_REGION,
     AWS_SNS_SENDER_ID: process.env.AWS_SNS_SENDER_ID,
     SITE_URL: process.env.SITE_URL,
+    AUTH_DEV_LOG_DELIVERY: process.env.AUTH_DEV_LOG_DELIVERY,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
   },

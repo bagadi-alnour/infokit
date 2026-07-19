@@ -67,6 +67,10 @@ export function createAuthConfig(locale: Locale): NextAuthConfig {
     callbacks: {
       signIn({ user, email }) {
         if (!user.email) return false;
+        // Anti-enumeration by design: the request phase reports success for
+        // any address so outsiders cannot probe the allowlist — but
+        // sendMagicLinkEmail() silently drops unlisted recipients, and this
+        // callback still blocks them at link consumption below.
         if (email?.verificationRequest) return true;
         return Boolean(editorRecipient(user.email));
       },
