@@ -13,21 +13,21 @@
 
 ## Register
 
-| ID | Risk | L | I | Mitigation in one line |
-| --- | --- | --- | --- | --- |
-| R1 | Associations will not maintain their data — the freshness premise fails | High | High | Verification loop ≤5 min/org/month; platform-editor fallback; explicit pivot criterion |
-| R2 | Nobody in Calais learns the product exists | High | High | Aid-workers-first distribution (`DISTRIBUTION.md`); no public promotion before verified content |
-| R3 | Solo-operator continuity: burnout, absence, abandonment | Med | High | Time budget cap, dead-man banner, static-export fallback, handover pack (`SUSTAINABILITY.md`) |
-| R4 | Running costs exceed a personal budget | Low | Med | ≤€60/month architecture target; free-tier geocoding (BAN); cost reviewed monthly |
-| R5 | Hostile use of public data (police sweeps, far-right targeting of distributions) | Med | High | Per-place "should this be public?" with precision levels; org-controlled publication; no crowd data |
-| R6 | Legal/data-protection exposure lands on one individual | Med | High | Hard gate: no Phase 3 (member PII, signed documents) without a backing legal entity and specialist advice |
-| R7 | Wrong or stale information causes real-world harm | Med | High | Freshness warnings, uncertainty states, correction SLA, no eligibility/legal advice |
-| R8 | Trust failure: perceived as a state/surveillance tool | Med | High | No accounts, no tracking, association-owned attribution, published independence statement |
-| R9 | Ecosystem duplication and partner friction (Soliguide, Watizat, Channel Info Project) | Med | Med | Partner-first doctrine (`LANDSCAPE.md`); interoperate before duplicating |
-| R10 | Publishing-integrity attack: a compromised editor account publishes false information | Low | High | Strong auth/2FA for all editors, audit + revision rollback, out-of-band check for critical changes |
-| R11 | Platform dependencies: app-store latency, stale native binaries, map/geocoder outages | Med | Med | Web stays always-current while Expo OTA updates keep mobile builds fresh; direct install bridges store delays; list-first fallback already required by PRD |
-| R12 | AI-assisted drift: generated docs/code quietly contradict each other | High | Med | Git from day 0, cross-doc consistency pass after every edit, review-budget rules |
-| R13 | A pilot organisation drops out and the pilot loses its evidence base | Med | Med | Recruit 3–5 orgs for the verification loop so two survivors remain |
+| ID  | Risk                                                                                  | L    | I    | Mitigation in one line                                                                                                                                     |
+| --- | ------------------------------------------------------------------------------------- | ---- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Associations will not maintain their data — the freshness premise fails               | High | High | Verification loop ≤5 min/org/month; platform-editor fallback; explicit pivot criterion                                                                     |
+| R2  | Nobody in Calais learns the product exists                                            | High | High | Aid-workers-first distribution (`DISTRIBUTION.md`); no public promotion before verified content                                                            |
+| R3  | Solo-operator continuity: burnout, absence, abandonment                               | Med  | High | Time budget cap, dead-man banner, static-export fallback, handover pack (`SUSTAINABILITY.md`)                                                              |
+| R4  | Running costs exceed a personal budget                                                | Low  | Med  | ≤€60/month architecture target; free-tier geocoding (BAN); cost reviewed monthly                                                                           |
+| R5  | Hostile use of public data (police sweeps, far-right targeting of distributions)      | Med  | High | Per-place "should this be public?" with precision levels; org-controlled publication; no crowd data                                                        |
+| R6  | Legal/data-protection exposure lands on one individual                                | Med  | High | Hard gate: no Phase 3 (member PII, signed documents) without a backing legal entity and specialist advice                                                  |
+| R7  | Wrong or stale information causes real-world harm                                     | Med  | High | Freshness warnings, uncertainty states, correction SLA, no eligibility/legal advice                                                                        |
+| R8  | Trust failure: perceived as a state/surveillance tool                                 | Med  | High | No accounts, no tracking, association-owned attribution, published independence statement                                                                  |
+| R9  | Ecosystem duplication and partner friction (Soliguide, Watizat, Channel Info Project) | Med  | Med  | Partner-first doctrine (`LANDSCAPE.md`); interoperate before duplicating                                                                                   |
+| R10 | Publishing-integrity attack: a compromised editor account publishes false information | Low  | High | Strong auth/2FA for all editors, audit + revision rollback, out-of-band check for critical changes                                                         |
+| R11 | Platform dependencies: app-store latency, stale native binaries, map/geocoder outages | Med  | Med  | Web stays always-current while Expo OTA updates keep mobile builds fresh; direct install bridges store delays; list-first fallback already required by PRD |
+| R12 | AI-assisted drift: generated docs/code quietly contradict each other                  | High | Med  | Git from day 0, cross-doc consistency pass after every edit, review-budget rules                                                                           |
+| R13 | A pilot organisation drops out and the pilot loses its evidence base                  | Med  | Med  | Recruit 3–5 orgs for the verification loop so two survivors remain                                                                                         |
 
 ## Detail
 

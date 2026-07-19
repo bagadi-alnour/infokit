@@ -9,5 +9,12 @@
   "auth.securityTitle": "تحمي عمليتا تحقق كل تعديل",
   "auth.securityEmail": "يؤكد رابط للاستخدام مرة واحدة عنوان بريدك الإلكتروني المعتمد.",
   "auth.securitySms": "يؤكد رمز قصير عبر رسالة نصية عامل التحقق الثاني.",
-  "auth.securitySession": "تنتهي جلسة المحرر بعد ثماني ساعات."
+  "auth.securitySession": "تنتهي جلسة المحرر بعد ثماني ساعات.",
+  "fresh.today": "تم التحقق اليوم",
+  "fresh.current": "محدَّث",
+  "fresh.due_soon": "التحقق مستحق قريباً",
+  "fresh.overdue": "تأخر التحقق",
+  "fresh.never": "لم يتم التحقق",
+  "today.scheduled": "اليوم",
+  "action.confirmToday": "تأكيد اليوم"
 }

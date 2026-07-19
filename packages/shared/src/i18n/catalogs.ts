@@ -4,6 +4,7 @@ export interface CatalogMap {
   "auth-delivery": typeof import("./messages/en/auth-delivery.json");
   common: typeof import("./messages/en/common.json");
   "dashboard-layout": typeof import("./messages/en/dashboard-layout.json");
+  "dashboard-overview": typeof import("./messages/en/dashboard-overview.json");
   "dashboard-places": typeof import("./messages/en/dashboard-places.json");
   home: typeof import("./messages/en/home.json");
   login: typeof import("./messages/en/login.json");
@@ -30,6 +31,8 @@ const catalogLoaders = {
     common: async () => (await import("./messages/fr/common.json")).default,
     "dashboard-layout": async () =>
       (await import("./messages/fr/dashboard-layout.json")).default,
+    "dashboard-overview": async () =>
+      (await import("./messages/fr/dashboard-overview.json")).default,
     "dashboard-places": async () =>
       (await import("./messages/fr/dashboard-places.json")).default,
     home: async () => (await import("./messages/fr/home.json")).default,
@@ -47,6 +50,8 @@ const catalogLoaders = {
     common: async () => (await import("./messages/en/common.json")).default,
     "dashboard-layout": async () =>
       (await import("./messages/en/dashboard-layout.json")).default,
+    "dashboard-overview": async () =>
+      (await import("./messages/en/dashboard-overview.json")).default,
     "dashboard-places": async () =>
       (await import("./messages/en/dashboard-places.json")).default,
     home: async () => (await import("./messages/en/home.json")).default,
@@ -64,6 +69,8 @@ const catalogLoaders = {
     common: async () => (await import("./messages/ar/common.json")).default,
     "dashboard-layout": async () =>
       (await import("./messages/ar/dashboard-layout.json")).default,
+    "dashboard-overview": async () =>
+      (await import("./messages/ar/dashboard-overview.json")).default,
     "dashboard-places": async () =>
       (await import("./messages/ar/dashboard-places.json")).default,
     home: async () => (await import("./messages/ar/home.json")).default,

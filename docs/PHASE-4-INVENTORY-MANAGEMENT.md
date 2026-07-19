@@ -93,20 +93,20 @@ Publishing, coordination, document, inventory, financial, and possible future as
 
 ## Required Screens
 
-| ID | Screen |
-| --- | --- |
-| P4-01 | Inventory overview, alerts, and recent movements |
-| P4-02 | Storage locations |
-| P4-03 | Item/category/variant catalogue |
-| P4-04 | Item balances, lots, expiry, and movement history |
+| ID    | Screen                                                |
+| ----- | ----------------------------------------------------- |
+| P4-01 | Inventory overview, alerts, and recent movements      |
+| P4-02 | Storage locations                                     |
+| P4-03 | Item/category/variant catalogue                       |
+| P4-04 | Item balances, lots, expiry, and movement history     |
 | P4-05 | Receive, adjust, damage, expire, and distribute stock |
-| P4-06 | Internal transfer dispatch/receipt |
-| P4-07 | Cross-organisation transfer offers/acceptance |
-| P4-08 | Reservations linked to events/missions |
-| P4-09 | Kit definitions and assembly/disassembly |
-| P4-10 | Low-stock and expiry alerts |
-| P4-11 | Barcode/QR scan and manual fallback |
-| P4-12 | Inventory CSV import preview/results/reversal |
+| P4-06 | Internal transfer dispatch/receipt                    |
+| P4-07 | Cross-organisation transfer offers/acceptance         |
+| P4-08 | Reservations linked to events/missions                |
+| P4-09 | Kit definitions and assembly/disassembly              |
+| P4-10 | Low-stock and expiry alerts                           |
+| P4-11 | Barcode/QR scan and manual fallback                   |
+| P4-12 | Inventory CSV import preview/results/reversal         |
 
 ## Privacy and Security
 

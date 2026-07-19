@@ -14,12 +14,12 @@ In this context, trust travels person-to-person. Exiled people get information f
 
 ## 2. Waves, tied to delivery gates (`PRODUCT.md` §8.1)
 
-| Wave | When (gate) | Audience | Action | Success signal |
-| --- | --- | --- | --- | --- |
-| 0 — Internal | Slice 1 verification loop | Staff/volunteers of the 3–5 loop orgs | They use the private site as their own lookup tool during the loop | They open it unprompted between meetings |
-| 1 — Intermediaries | G1 soft launch | Channel Info/RIB responders, day-centre staff, mediators, interpreters, legal drop-ins | Quiet URL + 1-page toolkit (FR/EN); share button demo; ask them to answer real questions with it | Weekly active intermediaries; shares sent |
-| 2 — Physical presence | Verified content ≥ agreed threshold | People in Calais directly | A6 cards and A3 posters at day centres, distributions, charging points, PASS, org locals — **with each org's permission** | Scans/short-link visits per site |
-| 3 — Organic | Ongoing after Wave 2 | Search and social | SEO (server-rendered pages, hreflang, service+city queries such as "douche gratuite calais"); org websites linking; partners posting in existing groups | Search impressions; non-FR sessions |
+| Wave                  | When (gate)                         | Audience                                                                               | Action                                                                                                                                                  | Success signal                            |
+| --------------------- | ----------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 0 — Internal          | Slice 1 verification loop           | Staff/volunteers of the 3–5 loop orgs                                                  | They use the private site as their own lookup tool during the loop                                                                                      | They open it unprompted between meetings  |
+| 1 — Intermediaries    | G1 soft launch                      | Channel Info/RIB responders, day-centre staff, mediators, interpreters, legal drop-ins | Quiet URL + 1-page toolkit (FR/EN); share button demo; ask them to answer real questions with it                                                        | Weekly active intermediaries; shares sent |
+| 2 — Physical presence | Verified content ≥ agreed threshold | People in Calais directly                                                              | A6 cards and A3 posters at day centres, distributions, charging points, PASS, org locals — **with each org's permission**                               | Scans/short-link visits per site          |
+| 3 — Organic           | Ongoing after Wave 2                | Search and social                                                                      | SEO (server-rendered pages, hreflang, service+city queries such as "douche gratuite calais"); org websites linking; partners posting in existing groups | Search impressions; non-FR sessions       |
 
 We do not post directly into community WhatsApp/Facebook groups ourselves — partners with existing standing do, when they judge it useful.
 
@@ -36,11 +36,11 @@ https://…/s/abc123
 
 The snippet is honest even if the link is never opened (status, time, checked date). This is the single most important distribution feature and belongs in Slice 0 scope. A printable per-service card (same content, QR) serves paper flows.
 
-*Feed back into `PRODUCT.md`: share-snippet requirement; short stable URLs.*
+_Feed back into `PRODUCT.md`: share-snippet requirement; short stable URLs._
 
 ## 4. Materials
 
-- **A6 card / A3 poster:** icon-led, five launch languages, QR **plus a short memorable URL** (QR alone excludes people), and three words of promise: *free · no account · no name*. Framing is neutral — "local services information", never "app for migrants" (stigma and targeting risk, R5/R8). No photographs of people.
+- **A6 card / A3 poster:** icon-led, five launch languages, QR **plus a short memorable URL** (QR alone excludes people), and three words of promise: _free · no account · no name_. Framing is neutral — "local services information", never "app for migrants" (stigma and targeting risk, R5/R8). No photographs of people.
 - **Generated, not hand-made:** flyers and cards come from the workspace flyer tool (`FR-P1-039` / `FR-P2-022`): choose a record, languages, and format; the QR code, short URL, and verification date are stamped automatically, and the same flyer is published as a downloadable PDF in the public Downloads section — the physical and digital versions never diverge.
 - **Org toolkit page** (`/partners`): what this is, who runs it, how to send corrections, printable materials, the share feature.
 - **Transparency page:** who operates it, who funds it, what is not collected (supports R8; see `SUSTAINABILITY.md`).

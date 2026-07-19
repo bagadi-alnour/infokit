@@ -90,13 +90,13 @@ Administration, coordinator, member-agenda, and notification interfaces are avai
 
 ## Initial Roles
 
-| Role | Typical permissions |
-| --- | --- |
-| Organisation administrator | Organisation settings, members, roles, teams, and audit access; document access only when explicitly granted |
-| Coordinator | Teams, availability, shifts, missions, meetings, and operational overview |
-| Document administrator/signatory | Approved templates, document preparation, signer workflow, signature status, and restricted document audit |
-| Staff/volunteer/intern | Own profile and availability, assigned shifts/missions, permitted team information, and documents sent to them |
-| Viewer/auditor | Read-only access to selected operational reports |
+| Role                             | Typical permissions                                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Organisation administrator       | Organisation settings, members, roles, teams, and audit access; document access only when explicitly granted   |
+| Coordinator                      | Teams, availability, shifts, missions, meetings, and operational overview                                      |
+| Document administrator/signatory | Approved templates, document preparation, signer workflow, signature status, and restricted document audit     |
+| Staff/volunteer/intern           | Own profile and availability, assigned shifts/missions, permitted team information, and documents sent to them |
+| Viewer/auditor                   | Read-only access to selected operational reports                                                               |
 
 An editor from Phase 2 does not automatically receive team-management access. A coordinator does not automatically receive publishing, restricted-document, or sensitive-data access. Organisation administrators configure access but do not automatically read signed documents unless policy requires it and the permission is granted.
 
@@ -149,24 +149,24 @@ An editor from Phase 2 does not automatically receive team-management access. A 
 
 ## Required Screens
 
-| ID | Screen |
-| --- | --- |
-| P3-01 | Team-management overview |
-| P3-02 | Members and invitation states |
-| P3-03 | Member operational profile |
-| P3-04 | Team list and team detail |
-| P3-05 | Availability calendar/form |
-| P3-06 | Weekly coverage planner |
-| P3-07 | Shift/event editor |
-| P3-08 | Mission detail and assignment |
-| P3-09 | Member schedule/mobile agenda |
-| P3-10 | Notifications and preferences |
-| P3-11 | Roles, permissions, and permission review |
-| P3-12 | Team audit history |
-| P3-13 | Restricted document centre and signature-status queue |
+| ID    | Screen                                                   |
+| ----- | -------------------------------------------------------- |
+| P3-01 | Team-management overview                                 |
+| P3-02 | Members and invitation states                            |
+| P3-03 | Member operational profile                               |
+| P3-04 | Team list and team detail                                |
+| P3-05 | Availability calendar/form                               |
+| P3-06 | Weekly coverage planner                                  |
+| P3-07 | Shift/event editor                                       |
+| P3-08 | Mission detail and assignment                            |
+| P3-09 | Member schedule/mobile agenda                            |
+| P3-10 | Notifications and preferences                            |
+| P3-11 | Roles, permissions, and permission review                |
+| P3-12 | Team audit history                                       |
+| P3-13 | Restricted document centre and signature-status queue    |
 | P3-14 | Template-based document preparation, review, and signing |
-| P3-15 | Training/course catalogue and member qualifications |
-| P3-16 | Agenda import preview, results, and undo |
+| P3-15 | Training/course catalogue and member qualifications      |
+| P3-16 | Agenda import preview, results, and undo                 |
 
 ## Privacy and Safety
 

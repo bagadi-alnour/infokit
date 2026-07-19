@@ -9,5 +9,12 @@
   "auth.securityTitle": "Two checks protect every edit",
   "auth.securityEmail": "A single-use link confirms your approved email address.",
   "auth.securitySms": "A short SMS code confirms the second factor.",
-  "auth.securitySession": "The editor session expires after eight hours."
+  "auth.securitySession": "The editor session expires after eight hours.",
+  "fresh.today": "Verified today",
+  "fresh.current": "Up to date",
+  "fresh.due_soon": "Review due soon",
+  "fresh.overdue": "Verification overdue",
+  "fresh.never": "Never verified",
+  "today.scheduled": "Today",
+  "action.confirmToday": "Confirm today"
 }

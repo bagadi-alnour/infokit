@@ -78,12 +78,12 @@ Team coordinators, staff, volunteers, interns, and restricted participation-docu
 
 Initial roles:
 
-| Role | Scope |
-| --- | --- |
-| Platform operator | Verify organisations, moderate shared taxonomies/content, investigate audit events |
-| Organisation administrator | Organisation settings, profile, users with Phase 2 roles, permissions, audit view |
-| Editor | Places, services, schedules, articles, contacts, downloads, and permitted simulator content |
-| Translator/reviewer | Assigned languages/content and verification state only |
+| Role                       | Scope                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------- |
+| Platform operator          | Verify organisations, moderate shared taxonomies/content, investigate audit events          |
+| Organisation administrator | Organisation settings, profile, users with Phase 2 roles, permissions, audit view           |
+| Editor                     | Places, services, schedules, articles, contacts, downloads, and permitted simulator content |
+| Translator/reviewer        | Assigned languages/content and verification state only                                      |
 
 Permissions remain organisation-scoped and explicit. Team membership and operational scheduling permissions wait until Phase 3.
 
@@ -144,21 +144,21 @@ Permissions remain organisation-scoped and explicit. Team membership and operati
 
 ## Required Screens
 
-| ID | Screen |
-| --- | --- |
-| P2-01 | Platform verification and organisation invitation |
-| P2-02 | Platform approval/duplicate review |
-| P2-03 | Workspace overview and review queue |
-| P2-04 | Public profile and speciality editor |
-| P2-05 | Places/services table and record inspector |
-| P2-06 | Schedule and exception editor |
+| ID    | Screen                                                             |
+| ----- | ------------------------------------------------------------------ |
+| P2-01 | Platform verification and organisation invitation                  |
+| P2-02 | Platform approval/duplicate review                                 |
+| P2-03 | Workspace overview and review queue                                |
+| P2-04 | Public profile and speciality editor                               |
+| P2-05 | Places/services table and record inspector                         |
+| P2-06 | Schedule and exception editor                                      |
 | P2-07 | Article editor, translation review, and joint-publication approval |
-| P2-08 | Simulator-content editor/review |
-| P2-09 | Files/downloads manager |
-| P2-10 | Phase 2 roles and invitations |
-| P2-11 | Audit log and revision history |
-| P2-12 | Article-custody transfer requests/history |
-| P2-13 | Shared inter-organisation agenda and coordination-event editor |
+| P2-08 | Simulator-content editor/review                                    |
+| P2-09 | Files/downloads manager                                            |
+| P2-10 | Phase 2 roles and invitations                                      |
+| P2-11 | Audit log and revision history                                     |
+| P2-12 | Article-custody transfer requests/history                          |
+| P2-13 | Shared inter-organisation agenda and coordination-event editor     |
 
 ## Phase 2 Exit Criteria
 

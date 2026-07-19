@@ -39,40 +39,40 @@ Until a logo is designed, use the text wordmark **Calais Info** with a simple fo
 
 Use semantic tokens rather than raw color values in components.
 
-| Token | Value | Role |
-| --- | --- | --- |
-| `--color-canvas` | `#FFFFFF` | Main page background |
-| `--color-surface` | `#FFFFFF` | Cards, panels, dialogs |
-| `--color-surface-subtle` | `#F8FAFC` | Secondary regions, table headers |
-| `--color-ink` | `#181D26` | Primary text |
-| `--color-text-muted` | `#56606F` | Secondary text and metadata |
-| `--color-border` | `#E0E2E6` | Default borders and dividers |
-| `--color-border-strong` | `#B8C0CC` | Selected or emphasized boundaries |
-| `--color-accent` | `#1B61C9` | Primary actions, links, focus indicators |
-| `--color-accent-hover` | `#154EA3` | Hover/pressed primary action |
-| `--color-accent-soft` | `#EAF2FF` | Selected rows and informational surfaces |
-| `--color-success` | `#16794B` | Open, confirmed, complete |
-| `--color-success-soft` | `#EAF7F0` | Success background |
-| `--color-warning` | `#9A6700` | Uncertain, review soon |
-| `--color-warning-soft` | `#FFF4D6` | Warning background |
-| `--color-danger` | `#B4232C` | Cancelled, destructive actions, errors |
-| `--color-danger-soft` | `#FDEBEC` | Danger background |
-| `--color-neutral-status` | `#5F6876` | Closed or inactive |
-| `--color-neutral-status-soft` | `#EEF0F3` | Neutral status background |
+| Token                         | Value     | Role                                     |
+| ----------------------------- | --------- | ---------------------------------------- |
+| `--color-canvas`              | `#FFFFFF` | Main page background                     |
+| `--color-surface`             | `#FFFFFF` | Cards, panels, dialogs                   |
+| `--color-surface-subtle`      | `#F8FAFC` | Secondary regions, table headers         |
+| `--color-ink`                 | `#181D26` | Primary text                             |
+| `--color-text-muted`          | `#56606F` | Secondary text and metadata              |
+| `--color-border`              | `#E0E2E6` | Default borders and dividers             |
+| `--color-border-strong`       | `#B8C0CC` | Selected or emphasized boundaries        |
+| `--color-accent`              | `#1B61C9` | Primary actions, links, focus indicators |
+| `--color-accent-hover`        | `#154EA3` | Hover/pressed primary action             |
+| `--color-accent-soft`         | `#EAF2FF` | Selected rows and informational surfaces |
+| `--color-success`             | `#16794B` | Open, confirmed, complete                |
+| `--color-success-soft`        | `#EAF7F0` | Success background                       |
+| `--color-warning`             | `#9A6700` | Uncertain, review soon                   |
+| `--color-warning-soft`        | `#FFF4D6` | Warning background                       |
+| `--color-danger`              | `#B4232C` | Cancelled, destructive actions, errors   |
+| `--color-danger-soft`         | `#FDEBEC` | Danger background                        |
+| `--color-neutral-status`      | `#5F6876` | Closed or inactive                       |
+| `--color-neutral-status-soft` | `#EEF0F3` | Neutral status background                |
 
 ### Service-category accents
 
 Service categories may use restrained accent colors for icons, map pins, and tags. Every category must also have a unique icon and visible text label; color is never the only identifier.
 
-| Category | Accent |
-| --- | --- |
-| Food | `#D97706` |
-| Drinking water | `#1677A8` |
-| Clothing | `#7C5CC4` |
-| Showers | `#167C80` |
-| Device charging | `#B25E09` |
-| Healthcare | `#C13F5A` |
-| Legal assistance | `#4867B1` |
+| Category            | Accent    |
+| ------------------- | --------- |
+| Food                | `#D97706` |
+| Drinking water      | `#1677A8` |
+| Clothing            | `#7C5CC4` |
+| Showers             | `#167C80` |
+| Device charging     | `#B25E09` |
+| Healthcare          | `#C13F5A` |
+| Legal assistance    | `#4867B1` |
 | General information | `#52606D` |
 
 ### Color rules
@@ -88,21 +88,27 @@ Service categories may use restrained accent colors for icons, map pins, and tag
 Use a Haas-like neutral grotesk without requiring a proprietary font:
 
 ```css
-font-family: Inter, "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+font-family:
+  Inter,
+  "Helvetica Neue",
+  -apple-system,
+  BlinkMacSystemFont,
+  "Segoe UI",
+  sans-serif;
 ```
 
 If licensed Haas files are available in the Open Design package, they may replace `Inter` without changing metrics or hierarchy.
 
-| Role | Desktop | Mobile | Weight | Line height |
-| --- | --- | --- | --- | --- |
-| Display | 48px | 36px | 700 | 1.08 |
-| Page title | 36px | 30px | 650 | 1.15 |
-| Section title | 28px | 24px | 650 | 1.2 |
-| Card title | 20px | 18px | 600 | 1.3 |
-| Body large | 18px | 18px | 400 | 1.5 |
-| Body | 16px | 16px | 400 | 1.5 |
-| Label/button | 14px | 15px | 600 | 1.3 |
-| Caption/metadata | 13px | 14px | 500 | 1.4 |
+| Role             | Desktop | Mobile | Weight | Line height |
+| ---------------- | ------- | ------ | ------ | ----------- |
+| Display          | 48px    | 36px   | 700    | 1.08        |
+| Page title       | 36px    | 30px   | 650    | 1.15        |
+| Section title    | 28px    | 24px   | 650    | 1.2         |
+| Card title       | 20px    | 18px   | 600    | 1.3         |
+| Body large       | 18px    | 18px   | 400    | 1.5         |
+| Body             | 16px    | 16px   | 400    | 1.5         |
+| Label/button     | 14px    | 15px   | 600    | 1.3         |
+| Caption/metadata | 13px    | 14px   | 500    | 1.4         |
 
 ### Typography rules
 
@@ -119,16 +125,16 @@ If licensed Haas files are available in the Open Design package, they may replac
 
 Use an 8px base grid with 4px available for compact internal spacing.
 
-| Token | Value | Typical use |
-| --- | --- | --- |
-| `--space-1` | 4px | Icon gaps, compact metadata |
-| `--space-2` | 8px | Inline gaps, chip padding |
-| `--space-3` | 12px | Compact control padding |
-| `--space-4` | 16px | Card padding on mobile |
-| `--space-5` | 24px | Card padding on desktop |
-| `--space-6` | 32px | Section spacing |
-| `--space-7` | 48px | Major section separation |
-| `--space-8` | 64px | Public page vertical rhythm |
+| Token       | Value | Typical use                 |
+| ----------- | ----- | --------------------------- |
+| `--space-1` | 4px   | Icon gaps, compact metadata |
+| `--space-2` | 8px   | Inline gaps, chip padding   |
+| `--space-3` | 12px  | Compact control padding     |
+| `--space-4` | 16px  | Card padding on mobile      |
+| `--space-5` | 24px  | Card padding on desktop     |
+| `--space-6` | 32px  | Section spacing             |
+| `--space-7` | 48px  | Major section separation    |
+| `--space-8` | 64px  | Public page vertical rhythm |
 
 ### Sizing rules
 

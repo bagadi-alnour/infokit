@@ -1,5 +1,7 @@
 import { type ReactNode } from "react";
 
+import { type Freshness } from "~/lib/freshness";
+
 /**
  * Workspace primitives per docs/DESIGN.md (compact density is allowed in
  * the authenticated workspace; the public pages get their own, calmer set).
@@ -89,7 +91,7 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...rest} className={`${controlClass} ${className}`} />;
 }
 
-const buttonVariants = {
+export const buttonVariants = {
   primary: "bg-accent text-white hover:bg-accent-hover",
   secondary: "border border-line-strong bg-surface hover:border-accent",
   danger: "bg-danger text-white",
@@ -140,5 +142,35 @@ export function EmptyState({ children }: { children: ReactNode }) {
     <p className="text-muted border-line rounded-card border border-dashed px-4 py-8 text-center text-sm">
       {children}
     </p>
+  );
+}
+
+const freshnessTone: Record<Freshness, string> = {
+  today: "bg-ok",
+  current: "bg-ok/50",
+  due_soon: "bg-warn",
+  overdue: "bg-danger",
+  never: "bg-line-strong",
+};
+
+/**
+ * Quiet freshness signal (docs/DESIGN-BRIEF.md §11): color paired with an
+ * accessible label — never the only carrier of meaning.
+ */
+export function FreshnessDot({
+  state,
+  label,
+}: {
+  state: Freshness;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs" title={label}>
+      <span
+        aria-hidden
+        className={`inline-block h-2 w-2 rounded-full ${freshnessTone[state]}`}
+      />
+      <span className="text-muted">{label}</span>
+    </span>
   );
 }

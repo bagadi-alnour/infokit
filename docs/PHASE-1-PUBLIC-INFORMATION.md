@@ -138,22 +138,22 @@ Icons describe services, not the association's brand. Use one consistent open-so
 
 Organisation specialities provide a compact directory summary. Included features describe one service offering. The profile must not merge every feature offered by an organisation into one flat list or imply that a feature is available during another activity.
 
-| Speciality | Suggested icon name | Example label |
-| --- | --- | --- |
-| Medical care | `Stethoscope` | Medical care |
-| Medication | `Pill` | Medication |
-| Doctors/clinical consultation | `UserRoundPlus` | Doctors |
-| Mental-health support | `Brain` | Mental-health support |
-| Food | `UtensilsCrossed` | Food |
-| Drinking water | `Droplets` | Drinking water |
-| Clothing | `Shirt` | Clothing |
-| Showers/hygiene | `ShowerHead` | Showers & hygiene |
-| Device charging | `BatteryCharging` | Device charging |
-| Legal assistance | `Scale` | Legal assistance |
-| Information/orientation | `CircleHelp` | Information |
-| Shelter/day services | `House` | Shelter & day services |
-| Transport | `Bus` | Transport |
-| Translation/mediation | `Languages` | Translation & mediation |
+| Speciality                    | Suggested icon name | Example label           |
+| ----------------------------- | ------------------- | ----------------------- |
+| Medical care                  | `Stethoscope`       | Medical care            |
+| Medication                    | `Pill`              | Medication              |
+| Doctors/clinical consultation | `UserRoundPlus`     | Doctors                 |
+| Mental-health support         | `Brain`             | Mental-health support   |
+| Food                          | `UtensilsCrossed`   | Food                    |
+| Drinking water                | `Droplets`          | Drinking water          |
+| Clothing                      | `Shirt`             | Clothing                |
+| Showers/hygiene               | `ShowerHead`        | Showers & hygiene       |
+| Device charging               | `BatteryCharging`   | Device charging         |
+| Legal assistance              | `Scale`             | Legal assistance        |
+| Information/orientation       | `CircleHelp`        | Information             |
+| Shelter/day services          | `House`             | Shelter & day services  |
+| Transport                     | `Bus`               | Transport               |
+| Translation/mediation         | `Languages`         | Translation & mediation |
 
 Illustrative example only: an approved MSF directory record could display **Medical care** (`Stethoscope`), **Medication** (`Pill`), and **Doctors** (`UserRoundPlus`) if MSF confirms those services for the listed Calais location. Do not infer or publish a real association's services without verification.
 
@@ -161,10 +161,10 @@ Illustrative example only: an approved MSF directory record could display **Medi
 
 The following MFS example comes from the product brief and defines the required content structure. An editor must verify the organisation name, programme details, schedule, and availability before publication.
 
-| Service offering | Primary category | Included features shown with icons |
-| --- | --- | --- |
-| Accueil de jour | Day services | Laundry or clothes cleaning (`WashingMachine`), shower (`ShowerHead`), phone charging (`BatteryCharging`), social assistance (`UsersRound`), mental-health support (`Brain`), food (`UtensilsCrossed`), drinking water (`Droplets`), welcome kit (`PackageOpen`) |
-| Nurse-led health activity | Healthcare | Nursing care (`Bandage`), dressing changes (`Bandage`), basic pain-relief support (`Pill`), treatment of minor health issues (`Stethoscope`) |
+| Service offering          | Primary category | Included features shown with icons                                                                                                                                                                                                                               |
+| ------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accueil de jour           | Day services     | Laundry or clothes cleaning (`WashingMachine`), shower (`ShowerHead`), phone charging (`BatteryCharging`), social assistance (`UsersRound`), mental-health support (`Brain`), food (`UtensilsCrossed`), drinking water (`Droplets`), welcome kit (`PackageOpen`) |
+| Nurse-led health activity | Healthcare       | Nursing care (`Bandage`), dressing changes (`Bandage`), basic pain-relief support (`Pill`), treatment of minor health issues (`Stethoscope`)                                                                                                                     |
 
 These rows are two service records. They may use the same provider and place, but each record retains its own description, schedule, audience, status, and included-feature assignments. The day-centre features do not appear on the nurse-led activity unless the provider confirms that they are available during that activity.
 
@@ -202,21 +202,21 @@ This publishing capability is intentionally narrower than the Phase 2 associatio
 
 ## Required Screens
 
-| ID | Screen |
-| --- | --- |
-| P1-01 | Public home/basic information |
-| P1-02 | Service autocomplete, audience filters, list/map |
-| P1-03 | Service detail |
-| P1-04 | Article list and article detail |
-| P1-05 | Information simulator intro/question/result |
-| P1-06 | Fixed-information index and page |
-| P1-07 | Association directory |
-| P1-08 | Association profile with speciality icons |
-| P1-09 | Language selector and translation-fallback states |
-| P1-10 | Printable/low-bandwidth view |
-| P1-11 | Association invitation acceptance and publisher sign-in |
+| ID    | Screen                                                                                                                      |
+| ----- | --------------------------------------------------------------------------------------------------------------------------- |
+| P1-01 | Public home/basic information                                                                                               |
+| P1-02 | Service autocomplete, audience filters, list/map                                                                            |
+| P1-03 | Service detail                                                                                                              |
+| P1-04 | Article list and article detail                                                                                             |
+| P1-05 | Information simulator intro/question/result                                                                                 |
+| P1-06 | Fixed-information index and page                                                                                            |
+| P1-07 | Association directory                                                                                                       |
+| P1-08 | Association profile with speciality icons                                                                                   |
+| P1-09 | Language selector and translation-fallback states                                                                           |
+| P1-10 | Printable/low-bandwidth view                                                                                                |
+| P1-11 | Association invitation acceptance and publisher sign-in                                                                     |
 | P1-12 | Minimal association article editor, media, AI provenance, joint-approval notes/projection, preview, and publication history |
-| P1-13 | Downloads index and detail |
+| P1-13 | Downloads index and detail                                                                                                  |
 
 ## Safety and Accessibility
 

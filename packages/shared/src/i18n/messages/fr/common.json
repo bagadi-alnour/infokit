@@ -9,5 +9,12 @@
   "auth.securityTitle": "Deux vérifications protègent chaque modification",
   "auth.securityEmail": "Un lien à usage unique confirme votre adresse e-mail autorisée.",
   "auth.securitySms": "Un code SMS court confirme le second facteur.",
-  "auth.securitySession": "La session d’édition expire après huit heures."
+  "auth.securitySession": "La session d’édition expire après huit heures.",
+  "fresh.today": "Vérifié aujourd’hui",
+  "fresh.current": "À jour",
+  "fresh.due_soon": "Vérification bientôt due",
+  "fresh.overdue": "Vérification en retard",
+  "fresh.never": "Jamais vérifié",
+  "today.scheduled": "Aujourd’hui",
+  "action.confirmToday": "Confirmer aujourd’hui"
 }

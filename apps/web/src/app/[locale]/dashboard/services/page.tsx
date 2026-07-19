@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
 
+import { loadCatalog } from "@calais/shared/i18n/catalogs";
+import { PendingButton } from "~/components/pending-button";
 import {
   Button,
   Card,
   Chip,
   EmptyState,
   Field,
+  FreshnessDot,
   PageHeader,
   Select,
   TextArea,
@@ -15,15 +18,18 @@ import {
 import { db } from "~/server/db";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
+import { freshnessOf, isSameParisDay, parisToday } from "~/lib/freshness";
 import {
   audienceCategories,
   organizations,
   places,
   placeTranslations,
+  scheduleRules,
   serviceCategories,
   serviceTranslations,
   services,
 } from "~/server/db/schema";
+import { confirmServiceToday } from "../actions";
 import { createService } from "./actions";
 
 export default async function ServicesPage({
@@ -61,6 +67,7 @@ export default async function ServicesPage({
       published: services.published,
       manualStatus: services.manualStatus,
       lastVerifiedAt: services.lastVerifiedAt,
+      reviewDueAt: services.reviewDueAt,
       name: serviceTranslations.name,
       org: organizations.displayName,
       categoryCode: serviceCategories.code,
@@ -77,6 +84,29 @@ export default async function ServicesPage({
     .leftJoin(serviceCategories, eq(services.categoryId, serviceCategories.id))
     .orderBy(desc(services.createdAt));
 
+  const common = await loadCatalog(locale, "common");
+  const today = parisToday();
+  const scheduledToday = new Set(
+    (
+      await db
+        .select({ serviceId: scheduleRules.serviceId })
+        .from(scheduleRules)
+        .where(
+          and(
+            eq(scheduleRules.weekday, today.weekday),
+            or(
+              isNull(scheduleRules.validFrom),
+              lte(scheduleRules.validFrom, today.isoDate),
+            ),
+            or(
+              isNull(scheduleRules.validTo),
+              gte(scheduleRules.validTo, today.isoDate),
+            ),
+          ),
+        )
+    ).map((row) => row.serviceId),
+  );
+
   return (
     <>
       <PageHeader
@@ -92,17 +122,24 @@ export default async function ServicesPage({
             </EmptyState>
           ) : (
             <ul className="divide-line divide-y">
-              {rows.map((service) => (
-                <li key={service.id} className="py-2.5">
-                  <Link
-                    href={localizedPath(
-                      `/dashboard/services/${service.id}`,
-                      locale,
-                    )}
-                    className="flex flex-wrap items-center justify-between gap-2"
+              {rows.map((service) => {
+                const freshness = freshnessOf(service);
+                const isToday = scheduledToday.has(service.id);
+                const confirmable =
+                  isToday && !isSameParisDay(service.lastVerifiedAt);
+                return (
+                  <li
+                    key={service.id}
+                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5"
                   >
-                    <div>
-                      <p className="text-sm font-medium">
+                    <Link
+                      href={localizedPath(
+                        `/dashboard/services/${service.id}`,
+                        locale,
+                      )}
+                      className="min-w-0"
+                    >
+                      <p className="text-sm font-medium hover:underline">
                         {service.name ?? "(no name)"}
                       </p>
                       <p className="text-muted text-xs">
@@ -110,8 +147,15 @@ export default async function ServicesPage({
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
-                    </div>
-                    <span className="flex gap-1.5">
+                    </Link>
+                    <span className="flex items-center gap-1.5">
+                      <FreshnessDot
+                        state={freshness}
+                        label={common[`fresh.${freshness}`]}
+                      />
+                      {isToday ? (
+                        <Chip tone="accent">{common["today.scheduled"]}</Chip>
+                      ) : null}
                       {service.manualStatus !== "normal" ? (
                         <Chip
                           tone={
@@ -123,16 +167,26 @@ export default async function ServicesPage({
                           {service.manualStatus}
                         </Chip>
                       ) : null}
-                      {service.lastVerifiedAt === null ? (
-                        <Chip tone="warn">unverified</Chip>
-                      ) : null}
                       <Chip tone={service.published ? "ok" : "neutral"}>
                         {service.published ? "published" : "draft"}
                       </Chip>
+                      {confirmable ? (
+                        <form action={confirmServiceToday}>
+                          <input type="hidden" name="locale" value={locale} />
+                          <input
+                            type="hidden"
+                            name="serviceId"
+                            value={service.id}
+                          />
+                          <PendingButton variant="secondary">
+                            {common["action.confirmToday"]}
+                          </PendingButton>
+                        </form>
+                      ) : null}
                     </span>
-                  </Link>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
