@@ -1,0 +1,5 @@
+[
+  { "code": "fr", "label": "Français", "direction": "ltr" },
+  { "code": "en", "label": "English", "direction": "ltr" },
+  { "code": "ar", "label": "العربية", "direction": "rtl" }
+]

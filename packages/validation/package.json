@@ -1,0 +1,29 @@
+{
+  "name": "@calais/validation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./address": "./src/address.ts",
+    "./auth": "./src/auth.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --cache --cache-location .cache/eslint",
+    "typecheck": "tsc --noEmit"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix --cache --cache-location .cache/eslint",
+      "prettier --write --cache"
+    ]
+  },
+  "dependencies": {
+    "@calais/shared": "workspace:*",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "eslint": "^9.23.0",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.27.0"
+  }
+}

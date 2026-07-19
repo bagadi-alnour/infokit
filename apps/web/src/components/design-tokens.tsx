@@ -15,13 +15,20 @@ function themeVars(theme: SemanticTheme): string {
 }
 
 const css = [
-  `:root{color-scheme:light dark;${themeVars(light)}`,
+  `:root,:root[data-theme="light"]{color-scheme:light;${themeVars(light)}`,
   `--radius-control:${String(radii.control)}px;`,
   `--radius-card:${String(radii.card)}px;`,
   `--radius-panel:${String(radii.panel)}px;}`,
-  `@media (prefers-color-scheme: dark){:root{${themeVars(dark)}}}`,
+  `:root[data-theme="dark"]{color-scheme:dark;${themeVars(dark)}}`,
+  `@media (prefers-color-scheme: dark){:root:not([data-theme]),:root[data-theme="system"]{color-scheme:dark;${themeVars(dark)}}}`,
 ].join("");
+
+const initializationScript = `(()=>{try{const key="calais-info-theme";const stored=localStorage.getItem(key);const theme=stored==="light"||stored==="dark"?stored:"system";document.documentElement.dataset.theme=theme}catch{document.documentElement.dataset.theme="system"}})()`;
 
 export function DesignTokenStyles() {
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
+}
+
+export function ThemeInitializationScript() {
+  return <script dangerouslySetInnerHTML={{ __html: initializationScript }} />;
 }

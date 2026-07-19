@@ -1,0 +1,18 @@
+{
+  "auth.verify.eyebrow": "Second check",
+  "auth.verify.title": "Confirm the SMS code",
+  "auth.verify.description": "Send a six-digit code to {phone}. The code expires after 10 minutes.",
+  "auth.verify.signedInAs": "Email confirmed: {email}",
+  "auth.verify.send": "Send SMS code",
+  "auth.verify.sending": "Sending code…",
+  "auth.verify.codeLabel": "Six-digit code",
+  "auth.verify.codePlaceholder": "000000",
+  "auth.verify.submit": "Confirm and continue",
+  "auth.verify.submitting": "Checking code…",
+  "auth.verify.sent": "The code was sent. It can only be used once.",
+  "auth.verify.invalid": "That code is incorrect, expired, or has already been used.",
+  "auth.verify.cooldown": "Please wait one minute before requesting another code.",
+  "auth.verify.rateLimited": "Too many codes were requested. Try again in one hour.",
+  "auth.verify.sendError": "The SMS could not be sent. Try again shortly.",
+  "auth.verify.signOut": "Use a different email address"
+}

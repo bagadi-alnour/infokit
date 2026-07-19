@@ -1,0 +1,8 @@
+{
+  "auth.sms.message": "رمز Calais Info: {code}. تنتهي صلاحيته خلال 10 دقائق. لا تشارك هذا الرمز.",
+  "auth.email.subject": "رابط تسجيل الدخول إلى Calais Info",
+  "auth.email.heading": "تسجيل الدخول إلى Calais Info",
+  "auth.email.body": "استخدم هذا الرابط لمرة واحدة لتأكيد بريدك الإلكتروني. تنتهي صلاحيته خلال 15 دقيقة.",
+  "auth.email.action": "متابعة تسجيل الدخول",
+  "auth.email.ignore": "إذا لم تطلب هذا الرابط، يمكنك تجاهل هذه الرسالة."
+}

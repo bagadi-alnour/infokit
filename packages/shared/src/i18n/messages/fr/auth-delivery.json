@@ -1,0 +1,8 @@
+{
+  "auth.sms.message": "Code Calais Info : {code}. Il expire dans 10 minutes. Ne partagez jamais ce code.",
+  "auth.email.subject": "Votre lien de connexion à Calais Info",
+  "auth.email.heading": "Se connecter à Calais Info",
+  "auth.email.body": "Utilisez ce lien à usage unique pour confirmer votre adresse e-mail. Il expire dans 15 minutes.",
+  "auth.email.action": "Continuer la connexion",
+  "auth.email.ignore": "Si vous n’avez pas demandé ce lien, ignorez ce message."
+}

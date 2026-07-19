@@ -1,0 +1,11 @@
+{
+  "auth.login.eyebrow": "Accès éditeur",
+  "auth.login.title": "Se connecter à la console d’édition",
+  "auth.login.description": "Utilisez l’adresse e-mail autorisée pour cet outil privé. Nous enverrons un lien sécurisé, puis nous confirmerons votre accès par SMS.",
+  "auth.login.emailLabel": "Adresse e-mail autorisée",
+  "auth.login.emailPlaceholder": "vous@exemple.org",
+  "auth.login.submit": "Envoyer le lien sécurisé",
+  "auth.login.submitting": "Envoi du lien…",
+  "auth.login.error": "La connexion n’a pas pu démarrer. Vérifiez l’adresse et réessayez.",
+  "auth.login.privacy": "Seules les personnes désignées peuvent se connecter. Nous n’indiquons pas quelles adresses sont autorisées."
+}

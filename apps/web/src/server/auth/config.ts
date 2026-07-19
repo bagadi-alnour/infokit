@@ -1,67 +1,105 @@
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import { isLocale, type Locale } from "@calais/shared/i18n";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
-import DiscordProvider from "next-auth/providers/discord";
 
+import { env } from "~/env";
+import { authPath } from "~/i18n/routing";
 import { db } from "~/server/db";
-import {
-  accounts,
-  sessions,
-  users,
-  verificationTokens,
-} from "~/server/db/schema";
+import { auditEvents } from "~/server/db/schema";
+import { authAdapter } from "./adapter";
+import { sendMagicLinkEmail } from "./aws";
+import { editorRecipient } from "./editors";
 
-/**
- * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
- * object and keep type safety.
- *
- * @see https://next-auth.js.org/getting-started/typescript#module-augmentation
- */
 declare module "next-auth" {
   interface Session extends DefaultSession {
+    secondFactorVerified: boolean;
     user: {
       id: string;
-      // ...other properties
-      // role: UserRole;
     } & DefaultSession["user"];
   }
-
-  // interface User {
-  //   // ...other properties
-  //   // role: UserRole;
-  // }
 }
 
-/**
- * Options for NextAuth.js used to configure adapters, providers, callbacks, etc.
- *
- * @see https://next-auth.js.org/configuration/options
- */
-export const authConfig = {
-  providers: [
-    DiscordProvider,
-    /**
-     * ...add more providers here.
-     *
-     * Most other providers require a bit more work than the Discord provider. For example, the
-     * GitHub provider requires you to add the `refresh_token_expires_in` field to the Account
-     * model. Refer to the NextAuth.js docs for the provider you want to use. Example:
-     *
-     * @see https://next-auth.js.org/providers/github
-     */
-  ],
-  adapter: DrizzleAdapter(db, {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
-  }),
-  callbacks: {
-    session: ({ session, user }) => ({
-      ...session,
-      user: {
-        ...session.user,
-        id: user.id,
+async function localeFromRequest(request: Request): Promise<Locale> {
+  const locale = new URLSearchParams(await request.clone().text()).get(
+    "locale",
+  );
+  return isLocale(locale) ? locale : "fr";
+}
+
+export function createAuthConfig(locale: Locale): NextAuthConfig {
+  return {
+    adapter: authAdapter,
+    trustHost: env.AUTH_TRUST_HOST,
+    providers: [
+      {
+        id: "ses",
+        type: "email",
+        name: "Amazon SES",
+        from: "Calais Info",
+        maxAge: 15 * 60,
+        options: {},
+        async sendVerificationRequest({
+          identifier,
+          url,
+          request,
+        }: {
+          identifier: string;
+          url: string;
+          request: Request;
+        }) {
+          await sendMagicLinkEmail({
+            email: identifier,
+            url,
+            locale: await localeFromRequest(request),
+          });
+        },
       },
-    }),
-  },
-} satisfies NextAuthConfig;
+    ],
+    pages: {
+      signIn: authPath("login", locale),
+      verifyRequest: authPath("check", locale),
+      error: authPath("error", locale),
+    },
+    session: {
+      strategy: "database",
+      maxAge: 8 * 60 * 60,
+      updateAge: 60 * 60,
+    },
+    callbacks: {
+      signIn({ user, email }) {
+        if (!user.email) return false;
+        if (email?.verificationRequest) return true;
+        return Boolean(editorRecipient(user.email));
+      },
+      session: ({ session, user }) => {
+        const databaseSession = session as typeof session & {
+          secondFactorVerifiedAt?: Date | null;
+        };
+        return {
+          ...session,
+          secondFactorVerified: Boolean(databaseSession.secondFactorVerifiedAt),
+          user: {
+            ...session.user,
+            id: user.id,
+          },
+        };
+      },
+    },
+    events: {
+      async signIn({ user }) {
+        await db.insert(auditEvents).values({
+          actorUserId: user.id,
+          action: "auth.magic_link.signed_in",
+          subjectType: "auth.session",
+        });
+      },
+      async signOut(message) {
+        if (!("session" in message) || !message.session?.userId) return;
+        await db.insert(auditEvents).values({
+          actorUserId: message.session.userId,
+          action: "auth.session.signed_out",
+          subjectType: "auth.session",
+        });
+      },
+    },
+  } satisfies NextAuthConfig;
+}

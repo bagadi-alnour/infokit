@@ -1,0 +1,7 @@
+{
+  "auth.check.eyebrow": "Première vérification",
+  "auth.check.title": "Ouvrez le lien reçu par e-mail",
+  "auth.check.description": "Si l’adresse est autorisée, un lien à usage unique est en route. Il expire dans 15 minutes.",
+  "auth.check.next": "Après l’avoir ouvert, vous confirmerez un code envoyé sur votre téléphone.",
+  "auth.check.back": "Utiliser une autre adresse e-mail"
+}

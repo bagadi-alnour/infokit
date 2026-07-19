@@ -7,12 +7,21 @@ export const env = createEnv({
    * isn't built with invalid env vars.
    */
   server: {
-    AUTH_SECRET:
-      process.env.NODE_ENV === "production"
-        ? z.string()
-        : z.string().optional(),
-    AUTH_DISCORD_ID: z.string(),
-    AUTH_DISCORD_SECRET: z.string(),
+    AUTH_SECRET: z.string().min(32),
+    AUTH_TRUST_HOST: z
+      .enum(["true", "false"])
+      .default("true")
+      .transform((value) => value === "true"),
+    /** Comma-separated `email=E.164 phone` pairs; also acts as the allowlist. */
+    EDITOR_MFA_RECIPIENTS: z.string().default(""),
+    AUTH_EMAIL_FROM: z.string().default(""),
+    AWS_PROFILE: z.string().default("ep"),
+    AWS_REGION: z.string().default("eu-west-3"),
+    AWS_SNS_SENDER_ID: z
+      .string()
+      .regex(/^[A-Za-z0-9]{1,11}$/)
+      .optional(),
+    SITE_URL: z.string().url().default("http://localhost:3030"),
     DATABASE_URL: z.string().url(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
@@ -34,8 +43,13 @@ export const env = createEnv({
    */
   runtimeEnv: {
     AUTH_SECRET: process.env.AUTH_SECRET,
-    AUTH_DISCORD_ID: process.env.AUTH_DISCORD_ID,
-    AUTH_DISCORD_SECRET: process.env.AUTH_DISCORD_SECRET,
+    AUTH_TRUST_HOST: process.env.AUTH_TRUST_HOST,
+    EDITOR_MFA_RECIPIENTS: process.env.EDITOR_MFA_RECIPIENTS,
+    AUTH_EMAIL_FROM: process.env.AUTH_EMAIL_FROM,
+    AWS_PROFILE: process.env.AWS_PROFILE,
+    AWS_REGION: process.env.AWS_REGION,
+    AWS_SNS_SENDER_ID: process.env.AWS_SNS_SENDER_ID,
+    SITE_URL: process.env.SITE_URL,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
   },

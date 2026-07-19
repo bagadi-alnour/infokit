@@ -1,0 +1,7 @@
+{
+  "auth.check.eyebrow": "First check",
+  "auth.check.title": "Open the link in your email",
+  "auth.check.description": "If the address is approved, a single-use link is on its way. It expires in 15 minutes.",
+  "auth.check.next": "After opening it, you will confirm a code sent to your phone.",
+  "auth.check.back": "Use another email address"
+}

@@ -4,8 +4,13 @@
     "NODE_ENV",
     "DATABASE_URL",
     "AUTH_SECRET",
-    "AUTH_DISCORD_ID",
-    "AUTH_DISCORD_SECRET",
+    "AUTH_TRUST_HOST",
+    "AUTH_EMAIL_FROM",
+    "EDITOR_MFA_RECIPIENTS",
+    "AWS_PROFILE",
+    "AWS_REGION",
+    "AWS_SNS_SENDER_ID",
+    "SITE_URL",
     "SKIP_ENV_VALIDATION"
   ],
   "tasks": {

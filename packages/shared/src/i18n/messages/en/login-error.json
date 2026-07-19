@@ -1,0 +1,6 @@
+{
+  "auth.error.eyebrow": "Sign-in interrupted",
+  "auth.error.title": "That link cannot be used",
+  "auth.error.description": "It may have expired or already been used. Request a new secure link to continue.",
+  "auth.error.retry": "Request a new link"
+}

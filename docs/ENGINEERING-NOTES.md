@@ -12,6 +12,7 @@ apps/
   mobile/     Expo / React Native
 packages/
   tokens/     design tokens (see §2)
+  ui/         Tamagui components shared by web and mobile
   shared/     domain logic, i18n catalogs, constants (status/freshness rules)
   api-client/ typed client consumed by web and mobile
   validation/ zod schemas shared by API and clients
@@ -25,9 +26,9 @@ packages/
 
 ## 2. Shared design tokens — adopt
 
-EP-next `packages/design-tokens`: typed semantic themes (`light`/`dark` `SemanticTheme` objects, `designRadii`, border widths) consumed by **both** platforms — web through a CSS-variable injector component, mobile through a theme runtime (`apps/mobile/src/theme.ts`).
+EP-next `packages/design-tokens`: typed semantic themes (`light`/`dark` `SemanticTheme` objects, `designRadii`, border widths) consumed by **both** platforms.
 
-For Calais Info: `packages/tokens` is the single encoding of `DESIGN.md` §2 (both palettes already exist — the prototype's light/dark CSS variables port directly). Hard rule from kawa's AGENTS.md, adopted verbatim: **no color decisions in JSX/component CSS — token package only, consumed semantically.**
+For Calais Info: `packages/tokens` is the single encoding of `DESIGN.md` §2. `packages/ui` maps those tokens into one Tamagui configuration and holds universal components used by Next.js now and Expo when the mobile app is scaffolded; platform session, routing, and navigation adapters stay app-specific. The existing web CSS-variable bridge remains for legacy dashboard surfaces during migration. Hard rule from kawa's AGENTS.md, adopted verbatim: **no color decisions in JSX/component CSS — token package only, consumed semantically.**
 
 ## 3. i18n pipeline — adopt, with one Calais-specific split
 
@@ -86,10 +87,10 @@ EP-next's scripted EAS pipeline: named build profiles (`development-device`, `pr
 
 ## 10. Slice 0 bootstrap order (when coding starts)
 
-> **Status 18 July 2026:** coding started from a create-t3-app scaffold (Next 15, Drizzle, NextAuth v5, Tailwind 4) and was converted to the §1 monorepo the same day: `apps/web` + `packages/tokens` (DESIGN.md encoded) under pnpm workspaces + Turborepo, with lint-staged configs per package. Steps 1–4 done; still pending: `apps/mobile` (Expo) scaffold, and `packages/{shared,api-client,validation,config}` created as they gain real content — never as empty shells.
+> **Status 19 July 2026:** the monorepo now includes `packages/{tokens,shared,ui,validation}`. The web auth slice consumes the shared locale registry, validation schemas, and Tamagui auth components. Still pending: `apps/mobile` (Expo), `packages/api-client`, and shared config packages, created only when real consumers exist — never as empty shells.
 
 1. `git init`, initial commit of this suite + prototype.
 2. Scaffold the monorepo (§1) with `packages/tokens` from `DESIGN.md` + prototype CSS variables, and the i18n registry (fr, en, ar) with the fail-on-missing generator (§3).
 3. `drizzle/` with `0000_baseline` for the Slice 0 subset (~25–30 tables), immutability/audit triggers as custom SQL (§4), taxonomy seeds.
 4. `AGENTS.md` (§6), `check:ci`, dependency-cruiser config, coverage gate skeleton (§5).
-5. Web + mobile apps consuming `shared`/`tokens`/`api-client`; EAS profiles (§8).
+5. Web + mobile apps consuming `shared`/`tokens`/`ui`/`api-client`; EAS profiles (§8).

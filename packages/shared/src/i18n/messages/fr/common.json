@@ -1,0 +1,13 @@
+{
+  "auth.brand": "Calais Info",
+  "auth.privateInstrument": "Outil privé",
+  "auth.language": "Langue",
+  "ui.theme": "Thème",
+  "ui.theme.system": "Système",
+  "ui.theme.light": "Clair",
+  "ui.theme.dark": "Sombre",
+  "auth.securityTitle": "Deux vérifications protègent chaque modification",
+  "auth.securityEmail": "Un lien à usage unique confirme votre adresse e-mail autorisée.",
+  "auth.securitySms": "Un code SMS court confirme le second facteur.",
+  "auth.securitySession": "La session d’édition expire après huit heures."
+}

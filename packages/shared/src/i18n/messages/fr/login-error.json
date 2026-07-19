@@ -1,0 +1,6 @@
+{
+  "auth.error.eyebrow": "Connexion interrompue",
+  "auth.error.title": "Ce lien ne peut pas être utilisé",
+  "auth.error.description": "Il a peut-être expiré ou déjà été utilisé. Demandez un nouveau lien sécurisé pour continuer.",
+  "auth.error.retry": "Demander un nouveau lien"
+}

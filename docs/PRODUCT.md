@@ -2,23 +2,21 @@
 
 ## Document control
 
-| Field | Value |
-| --- | --- |
-| Status | Canonical product requirements; stakeholder decisions marked `TBD` remain open |
-| Last updated | 18 July 2026 |
-| Initial release | Phase 1 — Public information |
+| Field            | Value                                                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| Status           | Canonical product requirements; stakeholder decisions marked `TBD` remain open                             |
+| Last updated     | 18 July 2026                                                                                               |
+| Initial release  | Phase 1 — Public information                                                                               |
 | Primary surfaces | Responsive web application built with React; Android and iOS applications built with React Native and Expo |
-| Primary location | Calais, France |
-| Product owner | `TBD` |
-| Intended readers | Product, design, engineering, operations, association partners, governance, and data-protection reviewers |
+| Primary location | Calais, France                                                                                             |
+| Product owner    | `TBD`                                                                                                      |
+| Intended readers | Product, design, engineering, operations, association partners, governance, and data-protection reviewers  |
 
 ## 1. Authority and document precedence
 
 This file is the authoritative description of what Calais Info is, who it serves, what is included in each committed phase, which requirements must be met, and how completion is judged.
 
 A reader should be able to understand the product and delivery boundaries without opening another file. Supporting documents contain deeper implementation or design detail, but they must not expand or contradict this PRD without a corresponding update here.
-
-
 
 ## 2. Executive summary
 
@@ -78,52 +76,52 @@ A person using a basic phone can find a relevant service or reviewed information
 
 ## 5. Users and jobs to be done
 
-| User | Phase | Primary need |
-| --- | --- | --- |
-| Public visitor | 1 | Find, listen to, or view relevant current information without signing in, including when reading long text is difficult or undesirable |
-| Field worker, interpreter, or mediator | 1 | Find, explain, print, or share information whose owner and freshness are clear |
-| Platform operator/editor | 1–4 | Verify organisations, maintain shared taxonomies, publish safely, moderate conflicts, and investigate audit events |
-| Invited association author/publisher | 1 | Create, translate, preview, and publish articles owned by their association within narrow permissions |
-| Organisation administrator | 2–4 | Manage one verified workspace, its users, permissions, profile, publishing responsibilities, inventory access, and audit history |
-| Organisation editor | 2–4 | Maintain public places, services, schedules, events, articles, contacts, downloads, and permitted simulator content |
-| Translator/reviewer | 2–4 | Review assigned content and languages without broader administrative access |
-| Coordinator/team lead | 3 | See coverage, organize teams, plan shifts/missions, and respond to operational changes |
-| Staff member, volunteer, or intern | 3 | Maintain permitted profile/availability data and see assigned teams, schedules, missions, and document tasks |
-| Document administrator/authorised signatory | 3 | Prepare approved participation documents, manage signers, and audit completed workflows |
-| Viewer/auditor | 3–4 | Read explicitly permitted reports or history without editing |
-| Inventory manager | 4 | Manage stock locations, items, movements, reservations, kits, transfers, and alerts without access to assistance records |
+| User                                        | Phase | Primary need                                                                                                                           |
+| ------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Public visitor                              | 1     | Find, listen to, or view relevant current information without signing in, including when reading long text is difficult or undesirable |
+| Field worker, interpreter, or mediator      | 1     | Find, explain, print, or share information whose owner and freshness are clear                                                         |
+| Platform operator/editor                    | 1–4   | Verify organisations, maintain shared taxonomies, publish safely, moderate conflicts, and investigate audit events                     |
+| Invited association author/publisher        | 1     | Create, translate, preview, and publish articles owned by their association within narrow permissions                                  |
+| Organisation administrator                  | 2–4   | Manage one verified workspace, its users, permissions, profile, publishing responsibilities, inventory access, and audit history       |
+| Organisation editor                         | 2–4   | Maintain public places, services, schedules, events, articles, contacts, downloads, and permitted simulator content                    |
+| Translator/reviewer                         | 2–4   | Review assigned content and languages without broader administrative access                                                            |
+| Coordinator/team lead                       | 3     | See coverage, organize teams, plan shifts/missions, and respond to operational changes                                                 |
+| Staff member, volunteer, or intern          | 3     | Maintain permitted profile/availability data and see assigned teams, schedules, missions, and document tasks                           |
+| Document administrator/authorised signatory | 3     | Prepare approved participation documents, manage signers, and audit completed workflows                                                |
+| Viewer/auditor                              | 3–4   | Read explicitly permitted reports or history without editing                                                                           |
+| Inventory manager                           | 4     | Manage stock locations, items, movements, reservations, kits, transfers, and alerts without access to assistance records               |
 
 People may use more than one role, but permissions remain explicit and organisation-scoped.
 
 ## 6. Terminology
 
-| Term | Meaning |
-| --- | --- |
-| Organisation/association | A verified participating entity with a stable identity and, from Phase 2, an isolated workspace |
-| Public visitor | Any anonymous user of the public product |
-| Place | A physical location used by one or more public services or events |
-| Service offering/service | One visitor-facing activity or programme offered by an organisation at a place, for an audience, and according to its own schedule and status. An organisation may publish several distinct service offerings |
-| Included service feature | A controlled icon-and-text amenity or intervention available within one service offering, such as a shower, laundry, phone charging, drinking water, social assistance, or nursing care |
-| Public event | A dated or recurring public activity such as a temporary distribution |
-| Coordination event | An organisation- or platform-hosted meeting/event for organisation members, city-scoped, either organisation-scoped or inter-organisation (informally "global": visible to authenticated members of all verified organisations); never public |
-| Occurrence | One concrete date/time instance of a recurring service, public event, meeting, shift, or mission |
-| Article | Dated editorial information that may change and has revision/freshness metadata |
-| Fixed information | Relatively stable reference content that still has an owner and review interval |
-| Basic information | The shortest route to urgent or frequently needed information and matching services |
-| Information simulator | An anonymous branching information-navigation flow using optional session-only answers |
-| Priority information | Launch content whose absence or misunderstanding could materially prevent access to an essential service; the approved list and required audio languages are set during Phase 0 |
-| Speciality | A verified controlled classification of what an organisation does; an organisation may have many and at most one marked primary |
-| Tag | A flexible global or organisation-scoped label with color and display order; it supplements but does not replace verified taxonomies or permissions |
-| Member | A staff member, volunteer, or intern represented inside one organisation |
-| Engagement | A dated period in which a member participates as staff, volunteer, intern, or a future configured member type |
-| Mission | A private operational assignment with time, place, instructions, team, and requirements |
-| Participation document | An approved volunteer, internship, charter, confidentiality, or acknowledgement document routed through restricted signing |
-| Factual owner | The organisation responsible for the accuracy of public information, including when the platform publishes on its behalf |
-| Joint publication | One exact public content revision attributed to two or more organisations after each displayed organisation has approved that revision |
-| Audience category | A controlled public label describing who a service or event accepts, with provider-supplied eligibility details |
-| Administrative custodian | The organisation or platform team allowed to maintain an article; custody does not rewrite historical factual ownership |
-| Training/course | An organisation or platform catalogue entry that a mission may require or prefer and a member may declare as completed |
-| Stock movement | An append-only inventory entry that increases, decreases, reserves, releases, assembles, transfers, distributes, damages, or expires stock |
+| Term                     | Meaning                                                                                                                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Organisation/association | A verified participating entity with a stable identity and, from Phase 2, an isolated workspace                                                                                                                                               |
+| Public visitor           | Any anonymous user of the public product                                                                                                                                                                                                      |
+| Place                    | A physical location used by one or more public services or events                                                                                                                                                                             |
+| Service offering/service | One visitor-facing activity or programme offered by an organisation at a place, for an audience, and according to its own schedule and status. An organisation may publish several distinct service offerings                                 |
+| Included service feature | A controlled icon-and-text amenity or intervention available within one service offering, such as a shower, laundry, phone charging, drinking water, social assistance, or nursing care                                                       |
+| Public event             | A dated or recurring public activity such as a temporary distribution                                                                                                                                                                         |
+| Coordination event       | An organisation- or platform-hosted meeting/event for organisation members, city-scoped, either organisation-scoped or inter-organisation (informally "global": visible to authenticated members of all verified organisations); never public |
+| Occurrence               | One concrete date/time instance of a recurring service, public event, meeting, shift, or mission                                                                                                                                              |
+| Article                  | Dated editorial information that may change and has revision/freshness metadata                                                                                                                                                               |
+| Fixed information        | Relatively stable reference content that still has an owner and review interval                                                                                                                                                               |
+| Basic information        | The shortest route to urgent or frequently needed information and matching services                                                                                                                                                           |
+| Information simulator    | An anonymous branching information-navigation flow using optional session-only answers                                                                                                                                                        |
+| Priority information     | Launch content whose absence or misunderstanding could materially prevent access to an essential service; the approved list and required audio languages are set during Phase 0                                                               |
+| Speciality               | A verified controlled classification of what an organisation does; an organisation may have many and at most one marked primary                                                                                                               |
+| Tag                      | A flexible global or organisation-scoped label with color and display order; it supplements but does not replace verified taxonomies or permissions                                                                                           |
+| Member                   | A staff member, volunteer, or intern represented inside one organisation                                                                                                                                                                      |
+| Engagement               | A dated period in which a member participates as staff, volunteer, intern, or a future configured member type                                                                                                                                 |
+| Mission                  | A private operational assignment with time, place, instructions, team, and requirements                                                                                                                                                       |
+| Participation document   | An approved volunteer, internship, charter, confidentiality, or acknowledgement document routed through restricted signing                                                                                                                    |
+| Factual owner            | The organisation responsible for the accuracy of public information, including when the platform publishes on its behalf                                                                                                                      |
+| Joint publication        | One exact public content revision attributed to two or more organisations after each displayed organisation has approved that revision                                                                                                        |
+| Audience category        | A controlled public label describing who a service or event accepts, with provider-supplied eligibility details                                                                                                                               |
+| Administrative custodian | The organisation or platform team allowed to maintain an article; custody does not rewrite historical factual ownership                                                                                                                       |
+| Training/course          | An organisation or platform catalogue entry that a mission may require or prefer and a member may declare as completed                                                                                                                        |
+| Stock movement           | An append-only inventory entry that increases, decreases, reserves, releases, assembles, transfers, distributes, damages, or expires stock                                                                                                    |
 
 ## 7. Product and security boundaries
 
@@ -162,13 +160,13 @@ People may use more than one role, but permissions remain explicit and organisat
 
 ## 8. Delivery sequence and scope boundaries
 
-| Phase | Committed outcome | Dependency |
-| --- | --- | --- |
-| 0. Discovery | Validate field workflows, pilot partners, governance, and measures | None |
-| 1. Public information | Anyone can find current multilingual information; platform editors and narrow invited association publishers can maintain articles | Discovery decisions sufficient for launch content |
-| 2. Association onboarding and publishing | Verified associations manage their public profile and content in isolated workspaces | Stable Phase 1 public journeys and content rules |
-| 3. Team management | Onboarded associations coordinate members, teams, availability, missions, notifications, and restricted participation-document signatures | Verified Phase 2 workspaces and permissions |
-| 4. Inventory management | Onboarded associations manage locations, items, stock movements, transfers, reservations, kits, distributions, and alerts | Stable Phase 3 roles, audit, and operational workflows |
+| Phase                                    | Committed outcome                                                                                                                         | Dependency                                             |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| 0. Discovery                             | Validate field workflows, pilot partners, governance, and measures                                                                        | None                                                   |
+| 1. Public information                    | Anyone can find current multilingual information; platform editors and narrow invited association publishers can maintain articles        | Discovery decisions sufficient for launch content      |
+| 2. Association onboarding and publishing | Verified associations manage their public profile and content in isolated workspaces                                                      | Stable Phase 1 public journeys and content rules       |
+| 3. Team management                       | Onboarded associations coordinate members, teams, availability, missions, notifications, and restricted participation-document signatures | Verified Phase 2 workspaces and permissions            |
+| 4. Inventory management                  | Onboarded associations manage locations, items, stock movements, transfers, reservations, kits, distributions, and alerts                 | Stable Phase 3 roles, audit, and operational workflows |
 
 The phases are sequential. Every phase ends with a controlled pilot and iteration checkpoint. Assistance records require a separate approval and PRD update after Phase 4.
 
@@ -178,23 +176,23 @@ The four phases are the product map. Delivery is cut into smaller slices, each e
 
 Discovery runs through the product itself ("show, don't survey"): Slice 0 produces a **private** instrument seeded with real services from organisations' own public channels, each record marked unverified with its source and check date. The verification conversations that follow are simultaneously the Phase 0 interviews and the Phase 2 adoption funnel.
 
-| Slice | Delivers | Gate |
-| --- | --- | --- |
-| 0 — Instrument (~4–6 weeks) | Private build of both first-class public surfaces from one shared codebase — server-rendered web (installable PWA) and the React Native + Expo mobile app — FR/EN/AR, ~25–30 tables: services, places, schedules, statuses/freshness, basic information, directory, share snippet, simulator engine with draft flows, single-editor console | G0: the operator answers real "where can someone get X today?" questions faster with it than with existing channels, on web and on the mobile build |
-| 1 — Verification loop (weeks 5–12) | Corrections workflow, verified-by metadata, print cards; simulator launch flows reviewed with organisations and mediators; conversations with 3–5 organisations | G1 (public soft launch): ≥15–20 services across ≥5 organisations verified within 30 days, and ≥2 organisations committed to a monthly confirmation loop; web goes public immediately and the mobile builds follow as store review clears (direct install for the pilot in the meantime) |
-| 2 — Phase 1 completion (months 3–6) | Articles, fixed information, downloads, priority audio (uploaded files), Pashto/Dari with named reviewers, flyers, store-release hardening on both mobile platforms | G2: Phase 1 exit criteria (Section 10.7), with joint publication deferred to its trigger below |
-| 3 — Phase 2 lite (months 6–9) | Pilot organisations upgraded in place to real workspaces; cancellation publishable in under one minute | G3: two active workspaces and Stage B backing (`SUSTAINABILITY.md` §2) |
-| 4+ — Evidence-gated | Remaining Phase 2, then Phases 3–4 | Feature triggers below, plus the Phase 3 hard gate: a legal entity as responsible party (`RISKS.md` R6) |
+| Slice                               | Delivers                                                                                                                                                                                                                                                                                                                                    | Gate                                                                                                                                                                                                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 — Instrument (~4–6 weeks)         | Private build of both first-class public surfaces from one shared codebase — server-rendered web (installable PWA) and the React Native + Expo mobile app — FR/EN/AR, ~25–30 tables: services, places, schedules, statuses/freshness, basic information, directory, share snippet, simulator engine with draft flows, single-editor console | G0: the operator answers real "where can someone get X today?" questions faster with it than with existing channels, on web and on the mobile build                                                                                                                                     |
+| 1 — Verification loop (weeks 5–12)  | Corrections workflow, verified-by metadata, print cards; simulator launch flows reviewed with organisations and mediators; conversations with 3–5 organisations                                                                                                                                                                             | G1 (public soft launch): ≥15–20 services across ≥5 organisations verified within 30 days, and ≥2 organisations committed to a monthly confirmation loop; web goes public immediately and the mobile builds follow as store review clears (direct install for the pilot in the meantime) |
+| 2 — Phase 1 completion (months 3–6) | Articles, fixed information, downloads, priority audio (uploaded files), Pashto/Dari with named reviewers, flyers, store-release hardening on both mobile platforms                                                                                                                                                                         | G2: Phase 1 exit criteria (Section 10.7), with joint publication deferred to its trigger below                                                                                                                                                                                          |
+| 3 — Phase 2 lite (months 6–9)       | Pilot organisations upgraded in place to real workspaces; cancellation publishable in under one minute                                                                                                                                                                                                                                      | G3: two active workspaces and Stage B backing (`SUSTAINABILITY.md` §2)                                                                                                                                                                                                                  |
+| 4+ — Evidence-gated                 | Remaining Phase 2, then Phases 3–4                                                                                                                                                                                                                                                                                                          | Feature triggers below, plus the Phase 3 hard gate: a legal entity as responsible party (`RISKS.md` R6)                                                                                                                                                                                 |
 
 Deferred features return on evidence, not on schedule:
 
-| Deferred | Returns when |
-| --- | --- |
-| Autocomplete search | Pilot users demonstrably fail with browse + filter |
-| Joint-publication engine (sealed revisions, projections) | Two organisations request one co-published record |
-| Media processing pipeline | Audio/video volume exceeds manual file handling |
-| Languages beyond the launch set | A named person owns that language's review (Section 17) |
-| Organisation self-publishing invitations | An organisation asks to publish its own articles |
+| Deferred                                                 | Returns when                                            |
+| -------------------------------------------------------- | ------------------------------------------------------- |
+| Autocomplete search                                      | Pilot users demonstrably fail with browse + filter      |
+| Joint-publication engine (sealed revisions, projections) | Two organisations request one co-published record       |
+| Media processing pipeline                                | Audio/video volume exceeds manual file handling         |
+| Languages beyond the launch set                          | A named person owns that language's review (Section 17) |
+| Organisation self-publishing invitations                 | An organisation asks to publish its own articles        |
 
 Kill/pivot criterion, written down in advance: if by week 12 no organisation will verify its records monthly, the maintenance premise has failed — pivot per `LANDSCAPE.md` §4 rather than adding features. Dates are planning aids; gates are real. The product improves through use: every gate includes a review of what field interaction has taught, and this PRD is updated before scope expands.
 
@@ -235,48 +233,48 @@ On small screens, Map, Basic information, Simulator, and Language are immediatel
 
 ### 10.3 Functional requirements
 
-| ID | Requirement | Priority |
-| --- | --- | --- |
-| FR-P1-001 | Public information is accessible without an account or identity collection | P0 |
-| FR-P1-002 | Service discovery starts with a low-bandwidth list and offers an optional map | P0 |
-| FR-P1-003 | Visitors can filter services by category, audience, day, open-now state, language, and verified accessibility information | P0 |
-| FR-P1-004 | A service shows place/directions, schedule, current status (including the next opening time when closed), each providing association's approved logo and name, safe contact, language/accessibility data, and last verification | P0 |
-| FR-P1-005 | Service status supports open, closed, cancelled, and information uncertain with icon, text, and color | P0 |
-| FR-P1-006 | Recurring service hours support exceptional openings/closures and configurable French public-holiday behavior | P0 |
-| FR-P1-007 | Public events support recurrence, concrete occurrences, cancellation, uncertainty, audience category, related services, and one or more providing associations | P0 |
-| FR-P1-008 | Articles support title, summary, structured body, cover/inline images, video, one or more factual owners/publishers, sources, translations, revision history, review dates, and related records | P0 |
-| FR-P1-009 | Creating/editing an article asks whether it can become outdated and requires an unreliable-from date when the answer is yes | P0 |
-| FR-P1-010 | From the unreliable-from date, the public article displays a dated warning without automatically disappearing | P0 |
-| FR-P1-011 | Fixed information and basic information remain directly reachable without using the simulator | P0 |
-| FR-P1-012 | The association directory shows verified purpose, specialities, icon-and-text labels, languages, locations, schedules, safe contacts, and last verification | P0 |
-| FR-P1-013 | An organisation may store many verified specialities, with at most one optional primary; the initial card displays the primary plus up to four secondary specialities, or up to five co-equal specialities when no primary is marked | P0 |
-| FR-P1-014 | Downloads show title, description, language, type, size, factual owner(s)/publisher(s), update date, and freshness state | P1 |
-| FR-P1-015 | Important pages offer printable and low-bandwidth representations | P0 |
-| FR-P1-016 | Priority public information provides a reviewed per-language audio version and may include video; media includes accessible controls, duration/file-size metadata, captions/transcripts, no autoplay, and a low-bandwidth alternative | P0 |
-| FR-P1-017 | The simulator asks one short optional question at a time and provides Skip, Back, Prefer not to say where appropriate, and Start again | P0 |
-| FR-P1-018 | Simulator results are assembled from reviewed content, services, associations, contacts, and next steps, and never claim eligibility or legal advice | P0 |
-| FR-P1-019 | Simulator rules/results have at least one factual owner, source, last-reviewed date, and review/expiry date | P0 |
-| FR-P1-020 | Simulator answers remain only in browser session memory/storage and are not attached to identity, analytics, association accounts, or assistance records | P0 |
-| FR-P1-021 | A platform editor can publish public content on behalf of an association only with recorded factual ownership and approval evidence | P0 |
-| FR-P1-022 | A platform operator can invite a designated association author/publisher with expiring, resendable, and revocable access limited to owned articles | P0 |
-| FR-P1-023 | Invited association authors/publishers can create, translate, preview, publish, unpublish, and archive owned articles without accessing Phase 2/3/4 tools or another organisation | P0 |
-| FR-P1-024 | Public and editorial changes retain attributable audit/revision history | P0 |
-| FR-P1-025 | The Phase 1 public experience is delivered on responsive web, Android, and iOS; the mobile apps use React Native and Expo and expose the same public content, privacy, freshness, translation, and accessibility behavior | P0 |
-| FR-P1-026 | Every public detail page leads with a short plain-language summary, essential facts, primary action, and a visible listen option before optional long-form detail; no essential outcome requires reading the full article/page | P0 |
-| FR-P1-027 | Editors can upload or record localized audio/video, manage rights/ownership, attach captions/transcripts, review each language, and apply the same freshness/publication workflow as text | P0 |
-| FR-P1-028 | A public record may display multiple publishing/factual-owner organisations only after every displayed organisation approves the exact revision through a secure request sent to a verified representative email | P0 |
-| FR-P1-029 | Public attribution, logos, and structured organisation-specific blocks are derived from approval state: the public view hides each unapproved organisation and activates its approved content automatically when that organisation approves the sealed revision | P0 |
-| FR-P1-030 | Approval state supports requested, viewed, changes requested, approved, declined, expired, cancelled, and invalidated; representatives and requesters can exchange revision-linked notes, and a material content change creates a new revision and invalidates earlier approvals | P0 |
-| FR-P1-031 | Service/map search provides multilingual, typo-tolerant autocomplete across locations, addresses/landmarks, association names, service categories, specialities, and needs such as clothes, shoes, tents, water, SIM cards, calling family, and device charging | P0 |
-| FR-P1-032 | Every service and public event has one controlled audience category: all public, women only, children only, under 18 only, families only, or adult men only; the provider supplies translated eligibility details and exact age limits where needed | P0 |
-| FR-P1-033 | Every published service and public event has at least one verified providing association whose approved logo and text name remain visible on cards, details, and map results | P0 |
-| FR-P1-034 | Article images and video include rights evidence, alt text or equivalent description, captions/transcripts where applicable, poster/thumbnail, processing state, and low-bandwidth fallback | P0 |
-| FR-P1-035 | AI-assisted translations store their source and target languages and display a localized notice that AI translated the text, including after human review; verification state remains separate | P0 |
-| FR-P1-036 | If a Phase 1 publisher leaves or changes organisation, ending the old membership revokes old-organisation access without changing article custody, factual ownership, public attribution, URLs, revisions, or audit history; the new organisation grants access through a separate membership | P0 |
-| FR-P1-037 | Cities/territories are catalogue data referenced by places, services, and simulator flows; activating an additional city automatically surfaces it in public city filters and as a simulator city question, without code changes | P1 |
-| FR-P1-038 | The simulator asks where the person is (city area), when they need help, and who the information is for; results open with a summary of the given answers, then reviewed guidance and ranked recommendations in a dedicated card format with visible reasons, distinct from service-list cards, and can be downloaded as a PDF generated on the device; answers and the PDF never leave the device (extends FR-P1-020) | P0 |
-| FR-P1-039 | An authorised editor can generate print-ready flyers (card and poster formats) from a service, organisation profile, or basic-information page — with QR code, short URL, selected languages, and the record's verification date — and each flyer is simultaneously published as a public downloadable PDF, so physical and digital versions stay identical | P1 |
-| FR-P1-040 | An organisation can publish several service offerings with separate names, descriptions, places, audiences, schedules, statuses, contacts, and freshness dates. Each offering lists its own verified included features with an icon and visible label. The product never copies the organisation's combined feature list onto each offering | P0 |
+| ID        | Requirement                                                                                                                                                                                                                                                                                                                                                                                                            | Priority |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| FR-P1-001 | Public information is accessible without an account or identity collection                                                                                                                                                                                                                                                                                                                                             | P0       |
+| FR-P1-002 | Service discovery starts with a low-bandwidth list and offers an optional map                                                                                                                                                                                                                                                                                                                                          | P0       |
+| FR-P1-003 | Visitors can filter services by category, audience, day, open-now state, language, and verified accessibility information                                                                                                                                                                                                                                                                                              | P0       |
+| FR-P1-004 | A service shows place/directions, schedule, current status (including the next opening time when closed), each providing association's approved logo and name, safe contact, language/accessibility data, and last verification                                                                                                                                                                                        | P0       |
+| FR-P1-005 | Service status supports open, closed, cancelled, and information uncertain with icon, text, and color                                                                                                                                                                                                                                                                                                                  | P0       |
+| FR-P1-006 | Recurring service hours support exceptional openings/closures and configurable French public-holiday behavior                                                                                                                                                                                                                                                                                                          | P0       |
+| FR-P1-007 | Public events support recurrence, concrete occurrences, cancellation, uncertainty, audience category, related services, and one or more providing associations                                                                                                                                                                                                                                                         | P0       |
+| FR-P1-008 | Articles support title, summary, structured body, cover/inline images, video, one or more factual owners/publishers, sources, translations, revision history, review dates, and related records                                                                                                                                                                                                                        | P0       |
+| FR-P1-009 | Creating/editing an article asks whether it can become outdated and requires an unreliable-from date when the answer is yes                                                                                                                                                                                                                                                                                            | P0       |
+| FR-P1-010 | From the unreliable-from date, the public article displays a dated warning without automatically disappearing                                                                                                                                                                                                                                                                                                          | P0       |
+| FR-P1-011 | Fixed information and basic information remain directly reachable without using the simulator                                                                                                                                                                                                                                                                                                                          | P0       |
+| FR-P1-012 | The association directory shows verified purpose, specialities, icon-and-text labels, languages, locations, schedules, safe contacts, and last verification                                                                                                                                                                                                                                                            | P0       |
+| FR-P1-013 | An organisation may store many verified specialities, with at most one optional primary; the initial card displays the primary plus up to four secondary specialities, or up to five co-equal specialities when no primary is marked                                                                                                                                                                                   | P0       |
+| FR-P1-014 | Downloads show title, description, language, type, size, factual owner(s)/publisher(s), update date, and freshness state                                                                                                                                                                                                                                                                                               | P1       |
+| FR-P1-015 | Important pages offer printable and low-bandwidth representations                                                                                                                                                                                                                                                                                                                                                      | P0       |
+| FR-P1-016 | Priority public information provides a reviewed per-language audio version and may include video; media includes accessible controls, duration/file-size metadata, captions/transcripts, no autoplay, and a low-bandwidth alternative                                                                                                                                                                                  | P0       |
+| FR-P1-017 | The simulator asks one short optional question at a time and provides Skip, Back, Prefer not to say where appropriate, and Start again                                                                                                                                                                                                                                                                                 | P0       |
+| FR-P1-018 | Simulator results are assembled from reviewed content, services, associations, contacts, and next steps, and never claim eligibility or legal advice                                                                                                                                                                                                                                                                   | P0       |
+| FR-P1-019 | Simulator rules/results have at least one factual owner, source, last-reviewed date, and review/expiry date                                                                                                                                                                                                                                                                                                            | P0       |
+| FR-P1-020 | Simulator answers remain only in browser session memory/storage and are not attached to identity, analytics, association accounts, or assistance records                                                                                                                                                                                                                                                               | P0       |
+| FR-P1-021 | A platform editor can publish public content on behalf of an association only with recorded factual ownership and approval evidence                                                                                                                                                                                                                                                                                    | P0       |
+| FR-P1-022 | A platform operator can invite a designated association author/publisher with expiring, resendable, and revocable access limited to owned articles                                                                                                                                                                                                                                                                     | P0       |
+| FR-P1-023 | Invited association authors/publishers can create, translate, preview, publish, unpublish, and archive owned articles without accessing Phase 2/3/4 tools or another organisation                                                                                                                                                                                                                                      | P0       |
+| FR-P1-024 | Public and editorial changes retain attributable audit/revision history                                                                                                                                                                                                                                                                                                                                                | P0       |
+| FR-P1-025 | The Phase 1 public experience is delivered on responsive web, Android, and iOS; the mobile apps use React Native and Expo and expose the same public content, privacy, freshness, translation, and accessibility behavior                                                                                                                                                                                              | P0       |
+| FR-P1-026 | Every public detail page leads with a short plain-language summary, essential facts, primary action, and a visible listen option before optional long-form detail; no essential outcome requires reading the full article/page                                                                                                                                                                                         | P0       |
+| FR-P1-027 | Editors can upload or record localized audio/video, manage rights/ownership, attach captions/transcripts, review each language, and apply the same freshness/publication workflow as text                                                                                                                                                                                                                              | P0       |
+| FR-P1-028 | A public record may display multiple publishing/factual-owner organisations only after every displayed organisation approves the exact revision through a secure request sent to a verified representative email                                                                                                                                                                                                       | P0       |
+| FR-P1-029 | Public attribution, logos, and structured organisation-specific blocks are derived from approval state: the public view hides each unapproved organisation and activates its approved content automatically when that organisation approves the sealed revision                                                                                                                                                        | P0       |
+| FR-P1-030 | Approval state supports requested, viewed, changes requested, approved, declined, expired, cancelled, and invalidated; representatives and requesters can exchange revision-linked notes, and a material content change creates a new revision and invalidates earlier approvals                                                                                                                                       | P0       |
+| FR-P1-031 | Service/map search provides multilingual, typo-tolerant autocomplete across locations, addresses/landmarks, association names, service categories, specialities, and needs such as clothes, shoes, tents, water, SIM cards, calling family, and device charging                                                                                                                                                        | P0       |
+| FR-P1-032 | Every service and public event has one controlled audience category: all public, women only, children only, under 18 only, families only, or adult men only; the provider supplies translated eligibility details and exact age limits where needed                                                                                                                                                                    | P0       |
+| FR-P1-033 | Every published service and public event has at least one verified providing association whose approved logo and text name remain visible on cards, details, and map results                                                                                                                                                                                                                                           | P0       |
+| FR-P1-034 | Article images and video include rights evidence, alt text or equivalent description, captions/transcripts where applicable, poster/thumbnail, processing state, and low-bandwidth fallback                                                                                                                                                                                                                            | P0       |
+| FR-P1-035 | AI-assisted translations store their source and target languages and display a localized notice that AI translated the text, including after human review; verification state remains separate                                                                                                                                                                                                                         | P0       |
+| FR-P1-036 | If a Phase 1 publisher leaves or changes organisation, ending the old membership revokes old-organisation access without changing article custody, factual ownership, public attribution, URLs, revisions, or audit history; the new organisation grants access through a separate membership                                                                                                                          | P0       |
+| FR-P1-037 | Cities/territories are catalogue data referenced by places, services, and simulator flows; activating an additional city automatically surfaces it in public city filters and as a simulator city question, without code changes                                                                                                                                                                                       | P1       |
+| FR-P1-038 | The simulator asks where the person is (city area), when they need help, and who the information is for; results open with a summary of the given answers, then reviewed guidance and ranked recommendations in a dedicated card format with visible reasons, distinct from service-list cards, and can be downloaded as a PDF generated on the device; answers and the PDF never leave the device (extends FR-P1-020) | P0       |
+| FR-P1-039 | An authorised editor can generate print-ready flyers (card and poster formats) from a service, organisation profile, or basic-information page — with QR code, short URL, selected languages, and the record's verification date — and each flyer is simultaneously published as a public downloadable PDF, so physical and digital versions stay identical                                                            | P1       |
+| FR-P1-040 | An organisation can publish several service offerings with separate names, descriptions, places, audiences, schedules, statuses, contacts, and freshness dates. Each offering lists its own verified included features with an icon and visible label. The product never copies the organisation's combined feature list onto each offering                                                                            | P0       |
 
 ### 10.4 Simulator privacy rule
 
@@ -319,21 +317,21 @@ Questions involving nationality, country of origin, passport possession, health,
 
 ### 10.6 Required screens
 
-| ID | Screen | Priority |
-| --- | --- | --- |
-| P1-01 | Public home and basic information | P0 |
-| P1-02 | Service finder search/autocomplete, audience filters, list, and map | P0 |
-| P1-03 | Service detail | P0 |
-| P1-04 | Article list and article detail | P0 |
-| P1-05 | Simulator intro, question, and result | P0 |
-| P1-06 | Fixed-information index and page | P0 |
-| P1-07 | Association directory | P0 |
-| P1-08 | Association profile | P0 |
-| P1-09 | Language selector and fallback states | P0 |
-| P1-10 | Printable/low-bandwidth view | P0 |
-| P1-11 | Association publisher invitation, acceptance, and sign-in | P0 |
-| P1-12 | Minimal article editor, media, AI-translation provenance, joint-approval notes/state, preview, and publication history | P0 |
-| P1-13 | Downloads index/detail | P1 |
+| ID    | Screen                                                                                                                 | Priority |
+| ----- | ---------------------------------------------------------------------------------------------------------------------- | -------- |
+| P1-01 | Public home and basic information                                                                                      | P0       |
+| P1-02 | Service finder search/autocomplete, audience filters, list, and map                                                    | P0       |
+| P1-03 | Service detail                                                                                                         | P0       |
+| P1-04 | Article list and article detail                                                                                        | P0       |
+| P1-05 | Simulator intro, question, and result                                                                                  | P0       |
+| P1-06 | Fixed-information index and page                                                                                       | P0       |
+| P1-07 | Association directory                                                                                                  | P0       |
+| P1-08 | Association profile                                                                                                    | P0       |
+| P1-09 | Language selector and fallback states                                                                                  | P0       |
+| P1-10 | Printable/low-bandwidth view                                                                                           | P0       |
+| P1-11 | Association publisher invitation, acceptance, and sign-in                                                              | P0       |
+| P1-12 | Minimal article editor, media, AI-translation provenance, joint-approval notes/state, preview, and publication history | P0       |
+| P1-13 | Downloads index/detail                                                                                                 | P1       |
 
 ### 10.7 Phase 1 exit criteria
 
@@ -371,33 +369,33 @@ Allow verified organisations to manage their public profiles and content in isol
 
 ### 11.2 Functional requirements
 
-| ID | Requirement | Priority |
-| --- | --- | --- |
-| FR-P2-001 | Organisation onboarding is platform-initiated after identity and duplicate/impersonation checks; no public signup exists | P0 |
-| FR-P2-002 | A Phase 1 publishing organisation is upgraded in place without new organisation/user identities or content re-import | P0 |
-| FR-P2-003 | The first organisation administrator accepts an expiring invitation, credentials, terms, publishing responsibilities, and privacy notice | P0 |
-| FR-P2-004 | Every private record is scoped to one organisation unless explicitly platform-owned | P0 |
-| FR-P2-005 | The workspace always identifies the current organisation and active role | P0 |
-| FR-P2-006 | An authorised administrator can maintain public purpose, verified locations, safe contacts, service languages, accessibility information, website, logo rights, freshness, and speciality-change requests | P0 |
-| FR-P2-007 | An organisation can store multiple verified specialities, order them, and mark at most one primary; changes retain verification state and effective history | P0 |
-| FR-P2-008 | Editors can maintain places, services, schedules, exceptions, events, articles, contacts, downloads, and permitted simulator content | P0 |
-| FR-P2-009 | Editors can preview the exact public language, fallback, freshness, status, and ownership state before publishing | P0 |
-| FR-P2-010 | Urgent cancellation publishing supports an approved visible translation fallback policy | P0 |
-| FR-P2-011 | Organisation administrators manage Phase 2 users, invitations, roles, and permission review without granting Phase 3 access implicitly | P0 |
-| FR-P2-012 | Translators/reviewers can access only assigned languages/content and verification actions | P0 |
-| FR-P2-013 | The platform can moderate duplicate/conflicting content, suspend publishing, and preserve audit history | P0 |
-| FR-P2-014 | Organisation departure supports custody handover, unpublishing/archive, access revocation, and configured retention without rewriting historical ownership or audit records | P0 |
-| FR-P2-015 | Authorised users may manage public/workspace tags with translated labels, color, display order, visibility, and active state | P1 |
-| FR-P2-016 | Tags supplement and never replace verified specialities, service categories, lifecycle states, or permissions | P1 |
-| FR-P2-017 | Organisations may propose joint/shared public records; the sealed-revision approval, approval-driven public projection, notes, and reapproval rules from Phase 1 apply to every supported content type | P0 |
-| FR-P2-018 | An organisation administrator may propose additions, removals, reordering, or a new primary speciality; additions and changed claims require platform reverification, while removal can take effect at once with audit history | P0 |
-| FR-P2-019 | Only an authorised organisation or platform administrator may initiate article-custody transfer; an organisation destination must accept before transfer, and platform custody requires platform acceptance | P0 |
-| FR-P2-020 | Article-custody transfer preserves the URL, revisions, approvals, factual-owner history, and audit trail; it changes administrative control only, and any new factual-owner attribution follows the publication-approval workflow | P0 |
-| FR-P2-021 | The publishing workspace, administration dashboard, approval workflow, and system email templates are available in French and English with a saved user preference | P0 |
-| FR-P2-022 | Organisation editors can generate the same print-ready flyers for their own services, events, and profile from the workspace; the platform stores each generated flyer as a public downloadable PDF so the physical and digital versions never diverge | P1 |
-| FR-P2-023 | The workspace includes a shared agenda of coordination events; each event is hosted by one organisation (or the platform), carries a city, and is either organisation-scoped or inter-organisation — visible to authenticated members of all verified organisations; coordination events are never public | P0 |
-| FR-P2-024 | Coordination events support one-off and recurring schedules (such as a daily inter-association briefing), concrete occurrences, safe location and contact details, and cancellation or changes with a visible reason | P0 |
-| FR-P2-025 | Authorised members create and edit coordination events under an explicit coordination permission; organisations can indicate participation (attending, interested, declined) visible to the other participants | P1 |
+| ID        | Requirement                                                                                                                                                                                                                                                                                               | Priority |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| FR-P2-001 | Organisation onboarding is platform-initiated after identity and duplicate/impersonation checks; no public signup exists                                                                                                                                                                                  | P0       |
+| FR-P2-002 | A Phase 1 publishing organisation is upgraded in place without new organisation/user identities or content re-import                                                                                                                                                                                      | P0       |
+| FR-P2-003 | The first organisation administrator accepts an expiring invitation, credentials, terms, publishing responsibilities, and privacy notice                                                                                                                                                                  | P0       |
+| FR-P2-004 | Every private record is scoped to one organisation unless explicitly platform-owned                                                                                                                                                                                                                       | P0       |
+| FR-P2-005 | The workspace always identifies the current organisation and active role                                                                                                                                                                                                                                  | P0       |
+| FR-P2-006 | An authorised administrator can maintain public purpose, verified locations, safe contacts, service languages, accessibility information, website, logo rights, freshness, and speciality-change requests                                                                                                 | P0       |
+| FR-P2-007 | An organisation can store multiple verified specialities, order them, and mark at most one primary; changes retain verification state and effective history                                                                                                                                               | P0       |
+| FR-P2-008 | Editors can maintain places, services, schedules, exceptions, events, articles, contacts, downloads, and permitted simulator content                                                                                                                                                                      | P0       |
+| FR-P2-009 | Editors can preview the exact public language, fallback, freshness, status, and ownership state before publishing                                                                                                                                                                                         | P0       |
+| FR-P2-010 | Urgent cancellation publishing supports an approved visible translation fallback policy                                                                                                                                                                                                                   | P0       |
+| FR-P2-011 | Organisation administrators manage Phase 2 users, invitations, roles, and permission review without granting Phase 3 access implicitly                                                                                                                                                                    | P0       |
+| FR-P2-012 | Translators/reviewers can access only assigned languages/content and verification actions                                                                                                                                                                                                                 | P0       |
+| FR-P2-013 | The platform can moderate duplicate/conflicting content, suspend publishing, and preserve audit history                                                                                                                                                                                                   | P0       |
+| FR-P2-014 | Organisation departure supports custody handover, unpublishing/archive, access revocation, and configured retention without rewriting historical ownership or audit records                                                                                                                               | P0       |
+| FR-P2-015 | Authorised users may manage public/workspace tags with translated labels, color, display order, visibility, and active state                                                                                                                                                                              | P1       |
+| FR-P2-016 | Tags supplement and never replace verified specialities, service categories, lifecycle states, or permissions                                                                                                                                                                                             | P1       |
+| FR-P2-017 | Organisations may propose joint/shared public records; the sealed-revision approval, approval-driven public projection, notes, and reapproval rules from Phase 1 apply to every supported content type                                                                                                    | P0       |
+| FR-P2-018 | An organisation administrator may propose additions, removals, reordering, or a new primary speciality; additions and changed claims require platform reverification, while removal can take effect at once with audit history                                                                            | P0       |
+| FR-P2-019 | Only an authorised organisation or platform administrator may initiate article-custody transfer; an organisation destination must accept before transfer, and platform custody requires platform acceptance                                                                                               | P0       |
+| FR-P2-020 | Article-custody transfer preserves the URL, revisions, approvals, factual-owner history, and audit trail; it changes administrative control only, and any new factual-owner attribution follows the publication-approval workflow                                                                         | P0       |
+| FR-P2-021 | The publishing workspace, administration dashboard, approval workflow, and system email templates are available in French and English with a saved user preference                                                                                                                                        | P0       |
+| FR-P2-022 | Organisation editors can generate the same print-ready flyers for their own services, events, and profile from the workspace; the platform stores each generated flyer as a public downloadable PDF so the physical and digital versions never diverge                                                    | P1       |
+| FR-P2-023 | The workspace includes a shared agenda of coordination events; each event is hosted by one organisation (or the platform), carries a city, and is either organisation-scoped or inter-organisation — visible to authenticated members of all verified organisations; coordination events are never public | P0       |
+| FR-P2-024 | Coordination events support one-off and recurring schedules (such as a daily inter-association briefing), concrete occurrences, safe location and contact details, and cancellation or changes with a visible reason                                                                                      | P0       |
+| FR-P2-025 | Authorised members create and edit coordination events under an explicit coordination permission; organisations can indicate participation (attending, interested, declined) visible to the other participants                                                                                            | P1       |
 
 ### 11.3 Primary journeys
 
@@ -428,21 +426,21 @@ Allow verified organisations to manage their public profiles and content in isol
 
 ### 11.4 Required screens
 
-| ID | Screen | Priority |
-| --- | --- | --- |
-| P2-01 | Platform verification and organisation invitation | P0 |
-| P2-02 | Duplicate/impersonation approval review | P0 |
-| P2-03 | Workspace overview and review queue | P0 |
-| P2-04 | Public profile, speciality, and tag editor | P0 |
-| P2-05 | Places/services table and record inspector | P0 |
-| P2-06 | Schedule and exception editor | P0 |
-| P2-07 | Article editor, translation review, and joint-publication approval | P0 |
-| P2-08 | Simulator-content editor/review | P1 |
-| P2-09 | Files/downloads manager | P1 |
-| P2-10 | Roles and invitations | P0 |
-| P2-11 | Audit log and revision history | P0 |
-| P2-12 | Article-custody transfer requests and history | P0 |
-| P2-13 | Shared inter-organisation agenda (calendar/list) and coordination-event editor | P0 |
+| ID    | Screen                                                                         | Priority |
+| ----- | ------------------------------------------------------------------------------ | -------- |
+| P2-01 | Platform verification and organisation invitation                              | P0       |
+| P2-02 | Duplicate/impersonation approval review                                        | P0       |
+| P2-03 | Workspace overview and review queue                                            | P0       |
+| P2-04 | Public profile, speciality, and tag editor                                     | P0       |
+| P2-05 | Places/services table and record inspector                                     | P0       |
+| P2-06 | Schedule and exception editor                                                  | P0       |
+| P2-07 | Article editor, translation review, and joint-publication approval             | P0       |
+| P2-08 | Simulator-content editor/review                                                | P1       |
+| P2-09 | Files/downloads manager                                                        | P1       |
+| P2-10 | Roles and invitations                                                          | P0       |
+| P2-11 | Audit log and revision history                                                 | P0       |
+| P2-12 | Article-custody transfer requests and history                                  | P0       |
+| P2-13 | Shared inter-organisation agenda (calendar/list) and coordination-event editor | P0       |
 
 ### 11.5 Phase 2 exit criteria
 
@@ -475,37 +473,37 @@ Allow verified organisations to coordinate staff, volunteers, and interns and co
 
 ### 12.2 Functional requirements
 
-| ID | Requirement | Priority |
-| --- | --- | --- |
-| FR-P3-001 | Coordinators/admins can invite, resend, revoke, activate, deactivate, and offboard staff, volunteers, and interns | P0 |
-| FR-P3-002 | One global user may belong to multiple organisations concurrently or sequentially; permissions and offboarding remain organisation-specific | P0 |
-| FR-P3-003 | Membership history supports multiple engagement periods/types without overwriting previous volunteer/staff/intern history | P0 |
-| FR-P3-004 | Members maintain only permitted profile, spoken-language, skill, driving-permit, completed-training, qualification, and availability fields after the interface explains the purpose, visibility, requirement status, and retention of each field | P0 |
-| FR-P3-005 | Accommodation, emergency contact, absence reason, and document information remain outside ordinary member lists and planning boards | P0 |
-| FR-P3-006 | Authorised users can create teams, assign members/leads, apply workspace tags, and preserve membership history | P0 |
-| FR-P3-007 | Members submit recurring and one-off available, preferred, unavailable, or uncertain time | P0 |
-| FR-P3-008 | Staff can submit absence requests; volunteer/intern unavailability uses participation-appropriate wording and workflow | P0 |
-| FR-P3-009 | Coordinators use a day/week staffing board with member rows and filters for team, lead, member, role, skill, language, tag, and state | P0 |
-| FR-P3-010 | Planning distinguishes availability, absence, assignment, conflict, limited access, missing coverage, and qualification requirements with text/icon/color | P0 |
-| FR-P3-011 | Coordinators create recurring shifts, meetings, missions, and training and assign members whose declared/verified qualifications match required criteria | P0 |
-| FR-P3-012 | Members accept, decline, or request assignment changes and see a mobile personal agenda | P0 |
-| FR-P3-013 | Missions show time, place, team, coordinator, instructions, permitted contacts, and required/preferred skills, spoken languages, driving-permit categories, and completed training/courses | P0 |
-| FR-P3-014 | Notifications support invitations, reminders, changes, and cancellations without sensitive information in previews | P0 |
-| FR-P3-015 | Operational changes linked to a public service/event prompt an authorised editor to review public status; they do not silently publish member/availability data | P0 |
-| FR-P3-016 | Document administrators maintain organisation-approved, versioned participation-document templates | P0 |
-| FR-P3-017 | A document is prepared from a locked template version and reviewed before sending | P0 |
-| FR-P3-018 | Signing supports internal/external signers, explicit order, review, decline, expiry, reminders, and mobile/desktop completion | P0 |
-| FR-P3-019 | Document state supports draft, ready for review, awaiting signature, partially signed, signed, declined, expired, and cancelled | P0 |
-| FR-P3-020 | Final signed copy, template version, timestamps, provider evidence, integrity data, retention, access, and signature history are auditable | P0 |
-| FR-P3-021 | Team membership, coordination, organisation administration, and publishing do not automatically grant restricted-document access | P0 |
-| FR-P3-022 | Members can retrieve documents sent to them and completed copies they are permitted to receive | P0 |
-| FR-P3-023 | Organisations maintain a training/course catalogue with title, provider, link, description, validity period, active state, and optional verification requirement | P0 |
-| FR-P3-024 | Members select spoken languages and proficiency, driving-permit categories/status, and completed training/courses; each declaration records whether it is self-declared, awaiting verification, verified, rejected, or expired | P0 |
-| FR-P3-025 | The product does not request a driving-permit number or scan by default; an organisation needs a documented purpose, restricted access, and retention rule before collecting evidence | P0 |
-| FR-P3-026 | Mission requirements distinguish required from preferred criteria, include minimum language proficiency and permit category where relevant, and explain each match or gap to coordinators and members | P0 |
-| FR-P3-027 | A missing preferred criterion does not block assignment; a coordinator must record an authorised override reason before assigning someone who lacks a required verified criterion | P0 |
-| FR-P3-028 | Coordinators can import `.ics` and approved `.csv` agenda files through preview, timezone selection, field mapping, duplicate detection, row-level errors, idempotent commit, and batch undo | P0 |
-| FR-P3-029 | Members' personal agendas and coordinator boards show the coordination events (Phase 2 shared agenda) their organisation participates in, alongside internal shifts, missions, and meetings, without exposing internal operational data to other organisations | P1 |
+| ID        | Requirement                                                                                                                                                                                                                                                    | Priority |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| FR-P3-001 | Coordinators/admins can invite, resend, revoke, activate, deactivate, and offboard staff, volunteers, and interns                                                                                                                                              | P0       |
+| FR-P3-002 | One global user may belong to multiple organisations concurrently or sequentially; permissions and offboarding remain organisation-specific                                                                                                                    | P0       |
+| FR-P3-003 | Membership history supports multiple engagement periods/types without overwriting previous volunteer/staff/intern history                                                                                                                                      | P0       |
+| FR-P3-004 | Members maintain only permitted profile, spoken-language, skill, driving-permit, completed-training, qualification, and availability fields after the interface explains the purpose, visibility, requirement status, and retention of each field              | P0       |
+| FR-P3-005 | Accommodation, emergency contact, absence reason, and document information remain outside ordinary member lists and planning boards                                                                                                                            | P0       |
+| FR-P3-006 | Authorised users can create teams, assign members/leads, apply workspace tags, and preserve membership history                                                                                                                                                 | P0       |
+| FR-P3-007 | Members submit recurring and one-off available, preferred, unavailable, or uncertain time                                                                                                                                                                      | P0       |
+| FR-P3-008 | Staff can submit absence requests; volunteer/intern unavailability uses participation-appropriate wording and workflow                                                                                                                                         | P0       |
+| FR-P3-009 | Coordinators use a day/week staffing board with member rows and filters for team, lead, member, role, skill, language, tag, and state                                                                                                                          | P0       |
+| FR-P3-010 | Planning distinguishes availability, absence, assignment, conflict, limited access, missing coverage, and qualification requirements with text/icon/color                                                                                                      | P0       |
+| FR-P3-011 | Coordinators create recurring shifts, meetings, missions, and training and assign members whose declared/verified qualifications match required criteria                                                                                                       | P0       |
+| FR-P3-012 | Members accept, decline, or request assignment changes and see a mobile personal agenda                                                                                                                                                                        | P0       |
+| FR-P3-013 | Missions show time, place, team, coordinator, instructions, permitted contacts, and required/preferred skills, spoken languages, driving-permit categories, and completed training/courses                                                                     | P0       |
+| FR-P3-014 | Notifications support invitations, reminders, changes, and cancellations without sensitive information in previews                                                                                                                                             | P0       |
+| FR-P3-015 | Operational changes linked to a public service/event prompt an authorised editor to review public status; they do not silently publish member/availability data                                                                                                | P0       |
+| FR-P3-016 | Document administrators maintain organisation-approved, versioned participation-document templates                                                                                                                                                             | P0       |
+| FR-P3-017 | A document is prepared from a locked template version and reviewed before sending                                                                                                                                                                              | P0       |
+| FR-P3-018 | Signing supports internal/external signers, explicit order, review, decline, expiry, reminders, and mobile/desktop completion                                                                                                                                  | P0       |
+| FR-P3-019 | Document state supports draft, ready for review, awaiting signature, partially signed, signed, declined, expired, and cancelled                                                                                                                                | P0       |
+| FR-P3-020 | Final signed copy, template version, timestamps, provider evidence, integrity data, retention, access, and signature history are auditable                                                                                                                     | P0       |
+| FR-P3-021 | Team membership, coordination, organisation administration, and publishing do not automatically grant restricted-document access                                                                                                                               | P0       |
+| FR-P3-022 | Members can retrieve documents sent to them and completed copies they are permitted to receive                                                                                                                                                                 | P0       |
+| FR-P3-023 | Organisations maintain a training/course catalogue with title, provider, link, description, validity period, active state, and optional verification requirement                                                                                               | P0       |
+| FR-P3-024 | Members select spoken languages and proficiency, driving-permit categories/status, and completed training/courses; each declaration records whether it is self-declared, awaiting verification, verified, rejected, or expired                                 | P0       |
+| FR-P3-025 | The product does not request a driving-permit number or scan by default; an organisation needs a documented purpose, restricted access, and retention rule before collecting evidence                                                                          | P0       |
+| FR-P3-026 | Mission requirements distinguish required from preferred criteria, include minimum language proficiency and permit category where relevant, and explain each match or gap to coordinators and members                                                          | P0       |
+| FR-P3-027 | A missing preferred criterion does not block assignment; a coordinator must record an authorised override reason before assigning someone who lacks a required verified criterion                                                                              | P0       |
+| FR-P3-028 | Coordinators can import `.ics` and approved `.csv` agenda files through preview, timezone selection, field mapping, duplicate detection, row-level errors, idempotent commit, and batch undo                                                                   | P0       |
+| FR-P3-029 | Members' personal agendas and coordinator boards show the coordination events (Phase 2 shared agenda) their organisation participates in, alongside internal shifts, missions, and meetings, without exposing internal operational data to other organisations | P1       |
 
 ### 12.3 Primary journeys
 
@@ -555,24 +553,24 @@ Allow verified organisations to coordinate staff, volunteers, and interns and co
 
 ### 12.4 Required screens
 
-| ID | Screen | Priority |
-| --- | --- | --- |
-| P3-01 | Team-management overview | P0 |
-| P3-02 | Members and invitation states | P0 |
-| P3-03 | Member operational profile | P0 |
-| P3-04 | Team list and team detail | P0 |
-| P3-05 | Availability calendar/form | P0 |
-| P3-06 | Weekly coverage planner | P0 |
-| P3-07 | Shift/event editor | P0 |
-| P3-08 | Mission detail and assignment | P0 |
-| P3-09 | Member schedule/mobile agenda | P0 |
-| P3-10 | Notifications and preferences | P0 |
-| P3-11 | Roles, permissions, and permission review | P0 |
-| P3-12 | Team audit history | P0 |
-| P3-13 | Restricted document centre and signature queue | P0 |
-| P3-14 | Template-based preparation, review, and signing | P0 |
-| P3-15 | Training/course catalogue and member qualifications | P0 |
-| P3-16 | Agenda import preview, results, and undo | P0 |
+| ID    | Screen                                              | Priority |
+| ----- | --------------------------------------------------- | -------- |
+| P3-01 | Team-management overview                            | P0       |
+| P3-02 | Members and invitation states                       | P0       |
+| P3-03 | Member operational profile                          | P0       |
+| P3-04 | Team list and team detail                           | P0       |
+| P3-05 | Availability calendar/form                          | P0       |
+| P3-06 | Weekly coverage planner                             | P0       |
+| P3-07 | Shift/event editor                                  | P0       |
+| P3-08 | Mission detail and assignment                       | P0       |
+| P3-09 | Member schedule/mobile agenda                       | P0       |
+| P3-10 | Notifications and preferences                       | P0       |
+| P3-11 | Roles, permissions, and permission review           | P0       |
+| P3-12 | Team audit history                                  | P0       |
+| P3-13 | Restricted document centre and signature queue      | P0       |
+| P3-14 | Template-based preparation, review, and signing     | P0       |
+| P3-15 | Training/course catalogue and member qualifications | P0       |
+| P3-16 | Agenda import preview, results, and undo            | P0       |
 
 ### 12.5 Phase 3 exit criteria
 
@@ -604,28 +602,28 @@ Allow verified organisations to track physical resources across storage location
 
 ### 13.2 Functional requirements
 
-| ID | Requirement | Priority |
-| --- | --- | --- |
-| FR-P4-001 | Inventory administrators create organisation-scoped storage locations with status, address/internal directions, responsible team, and access notes | P0 |
-| FR-P4-002 | Organisations maintain item categories, items, variants, units of measure, barcodes/QR identifiers, active state, and translated labels where needed | P0 |
-| FR-P4-003 | Items may use lot/batch, expiry, condition, and serial tracking according to a configured tracking policy rather than one rule for every item | P0 |
-| FR-P4-004 | Posted stock uses an append-only movement ledger; the product calculates balances by organisation, location, item/variant, lot, condition, and reservation state | P0 |
-| FR-P4-005 | Movement types include receipt, donation, purchase, positive/negative adjustment, damage, expiry, internal transfer, cross-organisation transfer, reservation, release, kit assembly/disassembly, and distribution | P0 |
-| FR-P4-006 | Receipts may record donor/supplier reference, quantity, unit, lot/expiry, source document, and restricted cost/replacement-value fields | P0 |
-| FR-P4-007 | Internal transfers record dispatch and receipt between locations and report in-transit, partially received, completed, cancelled, and discrepancy states | P0 |
-| FR-P4-008 | A cross-organisation transfer exposes only the offered items and transfer logistics to the destination; a destination inventory admin must accept before receiving stock | P0 |
-| FR-P4-009 | Authorised users reserve stock for a public event, private mission, or kit batch and release unused quantities without changing the source event or mission | P0 |
-| FR-P4-010 | Versioned kit definitions specify component item/variant, quantity, unit, substitutions, and effective dates; assembly and disassembly create linked stock movements | P0 |
-| FR-P4-011 | Distribution records default to anonymous aggregate quantity by item/kit, date, location, and optional linked event; recipient identity is neither required nor stored | P0 |
-| FR-P4-012 | Per-location/item thresholds and expiry windows create low-stock, out-of-stock, expiry-soon, and expired alerts with acknowledgement state | P0 |
-| FR-P4-013 | Users correct posted mistakes with compensating movements and a reason; they cannot overwrite or delete ledger history | P0 |
-| FR-P4-014 | Inventory manager, stock operator, inventory viewer, transfer approver, and financial viewer permissions remain separate from publishing, member, document, and assistance permissions | P0 |
-| FR-P4-015 | Audit history records movement actor, reason, source/target, item, quantity/unit, linked batch, import/transfer reference, and timestamps without exposing restricted cost to ordinary inventory viewers | P0 |
-| FR-P4-016 | Mobile inventory supports item/location search and camera barcode/QR scanning with a manual entry fallback | P1 |
-| FR-P4-017 | Inventory admins can import approved `.csv` item/balance data through field mapping, unit validation, duplicate detection, preview, idempotent commit, row errors, and compensating batch reversal | P1 |
-| FR-P4-018 | Inventory changes linked to a public service/event or private mission may create an operational/public review task but never publish stock counts or change service status automatically | P0 |
-| FR-P4-019 | Organisation departure exports or transfers inventory records under an approved policy while preserving ledger/audit history and revoking access | P0 |
-| FR-P4-020 | Inventory dashboards and workflows use the authenticated French/English interface and the user's saved language preference | P0 |
+| ID        | Requirement                                                                                                                                                                                                        | Priority |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- |
+| FR-P4-001 | Inventory administrators create organisation-scoped storage locations with status, address/internal directions, responsible team, and access notes                                                                 | P0       |
+| FR-P4-002 | Organisations maintain item categories, items, variants, units of measure, barcodes/QR identifiers, active state, and translated labels where needed                                                               | P0       |
+| FR-P4-003 | Items may use lot/batch, expiry, condition, and serial tracking according to a configured tracking policy rather than one rule for every item                                                                      | P0       |
+| FR-P4-004 | Posted stock uses an append-only movement ledger; the product calculates balances by organisation, location, item/variant, lot, condition, and reservation state                                                   | P0       |
+| FR-P4-005 | Movement types include receipt, donation, purchase, positive/negative adjustment, damage, expiry, internal transfer, cross-organisation transfer, reservation, release, kit assembly/disassembly, and distribution | P0       |
+| FR-P4-006 | Receipts may record donor/supplier reference, quantity, unit, lot/expiry, source document, and restricted cost/replacement-value fields                                                                            | P0       |
+| FR-P4-007 | Internal transfers record dispatch and receipt between locations and report in-transit, partially received, completed, cancelled, and discrepancy states                                                           | P0       |
+| FR-P4-008 | A cross-organisation transfer exposes only the offered items and transfer logistics to the destination; a destination inventory admin must accept before receiving stock                                           | P0       |
+| FR-P4-009 | Authorised users reserve stock for a public event, private mission, or kit batch and release unused quantities without changing the source event or mission                                                        | P0       |
+| FR-P4-010 | Versioned kit definitions specify component item/variant, quantity, unit, substitutions, and effective dates; assembly and disassembly create linked stock movements                                               | P0       |
+| FR-P4-011 | Distribution records default to anonymous aggregate quantity by item/kit, date, location, and optional linked event; recipient identity is neither required nor stored                                             | P0       |
+| FR-P4-012 | Per-location/item thresholds and expiry windows create low-stock, out-of-stock, expiry-soon, and expired alerts with acknowledgement state                                                                         | P0       |
+| FR-P4-013 | Users correct posted mistakes with compensating movements and a reason; they cannot overwrite or delete ledger history                                                                                             | P0       |
+| FR-P4-014 | Inventory manager, stock operator, inventory viewer, transfer approver, and financial viewer permissions remain separate from publishing, member, document, and assistance permissions                             | P0       |
+| FR-P4-015 | Audit history records movement actor, reason, source/target, item, quantity/unit, linked batch, import/transfer reference, and timestamps without exposing restricted cost to ordinary inventory viewers           | P0       |
+| FR-P4-016 | Mobile inventory supports item/location search and camera barcode/QR scanning with a manual entry fallback                                                                                                         | P1       |
+| FR-P4-017 | Inventory admins can import approved `.csv` item/balance data through field mapping, unit validation, duplicate detection, preview, idempotent commit, row errors, and compensating batch reversal                 | P1       |
+| FR-P4-018 | Inventory changes linked to a public service/event or private mission may create an operational/public review task but never publish stock counts or change service status automatically                           | P0       |
+| FR-P4-019 | Organisation departure exports or transfers inventory records under an approved policy while preserving ledger/audit history and revoking access                                                                   | P0       |
+| FR-P4-020 | Inventory dashboards and workflows use the authenticated French/English interface and the user's saved language preference                                                                                         | P0       |
 
 ### 13.3 Primary journeys
 
@@ -647,20 +645,20 @@ Allow verified organisations to track physical resources across storage location
 
 ### 13.4 Required screens
 
-| ID | Screen | Priority |
-| --- | --- | --- |
-| P4-01 | Inventory overview, alerts, and recent movements | P0 |
-| P4-02 | Storage locations | P0 |
-| P4-03 | Item/category/variant catalogue | P0 |
-| P4-04 | Item balance, lots, expiry, and movement history | P0 |
-| P4-05 | Receive, adjust, damage, expire, and distribute stock | P0 |
-| P4-06 | Internal transfer dispatch/receipt | P0 |
-| P4-07 | Cross-organisation transfer offers and acceptance | P0 |
-| P4-08 | Reservations linked to events/missions | P0 |
-| P4-09 | Kit definitions and assembly/disassembly | P0 |
-| P4-10 | Low-stock and expiry alerts | P0 |
-| P4-11 | Barcode/QR scan and manual fallback | P1 |
-| P4-12 | Inventory CSV import preview/results/reversal | P1 |
+| ID    | Screen                                                | Priority |
+| ----- | ----------------------------------------------------- | -------- |
+| P4-01 | Inventory overview, alerts, and recent movements      | P0       |
+| P4-02 | Storage locations                                     | P0       |
+| P4-03 | Item/category/variant catalogue                       | P0       |
+| P4-04 | Item balance, lots, expiry, and movement history      | P0       |
+| P4-05 | Receive, adjust, damage, expire, and distribute stock | P0       |
+| P4-06 | Internal transfer dispatch/receipt                    | P0       |
+| P4-07 | Cross-organisation transfer offers and acceptance     | P0       |
+| P4-08 | Reservations linked to events/missions                | P0       |
+| P4-09 | Kit definitions and assembly/disassembly              | P0       |
+| P4-10 | Low-stock and expiry alerts                           | P0       |
+| P4-11 | Barcode/QR scan and manual fallback                   | P1       |
+| P4-12 | Inventory CSV import preview/results/reversal         | P1       |
 
 ### 13.5 Phase 4 exit criteria
 
@@ -691,20 +689,20 @@ Allow verified organisations to track physical resources across storage location
 
 ### 14.2 Required public states
 
-| Domain | Required states |
-| --- | --- |
-| Service/event | Open, closed, cancelled, information uncertain |
-| Freshness | Current, review soon, outdated, no review data/uncertain |
-| Translation | Human verified, draft, machine generated/needs review, missing with explicit fallback |
-| Media | Processing, ready, unavailable, loading, playing, paused, completed, error/retry; transcript/caption review is visible to editors |
-| Organisation approval | Requested, viewed, changes requested, approved, declined, expired, cancelled, invalidated by revision change |
-| Publication | Draft, in review, published, unpublished, archived |
-| Invitation | Pending, accepted, expired, revoked |
-| Member | Invited, active, inactive, offboarded |
-| Assignment | Proposed, accepted, declined, change requested, cancelled |
-| Coordination event | Scheduled, changed, cancelled (with visible reason); participation: attending, interested, declined |
-| Document | Draft, ready for review, awaiting signature, partially signed, signed, declined, expired, cancelled |
-| System | Loading, empty, success, error, offline, permission denied |
+| Domain                | Required states                                                                                                                   |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Service/event         | Open, closed, cancelled, information uncertain                                                                                    |
+| Freshness             | Current, review soon, outdated, no review data/uncertain                                                                          |
+| Translation           | Human verified, draft, machine generated/needs review, missing with explicit fallback                                             |
+| Media                 | Processing, ready, unavailable, loading, playing, paused, completed, error/retry; transcript/caption review is visible to editors |
+| Organisation approval | Requested, viewed, changes requested, approved, declined, expired, cancelled, invalidated by revision change                      |
+| Publication           | Draft, in review, published, unpublished, archived                                                                                |
+| Invitation            | Pending, accepted, expired, revoked                                                                                               |
+| Member                | Invited, active, inactive, offboarded                                                                                             |
+| Assignment            | Proposed, accepted, declined, change requested, cancelled                                                                         |
+| Coordination event    | Scheduled, changed, cancelled (with visible reason); participation: attending, interested, declined                               |
+| Document              | Draft, ready for review, awaiting signature, partially signed, signed, declined, expired, cancelled                               |
+| System                | Loading, empty, success, error, offline, permission denied                                                                        |
 
 Status meaning always uses visible text and an icon/state treatment; color is never the sole signal.
 
@@ -760,21 +758,21 @@ Joint-publication workflow:
 
 ## 15. Roles and access control
 
-| Role | Default capability boundary |
-| --- | --- |
-| Platform operator | Organisation verification, shared taxonomy/moderation, suspension, platform audit |
-| Platform editor | Platform public content and recorded proxy publication |
-| Association author | Owned article draft/translation only unless additional permission is granted |
-| Association reviewer/publisher | Approved owned article review/publication and revision-specific approval of joint content for their organisation |
-| Organisation administrator | Organisation configuration, permitted users/roles, public profile, audit; no automatic document reading |
-| Editor | Explicitly permitted public content types and languages |
-| Translator/reviewer | Assigned content/languages and verification only |
-| Coordinator | Teams, availability, shifts, missions, meetings, and operational overview |
-| Document administrator/signatory | Approved templates, document workflow, permitted signed files/evidence, and document audit |
-| Inventory manager/operator | Permitted locations, catalogues, movements, reservations, kits, transfers, alerts, and inventory audit; restricted cost requires a separate permission |
-| Transfer approver | Accept or decline custody/stock transfers for the destination organisation without broader edit access |
-| Staff/volunteer/intern | Own permitted profile/availability, teams, assignments, guidance, and documents sent to them |
-| Viewer/auditor | Read-only access to explicitly selected records/reports |
+| Role                             | Default capability boundary                                                                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Platform operator                | Organisation verification, shared taxonomy/moderation, suspension, platform audit                                                                      |
+| Platform editor                  | Platform public content and recorded proxy publication                                                                                                 |
+| Association author               | Owned article draft/translation only unless additional permission is granted                                                                           |
+| Association reviewer/publisher   | Approved owned article review/publication and revision-specific approval of joint content for their organisation                                       |
+| Organisation administrator       | Organisation configuration, permitted users/roles, public profile, audit; no automatic document reading                                                |
+| Editor                           | Explicitly permitted public content types and languages                                                                                                |
+| Translator/reviewer              | Assigned content/languages and verification only                                                                                                       |
+| Coordinator                      | Teams, availability, shifts, missions, meetings, and operational overview                                                                              |
+| Document administrator/signatory | Approved templates, document workflow, permitted signed files/evidence, and document audit                                                             |
+| Inventory manager/operator       | Permitted locations, catalogues, movements, reservations, kits, transfers, alerts, and inventory audit; restricted cost requires a separate permission |
+| Transfer approver                | Accept or decline custody/stock transfers for the destination organisation without broader edit access                                                 |
+| Staff/volunteer/intern           | Own permitted profile/availability, teams, assignments, guidance, and documents sent to them                                                           |
+| Viewer/auditor                   | Read-only access to explicitly selected records/reports                                                                                                |
 
 Access-control rules:
 
@@ -894,60 +892,60 @@ Before any implementation, participating organisations must agree in writing on 
 
 ## 19. Security and non-functional requirements
 
-| ID | Requirement |
-| --- | --- |
-| NFR-001 | Host production data in the European Union unless an approved governance decision states otherwise |
-| NFR-002 | Encrypt traffic in transit and production data/backups at rest |
-| NFR-003 | Use strong authentication, secure account recovery, session revocation, and expiring single-use invitation/recovery tokens |
-| NFR-004 | Enforce organisation isolation in application authorization and database controls; test cross-tenant access |
-| NFR-005 | Use separate public and authenticated API/read surfaces |
-| NFR-006 | Log administrative actions, publication changes, permission changes, and restricted-document access without logging sensitive contents |
-| NFR-007 | Define retention/deletion rules for every personal/restricted data category before production collection |
-| NFR-008 | Maintain encrypted backups and a tested restore procedure; recovery objectives remain `TBD` |
-| NFR-009 | Maintain an incident-response/data-breach procedure and responsible owner before pilot launch |
-| NFR-010 | Do not place sensitive information or simulator answers in analytics, URLs, notifications, application logs, or error reports |
-| NFR-011 | Preserve public low-bandwidth/list access when maps, geolocation, or nonessential scripts fail |
-| NFR-012 | Validate and sanitize uploaded files and structured editorial content; scan uploads before public availability |
-| NFR-013 | Make notification delivery and signature-provider webhooks idempotent and auditable |
-| NFR-014 | Establish measurable performance budgets for responsive web, Android, and iOS before engineering sign-off; target values remain `TBD` |
-| NFR-015 | Test permission, offline, localization, accessibility, long-text, empty, error, and destructive-action states before each phase exits |
-| NFR-016 | Build Android and iOS clients with React Native and Expo; share validated domain/API logic with the React web client where practical while preserving platform-native navigation, accessibility, safe areas, and permission behavior |
-| NFR-017 | Optimize public audio/video for constrained mobile data, support cancellation/retry and an explicit low-bandwidth mode, and never make media loading block the text/icon route to essential information |
+| ID      | Requirement                                                                                                                                                                                                                            |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-001 | Host production data in the European Union unless an approved governance decision states otherwise                                                                                                                                     |
+| NFR-002 | Encrypt traffic in transit and production data/backups at rest                                                                                                                                                                         |
+| NFR-003 | Use strong authentication, secure account recovery, session revocation, and expiring single-use invitation/recovery tokens                                                                                                             |
+| NFR-004 | Enforce organisation isolation in application authorization and database controls; test cross-tenant access                                                                                                                            |
+| NFR-005 | Use separate public and authenticated API/read surfaces                                                                                                                                                                                |
+| NFR-006 | Log administrative actions, publication changes, permission changes, and restricted-document access without logging sensitive contents                                                                                                 |
+| NFR-007 | Define retention/deletion rules for every personal/restricted data category before production collection                                                                                                                               |
+| NFR-008 | Maintain encrypted backups and a tested restore procedure; recovery objectives remain `TBD`                                                                                                                                            |
+| NFR-009 | Maintain an incident-response/data-breach procedure and responsible owner before pilot launch                                                                                                                                          |
+| NFR-010 | Do not place sensitive information or simulator answers in analytics, URLs, notifications, application logs, or error reports                                                                                                          |
+| NFR-011 | Preserve public low-bandwidth/list access when maps, geolocation, or nonessential scripts fail                                                                                                                                         |
+| NFR-012 | Validate and sanitize uploaded files and structured editorial content; scan uploads before public availability                                                                                                                         |
+| NFR-013 | Make notification delivery and signature-provider webhooks idempotent and auditable                                                                                                                                                    |
+| NFR-014 | Establish measurable performance budgets for responsive web, Android, and iOS before engineering sign-off; target values remain `TBD`                                                                                                  |
+| NFR-015 | Test permission, offline, localization, accessibility, long-text, empty, error, and destructive-action states before each phase exits                                                                                                  |
+| NFR-016 | Build Android and iOS clients with React Native and Expo; share validated domain/API logic with the React web client where practical while preserving platform-native navigation, accessibility, safe areas, and permission behavior   |
+| NFR-017 | Optimize public audio/video for constrained mobile data, support cancellation/retry and an explicit low-bandwidth mode, and never make media loading block the text/icon route to essential information                                |
 | NFR-018 | Joint-publication approval links are expiring and single-use, store only hashed tokens, expose the sealed revision only to an authorised verified representative, and never include unpublished content in the email body or analytics |
-| NFR-019 | French and English authenticated UI strings, validation, notifications, email templates, dates, numbers, and units pass localization testing; public content keeps its separate 15-language rules |
-| NFR-020 | AI translation jobs send only approved public/editorial text to an approved provider, store provenance and source revision/hash, and keep provider secrets and private member/document/inventory data out of prompts |
-| NFR-021 | Search autocomplete returns grouped suggestions within the approved performance budget, protects raw queries from analytics profiling, and preserves a local/list fallback when a geocoder or map provider fails |
-| NFR-022 | Approval-state changes regenerate public projections idempotently and retain each immutable projection, approved-party set, actor, and timestamp for rollback/audit |
-| NFR-023 | Inventory posting, import, transfer, kit, reservation, and reversal operations are transactional, idempotent where retried, unit-safe, and covered by balance-invariant tests |
+| NFR-019 | French and English authenticated UI strings, validation, notifications, email templates, dates, numbers, and units pass localization testing; public content keeps its separate 15-language rules                                      |
+| NFR-020 | AI translation jobs send only approved public/editorial text to an approved provider, store provenance and source revision/hash, and keep provider secrets and private member/document/inventory data out of prompts                   |
+| NFR-021 | Search autocomplete returns grouped suggestions within the approved performance budget, protects raw queries from analytics profiling, and preserves a local/list fallback when a geocoder or map provider fails                       |
+| NFR-022 | Approval-state changes regenerate public projections idempotently and retain each immutable projection, approved-party set, actor, and timestamp for rollback/audit                                                                    |
+| NFR-023 | Inventory posting, import, transfer, kit, reservation, and reversal operations are transactional, idempotent where retried, unit-safe, and covered by balance-invariant tests                                                          |
 
 The proposed implementation foundation is React for responsive web, React Native with Expo for Android/iOS, PostgreSQL with Drizzle ORM, translation-aware normalized content, organisation-scoped authorization, immutable publication revisions/projections, an append-only inventory ledger, private object storage for files, and a transactional outbox for notifications. Hosting provider, authentication provider, translation provider, signature provider, performance budgets, supported OS/device baselines, backup recovery objectives, and exact retention periods remain implementation decisions requiring approval.
 
 ## 20. Success measures and pilot evaluation
 
-| Outcome | Measure | Target/state |
-| --- | --- | --- |
-| Discoverability | Time for a pilot visitor to reach a relevant service or reviewed information path | Under two minutes |
-| Search coverage | Location, association, and launch-need queries returning a relevant grouped autocomplete suggestion | Target `TBD` before Phase 1 pilot |
-| Client coverage | Core Phase 1 journeys pass acceptance on responsive web, supported Android, and supported iOS | Required for Phase 1 exit |
-| Accessibility | Complete public journeys passing keyboard, zoom, mobile, contrast, LTR, and RTL review | Required for Phase 1 exit |
-| Low-literacy access | People with limited literacy can understand priority information and reach the next action using summary, icons, audio, or video without reading the long-form body | Required for Phase 1 exit; quantitative pilot target `TBD` |
-| Freshness | Percentage of active public records within their review interval | Baseline in Phase 0; target `TBD` before pilot |
-| Correction speed | Time for an authorised editor to publish an exceptional cancellation | Under one minute by Phase 2 exit |
-| Association adoption | Verified pilot organisations managing their public profiles/listings | At least two by Phase 2 exit |
-| Simulator safety | Stored/linked answer records | Zero in Phase 1 |
-| Translation quality | Public records with required verified translations or explicit fallback | Target `TBD` by content type before launch |
-| Spreadsheet reduction | Pilot coordination workflow performed without a separate planning spreadsheet | Required by Phase 3 exit |
-| Member usability | Members updating availability and responding to assignments on mobile | Required by Phase 3 exit |
-| Document workflow | Approved volunteer and internship workflows completed and audited | At least one of each by Phase 3 exit |
-| Operational fit | Reasons users return to WhatsApp, spreadsheets, email, websites, or paper | Measured every pilot; used to prioritize iteration |
-| Data minimisation | Unjustified personal fields or persisted simulator answers | Zero |
-| Joint attribution integrity | Public records displaying an organisation without its valid revision-specific approval | Zero |
-| Provider integrity | Published service/events without a verified provider logo and text name | Zero |
-| Agenda import | Duplicate events caused by retrying the same import batch | Zero in Phase 3 pilot |
-| Qualification transparency | Members who can explain why mission-matching fields are requested and who can see them | Target `TBD` before Phase 3 pilot |
-| Inventory reconciliation | Difference between calculated and agreed physical-count balances after investigated discrepancies | Target `TBD` before Phase 4 pilot |
-| Awareness | Aggregate, cookieless channel measures: sessions by channel code and share of non-French sessions | Targets set at the G1 soft launch (see `DISTRIBUTION.md`) |
-| Editorial cost | Editor-minutes per public record per month | Baseline from Slice 1; target `TBD` |
+| Outcome                     | Measure                                                                                                                                                             | Target/state                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Discoverability             | Time for a pilot visitor to reach a relevant service or reviewed information path                                                                                   | Under two minutes                                          |
+| Search coverage             | Location, association, and launch-need queries returning a relevant grouped autocomplete suggestion                                                                 | Target `TBD` before Phase 1 pilot                          |
+| Client coverage             | Core Phase 1 journeys pass acceptance on responsive web, supported Android, and supported iOS                                                                       | Required for Phase 1 exit                                  |
+| Accessibility               | Complete public journeys passing keyboard, zoom, mobile, contrast, LTR, and RTL review                                                                              | Required for Phase 1 exit                                  |
+| Low-literacy access         | People with limited literacy can understand priority information and reach the next action using summary, icons, audio, or video without reading the long-form body | Required for Phase 1 exit; quantitative pilot target `TBD` |
+| Freshness                   | Percentage of active public records within their review interval                                                                                                    | Baseline in Phase 0; target `TBD` before pilot             |
+| Correction speed            | Time for an authorised editor to publish an exceptional cancellation                                                                                                | Under one minute by Phase 2 exit                           |
+| Association adoption        | Verified pilot organisations managing their public profiles/listings                                                                                                | At least two by Phase 2 exit                               |
+| Simulator safety            | Stored/linked answer records                                                                                                                                        | Zero in Phase 1                                            |
+| Translation quality         | Public records with required verified translations or explicit fallback                                                                                             | Target `TBD` by content type before launch                 |
+| Spreadsheet reduction       | Pilot coordination workflow performed without a separate planning spreadsheet                                                                                       | Required by Phase 3 exit                                   |
+| Member usability            | Members updating availability and responding to assignments on mobile                                                                                               | Required by Phase 3 exit                                   |
+| Document workflow           | Approved volunteer and internship workflows completed and audited                                                                                                   | At least one of each by Phase 3 exit                       |
+| Operational fit             | Reasons users return to WhatsApp, spreadsheets, email, websites, or paper                                                                                           | Measured every pilot; used to prioritize iteration         |
+| Data minimisation           | Unjustified personal fields or persisted simulator answers                                                                                                          | Zero                                                       |
+| Joint attribution integrity | Public records displaying an organisation without its valid revision-specific approval                                                                              | Zero                                                       |
+| Provider integrity          | Published service/events without a verified provider logo and text name                                                                                             | Zero                                                       |
+| Agenda import               | Duplicate events caused by retrying the same import batch                                                                                                           | Zero in Phase 3 pilot                                      |
+| Qualification transparency  | Members who can explain why mission-matching fields are requested and who can see them                                                                              | Target `TBD` before Phase 3 pilot                          |
+| Inventory reconciliation    | Difference between calculated and agreed physical-count balances after investigated discrepancies                                                                   | Target `TBD` before Phase 4 pilot                          |
+| Awareness                   | Aggregate, cookieless channel measures: sessions by channel code and share of non-French sessions                                                                   | Targets set at the G1 soft launch (see `DISTRIBUTION.md`)  |
+| Editorial cost              | Editor-minutes per public record per month                                                                                                                          | Baseline from Slice 1; target `TBD`                        |
 
 Run every phase as a controlled pilot, measure outcomes and failure reasons, resolve governance/usability issues, and update this PRD before expanding scope.
 
@@ -1051,7 +1049,7 @@ If ever approved, the minimum initial record is: a random non-semantic person re
 ### Technical/service-provider decisions
 
 - `TBD` — PostgreSQL hosting provider and infrastructure ownership.
-- `TBD` — Authentication and email/SMS providers.
+- `DECIDED (Slice 0, 19 July 2026)` — Auth.js passwordless email with session-bound SMS verification; AWS SES and SNS in `eu-west-3`, using the operator's `ep` profile for local administration. Revisit credential delivery before the first persistent deployment and the mobile authentication gate.
 - `TBD` — Object storage, media processing, and malware-scanning providers.
 - `TBD` — AI translation provider and contractual/no-training/data-retention terms.
 - `TBD` — Signature provider, document types, signature levels, identity verification, and retention.
@@ -1063,22 +1061,22 @@ An open decision blocks launch only when it affects the relevant phase's safety,
 
 ## 25. Supporting artifacts
 
-| File | Purpose |
-| --- | --- |
-| `PHASE-1-PUBLIC-INFORMATION.md` | Phase 1 elaboration |
-| `PHASE-2-ASSOCIATION-ONBOARDING.md` | Phase 2 elaboration |
-| `PHASE-3-TEAM-MANAGEMENT.md` | Phase 3 elaboration |
-| `PHASE-4-INVENTORY-MANAGEMENT.md` | Phase 4 elaboration |
-| `DESIGN-BRIEF.md` | Priority journeys, screen requirements, prototype and state guidance |
-| `DESIGN.md` | Visual system, components, responsive behavior, accessibility, and voice |
-| `DATABASE-SCHEMA.md` | Proposed PostgreSQL/Drizzle data model |
-| `OPEN-DESIGN.md` | Open Design runbook for generating design artifacts |
-| `RISKS.md` | Risk register: adoption, continuity, safety of public data, legal exposure, AI-drift |
-| `SUSTAINABILITY.md` | Operating model, responsibility ladder, cost model, funding, continuity/exit plan |
-| `LANDSCAPE.md` | Existing information actors, gap analysis, partner-first positioning |
-| `DISTRIBUTION.md` | Awareness plan: intermediary-first waves, share-first design, privacy-safe measurement |
-| `prototype/index.html` | Interactive HTML prototype (public pages, workspace home, simulator, FR/EN/AR, light/dark) — design reference with fictional demo data; frozen, not product code |
-| `ENGINEERING-NOTES.md` | Proven engineering patterns adopted from the operator's prior monorepos (EP-next, kawa-web): monorepo blueprint, tokens, i18n pipeline, migration discipline, quality gates, AGENTS.md, warts to avoid |
+| File                                | Purpose                                                                                                                                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PHASE-1-PUBLIC-INFORMATION.md`     | Phase 1 elaboration                                                                                                                                                                                    |
+| `PHASE-2-ASSOCIATION-ONBOARDING.md` | Phase 2 elaboration                                                                                                                                                                                    |
+| `PHASE-3-TEAM-MANAGEMENT.md`        | Phase 3 elaboration                                                                                                                                                                                    |
+| `PHASE-4-INVENTORY-MANAGEMENT.md`   | Phase 4 elaboration                                                                                                                                                                                    |
+| `DESIGN-BRIEF.md`                   | Priority journeys, screen requirements, prototype and state guidance                                                                                                                                   |
+| `DESIGN.md`                         | Visual system, components, responsive behavior, accessibility, and voice                                                                                                                               |
+| `DATABASE-SCHEMA.md`                | Proposed PostgreSQL/Drizzle data model                                                                                                                                                                 |
+| `OPEN-DESIGN.md`                    | Open Design runbook for generating design artifacts                                                                                                                                                    |
+| `RISKS.md`                          | Risk register: adoption, continuity, safety of public data, legal exposure, AI-drift                                                                                                                   |
+| `SUSTAINABILITY.md`                 | Operating model, responsibility ladder, cost model, funding, continuity/exit plan                                                                                                                      |
+| `LANDSCAPE.md`                      | Existing information actors, gap analysis, partner-first positioning                                                                                                                                   |
+| `DISTRIBUTION.md`                   | Awareness plan: intermediary-first waves, share-first design, privacy-safe measurement                                                                                                                 |
+| `prototype/index.html`              | Interactive HTML prototype (public pages, workspace home, simulator, FR/EN/AR, light/dark) — design reference with fictional demo data; frozen, not product code                                       |
+| `ENGINEERING-NOTES.md`              | Proven engineering patterns adopted from the operator's prior monorepos (EP-next, kawa-web): monorepo blueprint, tokens, i18n pipeline, migration discipline, quality gates, AGENTS.md, warts to avoid |
 
 ## 26. References
 

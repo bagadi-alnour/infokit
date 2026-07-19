@@ -5,6 +5,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 import { authSchema } from "./schemas";
@@ -24,7 +25,7 @@ export const users = authSchema.table("users", {
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: varchar("name", { length: 255 }),
-  email: varchar("email", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
   emailVerified: timestamp("email_verified", {
     mode: "date",
     withTimezone: true,
@@ -34,6 +35,7 @@ export const users = authSchema.table("users", {
 
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
+  secondFactorChallenges: many(secondFactorChallenges),
 }));
 
 export const accounts = authSchema.table(
@@ -80,6 +82,10 @@ export const sessions = authSchema.table(
       mode: "date",
       withTimezone: true,
     }).notNull(),
+    secondFactorVerifiedAt: timestamp("second_factor_verified_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
   },
   (t) => [index("sessions_user_id_idx").on(t.userId)],
 );
@@ -87,6 +93,58 @@ export const sessions = authSchema.table(
 export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, { fields: [sessions.userId], references: [users.id] }),
 }));
+
+/**
+ * Short-lived, single-use SMS challenges for the editor step-up check.
+ * Codes are HMACed before storage; phone numbers remain in server env only.
+ */
+export const secondFactorChallenges = authSchema.table(
+  "second_factor_challenges",
+  {
+    id: uuid("id").defaultRandom().notNull().primaryKey(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sessionToken: varchar("session_token", { length: 255 })
+      .notNull()
+      .references(() => sessions.sessionToken, { onDelete: "cascade" }),
+    codeHash: varchar("code_hash", { length: 64 }).notNull(),
+    locale: varchar("locale", { length: 5 }).notNull(),
+    deliveryState: varchar("delivery_state", { length: 16 })
+      .$type<"pending" | "sent" | "failed">()
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    failedAt: timestamp("failed_at", { withTimezone: true }),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("second_factor_challenges_user_created_idx").on(
+      t.userId,
+      t.createdAt,
+    ),
+    index("second_factor_challenges_session_idx").on(t.sessionToken),
+  ],
+);
+
+export const secondFactorChallengesRelations = relations(
+  secondFactorChallenges,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [secondFactorChallenges.userId],
+      references: [users.id],
+    }),
+    session: one(sessions, {
+      fields: [secondFactorChallenges.sessionToken],
+      references: [sessions.sessionToken],
+    }),
+  }),
+);
 
 export const verificationTokens = authSchema.table(
   "verification_tokens",

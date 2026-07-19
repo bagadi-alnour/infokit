@@ -7,7 +7,12 @@ import "./src/env.js";
 /** @type {import("next").NextConfig} */
 const config = {
   // Workspace packages ship raw TypeScript; Next compiles them in place.
-  transpilePackages: ["@calais/tokens"],
+  transpilePackages: [
+    "@calais/shared",
+    "@calais/tokens",
+    "@calais/ui",
+    "@calais/validation",
+  ],
 };
 
 export default config;

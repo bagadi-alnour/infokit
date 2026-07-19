@@ -1,0 +1,11 @@
+{
+  "auth.login.eyebrow": "Editor access",
+  "auth.login.title": "Sign in to the editor console",
+  "auth.login.description": "Use the email address approved for this private instrument. We will send a secure link, then confirm your access by SMS.",
+  "auth.login.emailLabel": "Approved email address",
+  "auth.login.emailPlaceholder": "you@example.org",
+  "auth.login.submit": "Send secure link",
+  "auth.login.submitting": "Sending link…",
+  "auth.login.error": "We could not start sign-in. Check the address and try again.",
+  "auth.login.privacy": "Only designated editors can sign in. We do not reveal which addresses are approved."
+}

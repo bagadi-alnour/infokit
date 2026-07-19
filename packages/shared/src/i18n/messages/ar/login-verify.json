@@ -1,0 +1,18 @@
+{
+  "auth.verify.eyebrow": "التحقق الثاني",
+  "auth.verify.title": "أكد رمز الرسالة النصية",
+  "auth.verify.description": "أرسل رمزًا من ستة أرقام إلى {phone}. تنتهي صلاحيته بعد 10 دقائق.",
+  "auth.verify.signedInAs": "تم تأكيد البريد: {email}",
+  "auth.verify.send": "إرسال رمز برسالة نصية",
+  "auth.verify.sending": "جارٍ إرسال الرمز…",
+  "auth.verify.codeLabel": "الرمز المكوّن من ستة أرقام",
+  "auth.verify.codePlaceholder": "000000",
+  "auth.verify.submit": "تأكيد ومتابعة",
+  "auth.verify.submitting": "جارٍ التحقق من الرمز…",
+  "auth.verify.sent": "أُرسل الرمز. لا يمكن استخدامه إلا مرة واحدة.",
+  "auth.verify.invalid": "هذا الرمز غير صحيح أو انتهت صلاحيته أو استُخدم من قبل.",
+  "auth.verify.cooldown": "انتظر دقيقة قبل طلب رمز آخر.",
+  "auth.verify.rateLimited": "طُلبت رموز كثيرة. حاول مرة أخرى بعد ساعة.",
+  "auth.verify.sendError": "تعذر إرسال الرسالة النصية. حاول مرة أخرى بعد قليل.",
+  "auth.verify.signOut": "استخدام عنوان بريد آخر"
+}

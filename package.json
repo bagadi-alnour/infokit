@@ -11,12 +11,14 @@
     "db:migrate": "pnpm --filter @calais/web db:migrate",
     "db:push": "pnpm --filter @calais/web db:push",
     "db:studio": "pnpm --filter @calais/web db:studio",
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run dev",
+    "dev:frontend": "pnpm --filter @calais/web dev",
     "dev:web": "pnpm --filter @calais/web dev",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx,json,md,css}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx,json,md,css}\" --cache",
     "lint": "turbo run lint",
     "prepare": "simple-git-hooks",
+    "start": "pnpm --filter @calais/web start",
     "typecheck": "turbo run typecheck"
   },
   "simple-git-hooks": {

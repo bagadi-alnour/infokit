@@ -1,0 +1,11 @@
+{
+  "auth.dashboard.console": "وحدة التحرير",
+  "auth.dashboard.overview": "نظرة عامة",
+  "auth.dashboard.organizations": "المنظمات",
+  "auth.dashboard.places": "الأماكن",
+  "auth.dashboard.services": "الخدمات",
+  "auth.dashboard.signedIn": "تم تسجيل الدخول باسم {email}",
+  "auth.dashboard.role": "الدور",
+  "auth.dashboard.role.editor": "محرّر",
+  "auth.dashboard.signOut": "تسجيل الخروج"
+}

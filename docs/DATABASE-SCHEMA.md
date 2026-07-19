@@ -26,17 +26,17 @@ Assistance or beneficiary records are intentionally absent. If introduced later,
 
 Use PostgreSQL schemas as domain boundaries while keeping one Drizzle project:
 
-| PostgreSQL schema | Responsibility | Public access |
-| --- | --- | --- |
-| `auth` | Login identities, linked providers, sessions, verification, recovery | No |
-| `core` | Organisations, membership, invitations, roles, languages, terms | No |
-| `content` | Public profiles, places, services, events, editorial information, files | Published records only through the public API |
-| `simulator` | Versioned anonymous information-decision graphs | Published versions only |
-| `operations` | Members, teams, availability, absences, planning, assignments | No |
-| `documents` | Restricted templates, files, signers, signature evidence | No |
-| `inventory` | Locations, item catalogue, movements, reservations, kits, transfers, alerts, restricted costs | No |
-| `notifications` | Preferences, in-app notifications, delivery attempts, outbox | No |
-| `audit` | Append-only administrative, publishing, and restricted-access history | No |
+| PostgreSQL schema | Responsibility                                                                                | Public access                                 |
+| ----------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `auth`            | Login identities, linked providers, sessions, verification, recovery                          | No                                            |
+| `core`            | Organisations, membership, invitations, roles, languages, terms                               | No                                            |
+| `content`         | Public profiles, places, services, events, editorial information, files                       | Published records only through the public API |
+| `simulator`       | Versioned anonymous information-decision graphs                                               | Published versions only                       |
+| `operations`      | Members, teams, availability, absences, planning, assignments                                 | No                                            |
+| `documents`       | Restricted templates, files, signers, signature evidence                                      | No                                            |
+| `inventory`       | Locations, item catalogue, movements, reservations, kits, transfers, alerts, restricted costs | No                                            |
+| `notifications`   | Preferences, in-app notifications, delivery attempts, outbox                                  | No                                            |
+| `audit`           | Append-only administrative, publishing, and restricted-access history                         | No                                            |
 
 ```mermaid
 flowchart LR
@@ -174,59 +174,62 @@ Authentication library choice may rename these tables, but the data boundaries s
 
 Global login identity.
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | `uuid PK` | Random identifier |
-| `display_name` | `text nullable` | Account-level display only |
-| `preferred_language_code` | `text FK nullable` | UI preference |
-| `disabled_at` | `timestamptz nullable` | Platform account suspension |
-| `last_login_at` | `timestamptz nullable` | Security metadata |
-| `created_at`, `updated_at` | `timestamptz` | Standard timestamps |
+| Column                     | Type                   | Notes                       |
+| -------------------------- | ---------------------- | --------------------------- |
+| `id`                       | `uuid PK`              | Random identifier           |
+| `display_name`             | `text nullable`        | Account-level display only  |
+| `preferred_language_code`  | `text FK nullable`     | UI preference               |
+| `disabled_at`              | `timestamptz nullable` | Platform account suspension |
+| `last_login_at`            | `timestamptz nullable` | Security metadata           |
+| `created_at`, `updated_at` | `timestamptz`          | Standard timestamps         |
 
 ### `auth.user_emails`
 
 A user may keep a personal email and add one or more organisation emails without creating a second identity.
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | `uuid PK` | Email record ID |
-| `user_id` | `uuid FK` | Owning global user |
-| `email` | `text` | Original display form |
-| `normalized_email` | `text` | Trimmed and lower-cased for lookup; globally unique |
-| `is_primary` | `boolean` | One primary email per user |
-| `verified_at` | `timestamptz nullable` | Authentication verification |
-| `created_at`, `updated_at` | `timestamptz` | Standard timestamps |
+| Column                     | Type                   | Notes                                               |
+| -------------------------- | ---------------------- | --------------------------------------------------- |
+| `id`                       | `uuid PK`              | Email record ID                                     |
+| `user_id`                  | `uuid FK`              | Owning global user                                  |
+| `email`                    | `text`                 | Original display form                               |
+| `normalized_email`         | `text`                 | Trimmed and lower-cased for lookup; globally unique |
+| `is_primary`               | `boolean`              | One primary email per user                          |
+| `verified_at`              | `timestamptz nullable` | Authentication verification                         |
+| `created_at`, `updated_at` | `timestamptz`          | Standard timestamps                                 |
 
 The global uniqueness of `normalized_email` prevents two login identities from claiming the same verified address. It does **not** limit a user to one organisation. Organisation relationships are stored in `core.organization_members`, and an organisation-specific contact address may also be stored on that membership.
 
 ### Authentication support tables
 
-| Table | Purpose | Important columns/constraints |
-| --- | --- | --- |
-| `auth.accounts` | Password or external identity-provider linkage | `user_id`, optional `user_email_id`, `provider`, `provider_account_id`, optional `password_hash`; unique provider identity |
-| `auth.sessions` | Revocable login sessions | hashed `session_token`, `user_id`, `expires_at`, `last_seen_at`; never store raw tokens |
-| `auth.verification_tokens` | Email verification and passwordless login | hashed token, purpose, email/user, expiry, consumed time |
-| `auth.password_reset_tokens` | Single-use password recovery | hashed token, user, expiry, consumed time |
-| `auth.authenticators` | Optional WebAuthn/passkey credentials | credential ID, public key, counter, transports |
-| `auth.recovery_codes` | Optional MFA recovery | one-way hash, user, consumed time |
+| Table                           | Purpose                                             | Important columns/constraints                                                                                                                        |
+| ------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth.accounts`                 | Password or external identity-provider linkage      | `user_id`, optional `user_email_id`, `provider`, `provider_account_id`, optional `password_hash`; unique provider identity                           |
+| `auth.sessions`                 | Revocable login sessions                            | hashed `session_token`, `user_id`, `expires_at`, `last_seen_at`, nullable `second_factor_verified_at`; never store raw tokens                        |
+| `auth.verification_tokens`      | Email verification and passwordless login           | hashed token, purpose, email/user, expiry, consumed time                                                                                             |
+| `auth.second_factor_challenges` | Short-lived SMS verification for a specific session | user, hashed session token, keyed code digest, locale, delivery state, bounded attempts, expiry, consumed time; never store the phone number or code |
+| `auth.password_reset_tokens`    | Single-use password recovery                        | hashed token, user, expiry, consumed time                                                                                                            |
+| `auth.authenticators`           | Optional WebAuthn/passkey credentials               | credential ID, public key, counter, transports                                                                                                       |
+| `auth.recovery_codes`           | Optional MFA recovery                               | one-way hash, user, consumed time                                                                                                                    |
 
 Security events such as login failure, recovery, session revocation, MFA changes, and account disablement also create `audit.events` rows. IP addresses and user-agent retention require an explicit policy.
+
+Slice 0 has a fixed invited-editor allowlist. Its email-to-phone mapping is deployment configuration rather than account data: there is no public enrolment, phone-number editing, or recovery flow. A successful magic-link login still requires a session-bound, single-use SMS challenge before any private read or mutation is allowed.
 
 ## 5. Organisations, Invitations, and Authorization
 
 ### Organisation tables
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `core.organizations` | Stable private organisation identity | `id`, `slug`, legal/display name, timezone, status, publishing suspension |
-| `core.organization_verifications` | Platform verification and duplicate/impersonation review | organisation, reviewer, method, status, notes, evidence asset, decision times |
-| `core.organization_members` | Stable person/account identity inside one organisation | organisation, nullable user, operational name/contact, status, first/last seen times |
-| `core.member_types` | Extensible participation type catalogue | code such as staff/volunteer/intern, label key, active state, display order |
-| `core.member_engagements` | Historical period and type of participation | organisation, member, member type, start/end dates, status, ended reason |
-| `core.invitations` | Phase 1 publisher, Phase 2 admin/editor, and Phase 3 member invitations | organisation, email/phone, invitation kind, hashed token, inviter, expiry, accepted/revoked times |
-| `core.invitation_roles` | Roles that will be granted on acceptance | invitation, role |
-| `core.legal_documents` | Versioned privacy notice, platform terms, and publishing responsibilities | kind, version, language, asset/content, effective date |
-| `core.legal_acceptances` | Evidence that a user accepted a specific version | user, organisation nullable, legal document, accepted time, evidence metadata |
+| Table                             | Purpose                                                                   | Important columns                                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `core.organizations`              | Stable private organisation identity                                      | `id`, `slug`, legal/display name, timezone, status, publishing suspension                         |
+| `core.organization_verifications` | Platform verification and duplicate/impersonation review                  | organisation, reviewer, method, status, notes, evidence asset, decision times                     |
+| `core.organization_members`       | Stable person/account identity inside one organisation                    | organisation, nullable user, operational name/contact, status, first/last seen times              |
+| `core.member_types`               | Extensible participation type catalogue                                   | code such as staff/volunteer/intern, label key, active state, display order                       |
+| `core.member_engagements`         | Historical period and type of participation                               | organisation, member, member type, start/end dates, status, ended reason                          |
+| `core.invitations`                | Phase 1 publisher, Phase 2 admin/editor, and Phase 3 member invitations   | organisation, email/phone, invitation kind, hashed token, inviter, expiry, accepted/revoked times |
+| `core.invitation_roles`           | Roles that will be granted on acceptance                                  | invitation, role                                                                                  |
+| `core.legal_documents`            | Versioned privacy notice, platform terms, and publishing responsibilities | kind, version, language, asset/content, effective date                                            |
+| `core.legal_acceptances`          | Evidence that a user accepted a specific version                          | user, organisation nullable, legal document, accepted time, evidence metadata                     |
 
 `core.organization_members.user_id` stays nullable until an invited person creates or links an account. One `auth.users` row may be referenced by memberships in any number of organisations. Offboarding deactivates only that organisation relationship and its permissions; it does not delete the global account, affect another organisation, move content custody, or rewrite authored audit history.
 
@@ -234,14 +237,14 @@ Security events such as login failure, recovery, session revocation, MFA changes
 
 ### Role and permission tables
 
-| Table | Purpose | Key |
-| --- | --- | --- |
-| `core.roles` | Platform-defined or organisation-defined role | `id`; nullable `organization_id` means platform template |
-| `core.permissions` | Extensible permission catalogue | text `code PK`, description, sensitivity level |
-| `core.role_permissions` | Permission grant to role | `(role_id, permission_code)` |
-| `core.member_roles` | Role assignment inside one organisation | `(organization_id, member_id, role_id)` plus grant/review/expiry metadata |
-| `core.permission_reviews` | Periodic review campaign | organisation, due date, state, reviewer |
-| `core.permission_review_items` | Decision for one assignment | review, member role, keep/revoke, decision metadata |
+| Table                          | Purpose                                       | Key                                                                       |
+| ------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------- |
+| `core.roles`                   | Platform-defined or organisation-defined role | `id`; nullable `organization_id` means platform template                  |
+| `core.permissions`             | Extensible permission catalogue               | text `code PK`, description, sensitivity level                            |
+| `core.role_permissions`        | Permission grant to role                      | `(role_id, permission_code)`                                              |
+| `core.member_roles`            | Role assignment inside one organisation       | `(organization_id, member_id, role_id)` plus grant/review/expiry metadata |
+| `core.permission_reviews`      | Periodic review campaign                      | organisation, due date, state, reviewer                                   |
+| `core.permission_review_items` | Decision for one assignment                   | review, member role, keep/revoke, decision metadata                       |
 
 Example permission codes:
 
@@ -265,39 +268,39 @@ audit.read
 
 ### Shared catalogue tables
 
-| Table | Purpose |
-| --- | --- |
-| `core.languages` | BCP 47 code, native name, English/French name, direction, enabled state, fallback code, public sort order |
-| `core.cities` | City/territory catalogue: code, name translations, timezone, map bounds, ordered public areas (used by the simulator location question), active state |
-| `content.service_categories` | Stable service category code, icon, public color token, enabled state |
-| `content.service_category_translations` | Category label and description by language |
-| `content.service_features` | Controlled amenity or intervention code, icon, enabled state, and default display order; examples include laundry, shower, charging, social assistance, drinking water, welcome kit, and nursing care |
-| `content.service_feature_translations` | Public feature label and description by language |
-| `content.audience_categories` | Controlled audience code (`all_public`, `women_only`, `children_only`, `under_18_only`, `families_only`, `adult_men_only`), icon/token, enabled state, display order |
-| `content.audience_category_translations` | Audience label and explanation by language; providers still supply record-specific eligibility detail |
-| `content.specialities` | Controlled association-speciality code and icon |
-| `content.speciality_translations` | Speciality label and description by language |
-| `content.search_concepts` | Stable need/topic concept such as breakfast, shoes, tents, water, or device charging, with optional mapped service category |
-| `content.search_concept_translations` | Preferred search label by language |
-| `content.search_concept_aliases` | Language-specific normalized synonyms, common spellings, and typo aliases for autocomplete |
-| `content.service_search_concepts` | Verified need concepts satisfied by a service | `(service_id, search_concept_id)`, verified by/at |
+| Table                                    | Purpose                                                                                                                                                                                               |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core.languages`                         | BCP 47 code, native name, English/French name, direction, enabled state, fallback code, public sort order                                                                                             |
+| `core.cities`                            | City/territory catalogue: code, name translations, timezone, map bounds, ordered public areas (used by the simulator location question), active state                                                 |
+| `content.service_categories`             | Stable service category code, icon, public color token, enabled state                                                                                                                                 |
+| `content.service_category_translations`  | Category label and description by language                                                                                                                                                            |
+| `content.service_features`               | Controlled amenity or intervention code, icon, enabled state, and default display order; examples include laundry, shower, charging, social assistance, drinking water, welcome kit, and nursing care |
+| `content.service_feature_translations`   | Public feature label and description by language                                                                                                                                                      |
+| `content.audience_categories`            | Controlled audience code (`all_public`, `women_only`, `children_only`, `under_18_only`, `families_only`, `adult_men_only`), icon/token, enabled state, display order                                  |
+| `content.audience_category_translations` | Audience label and explanation by language; providers still supply record-specific eligibility detail                                                                                                 |
+| `content.specialities`                   | Controlled association-speciality code and icon                                                                                                                                                       |
+| `content.speciality_translations`        | Speciality label and description by language                                                                                                                                                          |
+| `content.search_concepts`                | Stable need/topic concept such as breakfast, shoes, tents, water, or device charging, with optional mapped service category                                                                           |
+| `content.search_concept_translations`    | Preferred search label by language                                                                                                                                                                    |
+| `content.search_concept_aliases`         | Language-specific normalized synonyms, common spellings, and typo aliases for autocomplete                                                                                                            |
+| `content.service_search_concepts`        | Verified need concepts satisfied by a service                                                                                                                                                         | `(service_id, search_concept_id)`, verified by/at |
 
 ### Flexible tags
 
 Tags supplement controlled categories and specialities. They must not replace permissions, lifecycle statuses, or verified service/speciality taxonomies.
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `core.tags` | Global or organisation-scoped tag | nullable organisation, namespace, code, color, display order, visibility (`public`/`workspace`), active state |
-| `core.tag_translations` | Localized tag label and optional description | tag, language, label, description |
-| `content.organization_tags` | Tag assigned to a public organisation profile | organisation/profile, tag, optional display-order override |
-| `content.service_tags` | Tag assigned to a public service | service, tag, optional display-order override |
-| `content.public_event_tags` | Tag assigned to a public event | event, tag, optional display-order override |
-| `content.editorial_entry_tags` | Tag assigned to an article/fixed/basic entry | entry, tag, optional display-order override |
-| `content.asset_tags` | Tag assigned to a download/media record | asset, tag, optional display-order override |
-| `operations.member_tags` | Workspace-only member tag when operationally justified | organisation, member, tag |
-| `operations.team_tags` | Workspace-only team tag | organisation, team, tag |
-| `operations.calendar_event_tags` | Workspace-only shift/mission/meeting tag | organisation, event, tag |
+| Table                            | Purpose                                                | Important columns                                                                                             |
+| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `core.tags`                      | Global or organisation-scoped tag                      | nullable organisation, namespace, code, color, display order, visibility (`public`/`workspace`), active state |
+| `core.tag_translations`          | Localized tag label and optional description           | tag, language, label, description                                                                             |
+| `content.organization_tags`      | Tag assigned to a public organisation profile          | organisation/profile, tag, optional display-order override                                                    |
+| `content.service_tags`           | Tag assigned to a public service                       | service, tag, optional display-order override                                                                 |
+| `content.public_event_tags`      | Tag assigned to a public event                         | event, tag, optional display-order override                                                                   |
+| `content.editorial_entry_tags`   | Tag assigned to an article/fixed/basic entry           | entry, tag, optional display-order override                                                                   |
+| `content.asset_tags`             | Tag assigned to a download/media record                | asset, tag, optional display-order override                                                                   |
+| `operations.member_tags`         | Workspace-only member tag when operationally justified | organisation, member, tag                                                                                     |
+| `operations.team_tags`           | Workspace-only team tag                                | organisation, team, tag                                                                                       |
+| `operations.calendar_event_tags` | Workspace-only shift/mission/meeting tag               | organisation, event, tag                                                                                      |
 
 Recommended `core.tags` behavior:
 
@@ -311,17 +314,17 @@ Recommended `core.tags` behavior:
 
 ### Public association profile
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `content.organization_profiles` | Public, reviewable part of an organisation | organisation, logo asset, website, visibility, last verified, review due, active publication snapshot |
-| `content.organization_profile_translations` | Public purpose/summary by language | profile, language, purpose, accessibility summary, translation state |
-| `content.organization_search_aliases` | Verified former/common names used by autocomplete | organisation, language, alias, normalized alias, active state, verified by/at |
-| `content.organization_specialities` | Effective-dated speciality assignment/history | organisation, speciality, state (`requested`, `verified`, `rejected`, `retired`), `is_primary`, display order, requested/verified/retired by/at, reason |
-| `content.speciality_change_requests` | One admin-submitted change set | organisation, requester, state, submitted/decided times, reviewer, reason |
-| `content.speciality_change_items` | Add, remove, reorder, or set-primary action in a change set | request, speciality, action, proposed primary/order, decision/reason |
-| `content.organization_languages` | Languages in which service can actually be provided | organisation, language, proficiency/scope, verified at |
-| `content.contacts` | Safe public or restricted contact method | organisation, type, value, visibility, purpose, active hours |
-| `content.contact_translations` | Contact label and instructions | contact, language, label, instructions |
+| Table                                       | Purpose                                                     | Important columns                                                                                                                                       |
+| ------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content.organization_profiles`             | Public, reviewable part of an organisation                  | organisation, logo asset, website, visibility, last verified, review due, active publication snapshot                                                   |
+| `content.organization_profile_translations` | Public purpose/summary by language                          | profile, language, purpose, accessibility summary, translation state                                                                                    |
+| `content.organization_search_aliases`       | Verified former/common names used by autocomplete           | organisation, language, alias, normalized alias, active state, verified by/at                                                                           |
+| `content.organization_specialities`         | Effective-dated speciality assignment/history               | organisation, speciality, state (`requested`, `verified`, `rejected`, `retired`), `is_primary`, display order, requested/verified/retired by/at, reason |
+| `content.speciality_change_requests`        | One admin-submitted change set                              | organisation, requester, state, submitted/decided times, reviewer, reason                                                                               |
+| `content.speciality_change_items`           | Add, remove, reorder, or set-primary action in a change set | request, speciality, action, proposed primary/order, decision/reason                                                                                    |
+| `content.organization_languages`            | Languages in which service can actually be provided         | organisation, language, proficiency/scope, verified at                                                                                                  |
+| `content.contacts`                          | Safe public or restricted contact method                    | organisation, type, value, visibility, purpose, active hours                                                                                            |
+| `content.contact_translations`              | Contact label and instructions                              | contact, language, label, instructions                                                                                                                  |
 
 An organisation can have many specialities. Enforce no more than one effective verified assignment with `is_primary = true` through a partial unique index. Marking a primary is optional: an organisation providing several services with equal weight (water and food, showers and laundry, mental and physical care) marks none, and the public card renders its specialities co-equally. Admins can retire a public assignment without deleting history. Additions and changed claims remain non-public until a platform reviewer verifies them. The Phase 1 product currently displays up to four secondary specialities, but that is a configurable publication/UI rule, not a storage limit or database trigger.
 
@@ -329,19 +332,19 @@ An organisation can have many specialities. Enforce no more than one effective v
 
 ### Places and service delivery
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `content.places` | A public or internal physical place | organisation, address fields, PostGIS point, visibility, accessibility flags, directions metadata |
-| `content.place_translations` | Name, directions, landmark, accessibility text | place, language, translation state |
-| `content.services` | Stable service identity, usually at a place | coordinating organisation, place, category, public status, contact, last verified, review due, archive state |
-| `content.service_providers` | One or more verified associations that provide the service | service, organisation, provider role, display order, effective dates; at least one active provider before publication |
-| `content.service_translations` | Public name, short description, instructions, uncertainty/cancellation copy | service, language, translation state |
-| `content.service_feature_assignments` | A verified feature available within one service offering | service, feature, availability mode (`available`, `scheduled`, `on_request`, `limited`), display order, effective dates, verified by/at |
-| `content.service_feature_assignment_translations` | Offering-specific feature detail or condition | assignment, language, short detail, translation state |
-| `content.service_audience_policies` | Required launch audience classification and exact age bounds when applicable | service PK/FK, audience category, nullable minimum/maximum age, verified by/at |
-| `content.service_audience_translations` | Provider-supplied eligibility explanation | audience policy, language, plain-language details, translation state |
-| `content.service_languages` | Languages available for this service | service, language, verification metadata |
-| `content.service_accessibility_features` | Controlled accessibility feature assignment | service/place, feature code, verification metadata |
+| Table                                             | Purpose                                                                      | Important columns                                                                                                                       |
+| ------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `content.places`                                  | A public or internal physical place                                          | organisation, address fields, PostGIS point, visibility, accessibility flags, directions metadata                                       |
+| `content.place_translations`                      | Name, directions, landmark, accessibility text                               | place, language, translation state                                                                                                      |
+| `content.services`                                | Stable service identity, usually at a place                                  | coordinating organisation, place, category, public status, contact, last verified, review due, archive state                            |
+| `content.service_providers`                       | One or more verified associations that provide the service                   | service, organisation, provider role, display order, effective dates; at least one active provider before publication                   |
+| `content.service_translations`                    | Public name, short description, instructions, uncertainty/cancellation copy  | service, language, translation state                                                                                                    |
+| `content.service_feature_assignments`             | A verified feature available within one service offering                     | service, feature, availability mode (`available`, `scheduled`, `on_request`, `limited`), display order, effective dates, verified by/at |
+| `content.service_feature_assignment_translations` | Offering-specific feature detail or condition                                | assignment, language, short detail, translation state                                                                                   |
+| `content.service_audience_policies`               | Required launch audience classification and exact age bounds when applicable | service PK/FK, audience category, nullable minimum/maximum age, verified by/at                                                          |
+| `content.service_audience_translations`           | Provider-supplied eligibility explanation                                    | audience policy, language, plain-language details, translation state                                                                    |
+| `content.service_languages`                       | Languages available for this service                                         | service, language, verification metadata                                                                                                |
+| `content.service_accessibility_features`          | Controlled accessibility feature assignment                                  | service/place, feature code, verification metadata                                                                                      |
 
 Every place references a `core.cities` row. Activating a city automatically surfaces it in public city filters and as a simulator city question — territory expansion is a data change, not a schema or code change.
 
@@ -353,11 +356,11 @@ Use PostGIS `geography(Point, 4326)` with a GiST index for distance queries. If 
 
 ### Recurring service availability
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `content.service_schedule_rules` | Weekly recurring service hours | service, weekday, local start/end time, timezone, effective dates, public-holiday behavior |
-| `content.service_schedule_exceptions` | Closure, cancellation, exceptional opening, or uncertainty | service, affected date/time, state, public reason, created by |
-| `content.service_status_history` | Trace important manual status changes | service, old/new state, effective interval, actor, reason |
+| Table                                 | Purpose                                                    | Important columns                                                                          |
+| ------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `content.service_schedule_rules`      | Weekly recurring service hours                             | service, weekday, local start/end time, timezone, effective dates, public-holiday behavior |
+| `content.service_schedule_exceptions` | Closure, cancellation, exceptional opening, or uncertainty | service, affected date/time, state, public reason, created by                              |
+| `content.service_status_history`      | Trace important manual status changes                      | service, old/new state, effective interval, actor, reason                                  |
 
 Schedule checks enforce `start_time < end_time` unless an explicit `ends_next_day` flag is true. French public-holiday behavior is stored on the rule, not inferred from UI copy.
 
@@ -365,16 +368,16 @@ Schedule checks enforce `start_time < end_time` unless an explicit `ends_next_da
 
 Public events remain separate from private shifts and missions. Linking them must never expose assigned member names or availability.
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `content.public_events` | Stable public event/temporary distribution identity | coordinating organisation, place, category, status, recurrence series, last verified, review due |
-| `content.public_event_providers` | One or more verified associations that provide the event | event, organisation, provider role, display order, effective dates; at least one active provider before publication |
-| `content.public_event_audience_policies` | Required launch audience classification and age bounds | event PK/FK, audience category, nullable minimum/maximum age, verified by/at |
-| `content.public_event_audience_translations` | Provider-supplied event eligibility explanation | audience policy, language, plain-language details, translation state |
-| `content.public_event_translations` | Name, description, instructions, cancellation reason | event, language, translation state |
-| `content.public_event_series` | Recurrence definition | event, timezone, local start, duration, RRULE or controlled recurrence fields, effective dates |
-| `content.public_event_occurrences` | Materialized concrete occurrences | event, starts/ends at, state, exception source; unique event/start |
-| `content.public_event_services` | Services available during the event | `(event_id, service_id)` |
+| Table                                        | Purpose                                                  | Important columns                                                                                                   |
+| -------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `content.public_events`                      | Stable public event/temporary distribution identity      | coordinating organisation, place, category, status, recurrence series, last verified, review due                    |
+| `content.public_event_providers`             | One or more verified associations that provide the event | event, organisation, provider role, display order, effective dates; at least one active provider before publication |
+| `content.public_event_audience_policies`     | Required launch audience classification and age bounds   | event PK/FK, audience category, nullable minimum/maximum age, verified by/at                                        |
+| `content.public_event_audience_translations` | Provider-supplied event eligibility explanation          | audience policy, language, plain-language details, translation state                                                |
+| `content.public_event_translations`          | Name, description, instructions, cancellation reason     | event, language, translation state                                                                                  |
+| `content.public_event_series`                | Recurrence definition                                    | event, timezone, local start, duration, RRULE or controlled recurrence fields, effective dates                      |
+| `content.public_event_occurrences`           | Materialized concrete occurrences                        | event, starts/ends at, state, exception source; unique event/start                                                  |
+| `content.public_event_services`              | Services available during the event                      | `(event_id, service_id)`                                                                                            |
 
 Materialize a rolling occurrence window, for example the next six months, whenever a series or exception changes. Public `open now` and calendar queries should not have to interpret every recurrence rule at request time.
 
@@ -386,35 +389,35 @@ These three products share revision, translation, source, freshness, and publica
 
 ### Stable entry and immutable revisions
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `content.editorial_entries` | Stable identity and URL | kind (`article`, `fixed_information`, `basic_information`), slug, workflow state, archived time; custody and public attribution use separate tables |
-| `content.editorial_revisions` | Immutable authored revision | entry, revision number, author, structured body schema version, can become outdated, unreliable from, last reviewed, review due, source summary, created time |
-| `content.editorial_revision_translations` | Localized content for one revision | revision, language, title, summary, structured body JSON, plain-text fallback, translation state, verified by/at |
-| `content.editorial_publications` | Typed pointer to the exact revision/snapshot public for one locale | entry, language, revision, publication snapshot, approval bundle nullable, published by/at, unpublished at; one active publication per entry/language |
-| `content.article_details` | Article-only metadata | entry PK/FK, article date, featured state |
-| `content.fixed_information_details` | Fixed-information metadata | entry PK/FK, topic code, review interval days |
-| `content.basic_information_details` | Basic-information tile metadata | entry PK/FK, icon, priority, matching service-category filter, emergency flag |
-| `content.editorial_custodianships` | Effective-dated administrative control of an entry | entry, custodian kind (`organization`/`platform`), nullable organisation, started/ended times, accepted by; one active row |
-| `content.editorial_custody_transfer_requests` | Admin-only proposed custody change | entry, source custodian, destination kind/organisation, initiator, state, token hash, expiry, accepted/declined/cancelled times and actors |
-| `content.editorial_custody_transfer_events` | Append-only transfer history and notes | transfer request, actor, event type, safe note, time |
+| Table                                         | Purpose                                                            | Important columns                                                                                                                                             |
+| --------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content.editorial_entries`                   | Stable identity and URL                                            | kind (`article`, `fixed_information`, `basic_information`), slug, workflow state, archived time; custody and public attribution use separate tables           |
+| `content.editorial_revisions`                 | Immutable authored revision                                        | entry, revision number, author, structured body schema version, can become outdated, unreliable from, last reviewed, review due, source summary, created time |
+| `content.editorial_revision_translations`     | Localized content for one revision                                 | revision, language, title, summary, structured body JSON, plain-text fallback, translation state, verified by/at                                              |
+| `content.editorial_publications`              | Typed pointer to the exact revision/snapshot public for one locale | entry, language, revision, publication snapshot, approval bundle nullable, published by/at, unpublished at; one active publication per entry/language         |
+| `content.article_details`                     | Article-only metadata                                              | entry PK/FK, article date, featured state                                                                                                                     |
+| `content.fixed_information_details`           | Fixed-information metadata                                         | entry PK/FK, topic code, review interval days                                                                                                                 |
+| `content.basic_information_details`           | Basic-information tile metadata                                    | entry PK/FK, icon, priority, matching service-category filter, emergency flag                                                                                 |
+| `content.editorial_custodianships`            | Effective-dated administrative control of an entry                 | entry, custodian kind (`organization`/`platform`), nullable organisation, started/ended times, accepted by; one active row                                    |
+| `content.editorial_custody_transfer_requests` | Admin-only proposed custody change                                 | entry, source custodian, destination kind/organisation, initiator, state, token hash, expiry, accepted/declined/cancelled times and actors                    |
+| `content.editorial_custody_transfer_events`   | Append-only transfer history and notes                             | transfer request, actor, event type, safe note, time                                                                                                          |
 
 `structured_body` may use a versioned editor JSON format, but it must be validated and rendered through an allowlist. Keep `plain_text_fallback` for low-bandwidth rendering and search.
 
 ### Sources, approvals, relationships, and review
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `content.sources` | Traceable factual source | title, publisher, URL/reference, source/retrieval dates, owner |
-| `content.editorial_revision_sources` | Sources supporting a revision | revision, source, role, display order |
-| `content.editorial_revision_organizations` | Organisations named in or responsible for the authored revision | revision, organisation, relationship role; public attribution is separately sealed in the approval bundle |
-| `content.review_tasks` | Review/freshness queue | entity/revision, assignee, due date, status, resolution |
-| `content.editorial_related_entries` | Editorial relationships | source entry, related entry, relation kind |
-| `content.editorial_related_services` | Related service links | entry, service, relation kind, display order |
-| `content.editorial_related_organizations` | Related association links | entry, organisation, relation kind, display order |
-| `content.editorial_revision_assets` | Download/media embedded or attached to an exact authored revision | revision, asset, role, language, display order, optional structured block key |
-| `content.translation_jobs` | Provider-neutral AI translation request/provenance | entity kind/ID, source/target language, source revision/hash, method, provider/model/job ID, state, requester, created/completed times |
-| `content.translation_provenance` | Public notice and review provenance attached to a typed translation row | translation job, translated entity kind/ID, method, AI-used flag, reviewer, verified time |
+| Table                                      | Purpose                                                                 | Important columns                                                                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `content.sources`                          | Traceable factual source                                                | title, publisher, URL/reference, source/retrieval dates, owner                                                                         |
+| `content.editorial_revision_sources`       | Sources supporting a revision                                           | revision, source, role, display order                                                                                                  |
+| `content.editorial_revision_organizations` | Organisations named in or responsible for the authored revision         | revision, organisation, relationship role; public attribution is separately sealed in the approval bundle                              |
+| `content.review_tasks`                     | Review/freshness queue                                                  | entity/revision, assignee, due date, status, resolution                                                                                |
+| `content.editorial_related_entries`        | Editorial relationships                                                 | source entry, related entry, relation kind                                                                                             |
+| `content.editorial_related_services`       | Related service links                                                   | entry, service, relation kind, display order                                                                                           |
+| `content.editorial_related_organizations`  | Related association links                                               | entry, organisation, relation kind, display order                                                                                      |
+| `content.editorial_revision_assets`        | Download/media embedded or attached to an exact authored revision       | revision, asset, role, language, display order, optional structured block key                                                          |
+| `content.translation_jobs`                 | Provider-neutral AI translation request/provenance                      | entity kind/ID, source/target language, source revision/hash, method, provider/model/job ID, state, requester, created/completed times |
+| `content.translation_provenance`           | Public notice and review provenance attached to a typed translation row | translation job, translated entity kind/ID, method, AI-used flag, reviewer, verified time                                              |
 
 The public outdated warning is derived from the published revision's `unreliable_from`; it should not be stored as manually edited display text. Public translation views derive a localized “translated from X to Y using AI” notice from `translation_provenance` whenever `ai_used = true`, including after human verification.
 
@@ -424,14 +427,14 @@ Custody transfer does not update historical revision organisations or publicatio
 
 Binary files belong in private/public object storage, not PostgreSQL.
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `content.assets` | Stable uploaded file identity | uploader, organisation nullable, content language nullable, storage key, MIME type, byte size, duration, SHA-256, media kind, visibility, malware-scan state, rights confirmation |
-| `content.asset_variants` | Thumbnail, optimized image, printable PDF, audio/video rendition | parent asset, variant kind, storage key, MIME type, dimensions/duration, hash |
-| `content.asset_translations` | Public title, description, alt text/equivalent description, transcript/caption metadata | asset, language, translation state |
-| `content.asset_text_tracks` | Reviewed transcript, captions, subtitles, or equivalent description | asset, language, track kind, text/storage key, review state, verified by/at |
-| `content.downloads` | Public downloadable-file record | asset, owner organisation, freshness/review metadata, status |
-| `content.download_translations` | Public download title and description | download, language, translation state |
+| Table                           | Purpose                                                                                 | Important columns                                                                                                                                                                 |
+| ------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content.assets`                | Stable uploaded file identity                                                           | uploader, organisation nullable, content language nullable, storage key, MIME type, byte size, duration, SHA-256, media kind, visibility, malware-scan state, rights confirmation |
+| `content.asset_variants`        | Thumbnail, optimized image, printable PDF, audio/video rendition                        | parent asset, variant kind, storage key, MIME type, dimensions/duration, hash                                                                                                     |
+| `content.asset_translations`    | Public title, description, alt text/equivalent description, transcript/caption metadata | asset, language, translation state                                                                                                                                                |
+| `content.asset_text_tracks`     | Reviewed transcript, captions, subtitles, or equivalent description                     | asset, language, track kind, text/storage key, review state, verified by/at                                                                                                       |
+| `content.downloads`             | Public downloadable-file record                                                         | asset, owner organisation, freshness/review metadata, status                                                                                                                      |
+| `content.download_translations` | Public download title and description                                                   | download, language, translation state                                                                                                                                             |
 
 Article media roles include `cover_image`, `inline_image`, `gallery_image`, `video`, `video_poster`, `audio`, and `attachment`. Images require localized alt text or an explicit decorative role. Video publication requires a poster/thumbnail, caption or transcript policy, rights confirmation, processing success, and a low-bandwidth representation.
 
@@ -443,26 +446,26 @@ The simulator is an immutable, versioned directed graph. Draft editing happens o
 
 ### Flow and version tables
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `simulator.flows` | Stable simulator identity | slug, owner organisation nullable, title key, status, archived time |
-| `simulator.flow_versions` | Immutable version envelope | flow, version number, entry node, owner, source summary, last reviewed, review due, status, published time |
-| `simulator.nodes` | Question, information, or result node | version, stable node key, node kind, optional/help flags, owner, review metadata |
-| `simulator.node_translations` | Prompt, explanation, result heading/body, disclaimer | node, language, translation state |
-| `simulator.options` | Selectable answer for a question | node, stable option key, sort order, prefer-not-to-say flag |
-| `simulator.option_translations` | Answer label/help by language | option, language, translation state |
-| `simulator.edges` | Allowed transition in the graph | version, from node, optional option, to node, priority; unique transition |
+| Table                           | Purpose                                              | Important columns                                                                                          |
+| ------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `simulator.flows`               | Stable simulator identity                            | slug, owner organisation nullable, title key, status, archived time                                        |
+| `simulator.flow_versions`       | Immutable version envelope                           | flow, version number, entry node, owner, source summary, last reviewed, review due, status, published time |
+| `simulator.nodes`               | Question, information, or result node                | version, stable node key, node kind, optional/help flags, owner, review metadata                           |
+| `simulator.node_translations`   | Prompt, explanation, result heading/body, disclaimer | node, language, translation state                                                                          |
+| `simulator.options`             | Selectable answer for a question                     | node, stable option key, sort order, prefer-not-to-say flag                                                |
+| `simulator.option_translations` | Answer label/help by language                        | option, language, translation state                                                                        |
+| `simulator.edges`               | Allowed transition in the graph                      | version, from node, optional option, to node, priority; unique transition                                  |
 
 ### Reviewed result composition
 
-| Table | Purpose |
-| --- | --- |
-| `simulator.node_sources` | Traceable sources for each question/rule/result |
+| Table                                | Purpose                                                    |
+| ------------------------------------ | ---------------------------------------------------------- |
+| `simulator.node_sources`             | Traceable sources for each question/rule/result            |
 | `simulator.result_editorial_entries` | Reviewed article/fixed/basic information shown by a result |
-| `simulator.result_services` | Matching public services shown by a result |
-| `simulator.result_organizations` | Relevant association profiles |
-| `simulator.result_contacts` | Safe next-step contacts |
-| `simulator.version_publications` | Active published simulator version and locale readiness |
+| `simulator.result_services`          | Matching public services shown by a result                 |
+| `simulator.result_organizations`     | Relevant association profiles                              |
+| `simulator.result_contacts`          | Safe next-step contacts                                    |
+| `simulator.version_publications`     | Active published simulator version and locale readiness    |
 
 There is intentionally no `simulator_answers`, `simulator_sessions`, or `simulator_people` table. Answers stay in browser memory/session storage and are discarded on restart or session end. Aggregate product analytics must not include answer values or a reconstructable result path.
 
@@ -478,22 +481,22 @@ Before publishing, validate that:
 
 Places, services, events, profiles, and downloads are typed mutable records. Editorial records already have typed revisions. An `organization_id` on a typed record identifies its coordinating tenant/data custodian; it does not cap public attribution at one organisation. The following immutable publication layer makes every public representation attributable and reversible and supports approval by several organisations:
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `content.publication_snapshots` | Immutable exact public projection | entity kind, entity ID, version, locale, source bundle, approved-party-set hash, payload JSON/hash, actor/system cause, created time |
-| `content.publication_approval_bundles` | Immutable manifest submitted for organisation approval | entity kind/ID, optional typed editorial revision, manifest version, manifest hash, creator, sealed/superseded times |
-| `content.publication_bundle_snapshots` | Exact localized public views included in a bundle | bundle, snapshot, locale, display scope; unique bundle/snapshot |
-| `content.publication_bundle_assets` | Exact audio, video, image, or file variants covered by approval | bundle, asset/variant, role, language, content hash |
-| `content.publication_parties` | Every organisation proposed for public attribution on that exact bundle | bundle, organisation, attribution role code, display order; unique bundle/organisation/role |
-| `content.publication_party_fragments` | Structured logos, attribution rows, claims, and body/media block keys conditional on one organisation's approval | bundle, organisation, fragment kind/key, asset nullable, display order |
-| `content.publication_approval_requests` | Secure email-linked review request for one organisation | bundle, organisation, authorised representative member, verified `auth.user_emails` record, token hash, state, sent/viewed/token-consumed/expiry/cancelled/invalidated times |
-| `content.publication_approval_decisions` | Append-only approval or decline evidence | request, bundle hash, organisation, representative/member, verified-email evidence, decision, decided at, safe evidence metadata |
-| `content.publication_approval_messages` | Revision-linked discussion between requester and representative | request, author user/member, body, created time, optional supersedes message; notify participants through outbox |
-| `content.publication_approval_events` | Append-only request/reminder/view/decision lifecycle | request, actor, event type, safe metadata, time |
-| `content.publication_snapshot_parties` | Organisations visible in one immutable public projection | snapshot, organisation, attribution role, display order, approval decision |
-| `content.active_publications` | Snapshot currently served | entity kind, entity ID, locale, snapshot, approval bundle nullable, published by/at |
-| `content.moderation_cases` | Duplicate, impersonation, conflict, unsafe content, suspension | organisation, entity reference, reason, status, assignee, resolution |
-| `content.moderation_events` | Append-only case history | case, actor, action, reason, time |
+| Table                                    | Purpose                                                                                                          | Important columns                                                                                                                                                            |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content.publication_snapshots`          | Immutable exact public projection                                                                                | entity kind, entity ID, version, locale, source bundle, approved-party-set hash, payload JSON/hash, actor/system cause, created time                                         |
+| `content.publication_approval_bundles`   | Immutable manifest submitted for organisation approval                                                           | entity kind/ID, optional typed editorial revision, manifest version, manifest hash, creator, sealed/superseded times                                                         |
+| `content.publication_bundle_snapshots`   | Exact localized public views included in a bundle                                                                | bundle, snapshot, locale, display scope; unique bundle/snapshot                                                                                                              |
+| `content.publication_bundle_assets`      | Exact audio, video, image, or file variants covered by approval                                                  | bundle, asset/variant, role, language, content hash                                                                                                                          |
+| `content.publication_parties`            | Every organisation proposed for public attribution on that exact bundle                                          | bundle, organisation, attribution role code, display order; unique bundle/organisation/role                                                                                  |
+| `content.publication_party_fragments`    | Structured logos, attribution rows, claims, and body/media block keys conditional on one organisation's approval | bundle, organisation, fragment kind/key, asset nullable, display order                                                                                                       |
+| `content.publication_approval_requests`  | Secure email-linked review request for one organisation                                                          | bundle, organisation, authorised representative member, verified `auth.user_emails` record, token hash, state, sent/viewed/token-consumed/expiry/cancelled/invalidated times |
+| `content.publication_approval_decisions` | Append-only approval or decline evidence                                                                         | request, bundle hash, organisation, representative/member, verified-email evidence, decision, decided at, safe evidence metadata                                             |
+| `content.publication_approval_messages`  | Revision-linked discussion between requester and representative                                                  | request, author user/member, body, created time, optional supersedes message; notify participants through outbox                                                             |
+| `content.publication_approval_events`    | Append-only request/reminder/view/decision lifecycle                                                             | request, actor, event type, safe metadata, time                                                                                                                              |
+| `content.publication_snapshot_parties`   | Organisations visible in one immutable public projection                                                         | snapshot, organisation, attribution role, display order, approval decision                                                                                                   |
+| `content.active_publications`            | Snapshot currently served                                                                                        | entity kind, entity ID, locale, snapshot, approval bundle nullable, published by/at                                                                                          |
+| `content.moderation_cases`               | Duplicate, impersonation, conflict, unsafe content, suspension                                                   | organisation, entity reference, reason, status, assignee, resolution                                                                                                         |
+| `content.moderation_events`              | Append-only case history                                                                                         | case, actor, action, reason, time                                                                                                                                            |
 
 The bundle manifest is canonicalized before hashing. It includes the exact snapshot hashes, translation set, asset hashes, sources, freshness dates, claims, and ordered public attribution. A request stores only a hash of its single-use token. Email is the notification/identity-verification channel; the decision is recorded in the application after the representative reviews the complete manifest. The representative must be an active member of the requested organisation, the selected verified email must belong to that member's linked global user, and the member must hold the joint-publication approval permission at decision time.
 
@@ -509,21 +512,21 @@ The generic entity reference in publication/moderation tables is a deliberate ex
 
 `core.organization_members` is the primary staff/volunteer/intern record. Operational profile extensions stay outside the login account.
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `operations.member_profiles` | Restricted operational fields not required for login | member PK/FK, preferred contact, profile-completion state, restricted accommodation pointer |
-| `operations.teams` | Organisation team | organisation, name, description, status |
-| `operations.team_members` | Team membership and lead state | organisation, team, member, is lead, joined/left times |
-| `operations.skills` | Organisation or platform skill catalogue | nullable organisation, code, name, verification required |
-| `operations.member_skills` | Member skill/qualification | organisation, member, skill, level, verification actor/time, expiry |
-| `operations.member_languages` | Spoken operational language capability | organisation, member, language, proficiency, declaration/verification state, verified/expiry times |
-| `operations.driving_permit_categories` | Extensible permit category catalogue | jurisdiction, code, active state |
-| `operations.driving_permit_category_translations` | Localized permit category label/help | category, language, label, description |
-| `operations.member_driving_permits` | Minimal driving qualification | organisation, member, category, state (`self_declared`, `awaiting_verification`, `verified`, `rejected`, `expired`, `declared_none`), expiry, verifier; no licence number/file by default |
-| `operations.training_courses` | Organisation or platform training/course catalogue | nullable organisation, provider, title key, URL, description, verification required, validity interval, active state |
-| `operations.training_course_translations` | Localized course title/description | course, language, title, description |
-| `operations.member_training_records` | Member-declared/completed training | organisation, member, course, completion/expiry dates, declaration/verification state, verifier, optional restricted evidence reference |
-| `operations.profile_field_policies` | Purpose notice shown before collecting an operational field | organisation, field code, purpose text key, visibility/permission, required context, retention policy, evidence allowed, active state |
+| Table                                             | Purpose                                                     | Important columns                                                                                                                                                                         |
+| ------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `operations.member_profiles`                      | Restricted operational fields not required for login        | member PK/FK, preferred contact, profile-completion state, restricted accommodation pointer                                                                                               |
+| `operations.teams`                                | Organisation team                                           | organisation, name, description, status                                                                                                                                                   |
+| `operations.team_members`                         | Team membership and lead state                              | organisation, team, member, is lead, joined/left times                                                                                                                                    |
+| `operations.skills`                               | Organisation or platform skill catalogue                    | nullable organisation, code, name, verification required                                                                                                                                  |
+| `operations.member_skills`                        | Member skill/qualification                                  | organisation, member, skill, level, verification actor/time, expiry                                                                                                                       |
+| `operations.member_languages`                     | Spoken operational language capability                      | organisation, member, language, proficiency, declaration/verification state, verified/expiry times                                                                                        |
+| `operations.driving_permit_categories`            | Extensible permit category catalogue                        | jurisdiction, code, active state                                                                                                                                                          |
+| `operations.driving_permit_category_translations` | Localized permit category label/help                        | category, language, label, description                                                                                                                                                    |
+| `operations.member_driving_permits`               | Minimal driving qualification                               | organisation, member, category, state (`self_declared`, `awaiting_verification`, `verified`, `rejected`, `expired`, `declared_none`), expiry, verifier; no licence number/file by default |
+| `operations.training_courses`                     | Organisation or platform training/course catalogue          | nullable organisation, provider, title key, URL, description, verification required, validity interval, active state                                                                      |
+| `operations.training_course_translations`         | Localized course title/description                          | course, language, title, description                                                                                                                                                      |
+| `operations.member_training_records`              | Member-declared/completed training                          | organisation, member, course, completion/expiry dates, declaration/verification state, verifier, optional restricted evidence reference                                                   |
+| `operations.profile_field_policies`               | Purpose notice shown before collecting an operational field | organisation, field code, purpose text key, visibility/permission, required context, retention policy, evidence allowed, active state                                                     |
 
 Emergency contacts, accommodation needs, and any approved driving/training evidence should use separate encrypted/restricted tables if a pilot establishes a justified need. They should not appear in an ordinary member-list query. APIs return a field policy with each editable qualification so the client can show purpose, audience, requirement status, and retention before save.
 
@@ -533,31 +536,31 @@ Availability, absence, an assignment, and an event are different concepts and sh
 
 ### Availability
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `operations.availability_rules` | Recurring weekly availability/preference | organisation, member, weekday, local start/end, timezone, state, effective dates |
-| `operations.availability_exceptions` | One-off override | organisation, member, starts/ends at, state, optional non-sensitive note |
-| `operations.absence_requests` | Staff absence approval workflow | organisation, member, interval, category code, status, reviewer, decision time; reason separately restricted |
-| `operations.absence_reasons` | Optional restricted detail | absence request PK/FK, encrypted/provider-protected content, access classification |
+| Table                                | Purpose                                  | Important columns                                                                                            |
+| ------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `operations.availability_rules`      | Recurring weekly availability/preference | organisation, member, weekday, local start/end, timezone, state, effective dates                             |
+| `operations.availability_exceptions` | One-off override                         | organisation, member, starts/ends at, state, optional non-sensitive note                                     |
+| `operations.absence_requests`        | Staff absence approval workflow          | organisation, member, interval, category code, status, reviewer, decision time; reason separately restricted |
+| `operations.absence_reasons`         | Optional restricted detail               | absence request PK/FK, encrypted/provider-protected content, access classification                           |
 
 Volunteer/intern unavailability should normally use availability exceptions, not an employee absence category.
 
 ### Private calendar and assignments
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `operations.calendar_events` | Shift, mission, meeting, or training | organisation, optional team/place/public event, kind, title, start/end, recurrence, required capacity, status |
-| `operations.calendar_event_occurrences` | Concrete occurrence of recurring private event | calendar event, starts/ends at, state, unique series/start |
-| `operations.event_skill_requirements` | Required/preferred skill and minimum count/level | event or occurrence, skill, necessity, minimum level/count |
-| `operations.event_language_requirements` | Required/preferred spoken language | event or occurrence, language, necessity, minimum proficiency/count |
-| `operations.event_training_requirements` | Required/preferred completed course | event or occurrence, course, necessity, verification/validity requirement, minimum count |
-| `operations.event_driving_requirements` | Required/preferred driving qualification | event or occurrence, permit category, necessity, verified-valid requirement, minimum count |
-| `operations.event_assignments` | Member invited/assigned to occurrence | organisation, occurrence, member, status, response time, coordinator note |
-| `operations.assignment_requirement_checks` | Snapshot of requirement match/gap at proposal/acceptance | assignment, requirement kind/ID, result, checked at, override actor/reason nullable |
-| `operations.assignment_events` | Append-only acceptance/change/cancellation history | assignment, actor, old/new status, reason, time |
-| `operations.calendar_imports` | One `.ics`/approved `.csv` import batch | organisation, source asset/hash, format, timezone, mapping JSON, state, creator, preview/commit/undo times, idempotency key |
-| `operations.calendar_import_rows` | Parsed row/component and validation result | import, source row/UID/recurrence ID, normalized payload, state, error codes, created event/occurrence nullable |
-| `operations.calendar_import_events` | Append-only preview/commit/undo history | import, actor, action, counts, safe metadata, time |
+| Table                                      | Purpose                                                  | Important columns                                                                                                           |
+| ------------------------------------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `operations.calendar_events`               | Shift, mission, meeting, or training                     | organisation, optional team/place/public event, kind, title, start/end, recurrence, required capacity, status               |
+| `operations.calendar_event_occurrences`    | Concrete occurrence of recurring private event           | calendar event, starts/ends at, state, unique series/start                                                                  |
+| `operations.event_skill_requirements`      | Required/preferred skill and minimum count/level         | event or occurrence, skill, necessity, minimum level/count                                                                  |
+| `operations.event_language_requirements`   | Required/preferred spoken language                       | event or occurrence, language, necessity, minimum proficiency/count                                                         |
+| `operations.event_training_requirements`   | Required/preferred completed course                      | event or occurrence, course, necessity, verification/validity requirement, minimum count                                    |
+| `operations.event_driving_requirements`    | Required/preferred driving qualification                 | event or occurrence, permit category, necessity, verified-valid requirement, minimum count                                  |
+| `operations.event_assignments`             | Member invited/assigned to occurrence                    | organisation, occurrence, member, status, response time, coordinator note                                                   |
+| `operations.assignment_requirement_checks` | Snapshot of requirement match/gap at proposal/acceptance | assignment, requirement kind/ID, result, checked at, override actor/reason nullable                                         |
+| `operations.assignment_events`             | Append-only acceptance/change/cancellation history       | assignment, actor, old/new status, reason, time                                                                             |
+| `operations.calendar_imports`              | One `.ics`/approved `.csv` import batch                  | organisation, source asset/hash, format, timezone, mapping JSON, state, creator, preview/commit/undo times, idempotency key |
+| `operations.calendar_import_rows`          | Parsed row/component and validation result               | import, source row/UID/recurrence ID, normalized payload, state, error codes, created event/occurrence nullable             |
+| `operations.calendar_import_events`        | Append-only preview/commit/undo history                  | import, actor, action, counts, safe metadata, time                                                                          |
 
 `operations.calendar_events.public_event_id` may link a private operational event to a public event. The public API never joins through to assignments. A staffing change raises a publishing review task; it does not silently alter public information.
 
@@ -569,12 +572,12 @@ Calendar import parses into staging rows first. Commit uses the file hash, organ
 
 Introduced with Phase 2 workspaces: a narrow, deliberate cross-tenant surface (never public) for events such as a daily inter-association briefing.
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `operations.coordination_events` | Organisation- or platform-hosted coordination event/meeting | host organisation nullable (null = platform), city, visibility (`organisation`/`inter_organisation`), title, description, safe location/contact, status, created by |
-| `operations.coordination_event_series` | Recurrence for repeating events | event, timezone, local start, duration, RRULE or controlled recurrence fields, effective dates |
-| `operations.coordination_event_occurrences` | Materialized occurrences with change/cancellation state and visible reason | event, starts/ends at, state, reason, unique event/start |
-| `operations.coordination_event_participation` | Organisation-level participation state | event or occurrence, organisation, state (`attending`/`interested`/`declined`), actor member, updated at |
+| Table                                         | Purpose                                                                    | Important columns                                                                                                                                                   |
+| --------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `operations.coordination_events`              | Organisation- or platform-hosted coordination event/meeting                | host organisation nullable (null = platform), city, visibility (`organisation`/`inter_organisation`), title, description, safe location/contact, status, created by |
+| `operations.coordination_event_series`        | Recurrence for repeating events                                            | event, timezone, local start, duration, RRULE or controlled recurrence fields, effective dates                                                                      |
+| `operations.coordination_event_occurrences`   | Materialized occurrences with change/cancellation state and visible reason | event, starts/ends at, state, reason, unique event/start                                                                                                            |
+| `operations.coordination_event_participation` | Organisation-level participation state                                     | event or occurrence, organisation, state (`attending`/`interested`/`declined`), actor member, updated at                                                            |
 
 RLS: `organisation` rows follow the standard tenant policy; `inter_organisation` rows are readable by any active member of a verified organisation through a dedicated policy or view — the same explicit-exception pattern as transfers and joint publication. Writing always requires the host organisation's coordination permission. Coordination events are excluded from every public read model.
 
@@ -590,17 +593,17 @@ Recommended weekly-board indexes:
 
 Document contents and signed files are not ordinary `content.assets`.
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `documents.document_types` | Organisation-approved participation-document type | code, name, retention rule, signature policy |
-| `documents.templates` | Stable template identity | organisation, document type, name, active state |
-| `documents.template_versions` | Locked approved template version | template, version, private storage key, hash, merge-field schema, approved by/at |
-| `documents.member_documents` | Generated document workflow | organisation, member, template version, status, expiry, sent/completed/cancelled times, created/reviewed by |
-| `documents.document_files` | Draft, final, and evidence files | document, file purpose, private storage key, MIME, size, hash, created time |
-| `documents.signers` | Internal or external signer and ordering | document, optional member, external name/contact, order, role, status, viewed/signed/declined times, provider signer ID |
-| `documents.signature_events` | Append-only provider and user workflow history | document, signer nullable, event type, provider event ID, safe metadata, time |
-| `documents.access_grants` | Exceptional per-document access | document, member/role, permission, granted by, expiry |
-| `documents.retention_actions` | Retention review, legal hold, deletion/anonymisation evidence | document, action, policy, actor, time |
+| Table                         | Purpose                                                       | Important columns                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `documents.document_types`    | Organisation-approved participation-document type             | code, name, retention rule, signature policy                                                                            |
+| `documents.templates`         | Stable template identity                                      | organisation, document type, name, active state                                                                         |
+| `documents.template_versions` | Locked approved template version                              | template, version, private storage key, hash, merge-field schema, approved by/at                                        |
+| `documents.member_documents`  | Generated document workflow                                   | organisation, member, template version, status, expiry, sent/completed/cancelled times, created/reviewed by             |
+| `documents.document_files`    | Draft, final, and evidence files                              | document, file purpose, private storage key, MIME, size, hash, created time                                             |
+| `documents.signers`           | Internal or external signer and ordering                      | document, optional member, external name/contact, order, role, status, viewed/signed/declined times, provider signer ID |
+| `documents.signature_events`  | Append-only provider and user workflow history                | document, signer nullable, event type, provider event ID, safe metadata, time                                           |
+| `documents.access_grants`     | Exceptional per-document access                               | document, member/role, permission, granted by, expiry                                                                   |
+| `documents.retention_actions` | Retention review, legal hold, deletion/anonymisation evidence | document, action, policy, actor, time                                                                                   |
 
 Rules:
 
@@ -617,62 +620,62 @@ Inventory uses an append-only movement ledger. Never treat one mutable `quantity
 
 ### Catalogue, locations, lots, and identifiers
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `inventory.locations` | Organisation storage location | organisation, name, kind, optional place/address, responsible team, status, access-note classification |
-| `inventory.units` | Controlled unit catalogue | code, dimension, precision, translated label, active state |
-| `inventory.categories` | Organisation or platform item taxonomy | nullable organisation, parent category, code, active state, display order |
-| `inventory.category_translations` | Category label by language | category, language, label, description |
-| `inventory.items` | Stable stock item identity | organisation, category, code, base unit, tracking policy, active state |
-| `inventory.item_translations` | Item public/workspace name and description | item, language, name, description |
-| `inventory.item_variants` | Size, format, packaging, or other controlled variant | item, code, attributes, base-unit factor, active state |
-| `inventory.item_identifiers` | Barcode/QR/internal scan code | organisation, item/variant, identifier type/value, active dates; unique active value per organisation |
-| `inventory.lots` | Optional batch/lot/serial grouping | organisation, item/variant, lot code, expiry date, condition, source reference, status |
-| `inventory.stock_policies` | Per-location/item threshold and tracking policy | organisation, location, item/variant, minimum/preferred quantity, expiry-warning days, negative-stock policy |
+| Table                             | Purpose                                              | Important columns                                                                                            |
+| --------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `inventory.locations`             | Organisation storage location                        | organisation, name, kind, optional place/address, responsible team, status, access-note classification       |
+| `inventory.units`                 | Controlled unit catalogue                            | code, dimension, precision, translated label, active state                                                   |
+| `inventory.categories`            | Organisation or platform item taxonomy               | nullable organisation, parent category, code, active state, display order                                    |
+| `inventory.category_translations` | Category label by language                           | category, language, label, description                                                                       |
+| `inventory.items`                 | Stable stock item identity                           | organisation, category, code, base unit, tracking policy, active state                                       |
+| `inventory.item_translations`     | Item public/workspace name and description           | item, language, name, description                                                                            |
+| `inventory.item_variants`         | Size, format, packaging, or other controlled variant | item, code, attributes, base-unit factor, active state                                                       |
+| `inventory.item_identifiers`      | Barcode/QR/internal scan code                        | organisation, item/variant, identifier type/value, active dates; unique active value per organisation        |
+| `inventory.lots`                  | Optional batch/lot/serial grouping                   | organisation, item/variant, lot code, expiry date, condition, source reference, status                       |
+| `inventory.stock_policies`        | Per-location/item threshold and tracking policy      | organisation, location, item/variant, minimum/preferred quantity, expiry-warning days, negative-stock policy |
 
 Use `numeric`, never floating point, for quantities and unit factors. Unit conversion must remain within the same dimension and use the item's configured base unit. A tracking policy decides whether a movement requires a lot, expiry date, condition, or serial; the schema does not force batch tracking on every item.
 
 ### Ledger, counts, and restricted value
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `inventory.movement_headers` | One posted business action | organisation, movement type, status, reason, linked event/mission/import/transfer/kit, actor, occurred/posted times, idempotency key |
-| `inventory.movement_lines` | Signed stock delta | movement, location, item/variant, lot nullable, quantity delta in base unit, condition; no update/delete after posting |
-| `inventory.movement_events` | Append-only post/reverse/correct history | movement, actor, event type, reason, safe metadata, time |
-| `inventory.financial_entries` | Separately protected item/movement value | organisation, movement/line, currency, unit cost, replacement value, source document, access class |
-| `inventory.stock_counts` | Physical-count session | organisation, location, scope, state, opened/closed by/at |
-| `inventory.stock_count_lines` | Counted quantity and variance | count, item/variant/lot, expected quantity snapshot, counted quantity, variance, adjustment movement nullable |
+| Table                         | Purpose                                  | Important columns                                                                                                                    |
+| ----------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `inventory.movement_headers`  | One posted business action               | organisation, movement type, status, reason, linked event/mission/import/transfer/kit, actor, occurred/posted times, idempotency key |
+| `inventory.movement_lines`    | Signed stock delta                       | movement, location, item/variant, lot nullable, quantity delta in base unit, condition; no update/delete after posting               |
+| `inventory.movement_events`   | Append-only post/reverse/correct history | movement, actor, event type, reason, safe metadata, time                                                                             |
+| `inventory.financial_entries` | Separately protected item/movement value | organisation, movement/line, currency, unit cost, replacement value, source document, access class                                   |
+| `inventory.stock_counts`      | Physical-count session                   | organisation, location, scope, state, opened/closed by/at                                                                            |
+| `inventory.stock_count_lines` | Counted quantity and variance            | count, item/variant/lot, expected quantity snapshot, counted quantity, variance, adjustment movement nullable                        |
 
 Balances come from a transactionally maintained projection/materialized table or view such as `inventory.stock_balances`, keyed by organisation/location/item/variant/lot/condition. The movement ledger remains authoritative. Corrections create compensating movements with a reason. Database permissions deny update/delete on posted lines to the application role.
 
 ### Reservations, kits, transfers, alerts, and imports
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `inventory.reservations` | Stock held for a public event, private mission, or kit batch | organisation, target kind/ID, location, state, reserved/released/consumed times, creator |
-| `inventory.reservation_lines` | Reserved item quantity | reservation, item/variant/lot nullable, quantity, unit, fulfilled/released quantity |
-| `inventory.kit_definitions` | Stable kit identity | organisation, code, active state |
-| `inventory.kit_versions` | Effective immutable bill of materials | kit, version, effective dates, status, approved by/at |
-| `inventory.kit_components` | Item quantities/substitutions in a kit version | kit version, item/variant, quantity/unit, substitution group, required state |
-| `inventory.transfer_requests` | Internal or cross-organisation stock offer and logistics | source organisation/location, destination organisation/location nullable, kind, state, expiry, dispatch/receipt times, initiator/acceptor |
-| `inventory.transfer_lines` | Offered/dispatched/received item quantities | transfer, source item/variant/lot, destination item mapping nullable, offered/dispatched/received quantity, unit, discrepancy reason |
-| `inventory.transfer_events` | Append-only offer/note/accept/decline/dispatch/receipt/discrepancy history | transfer, actor organisation/member, event type, safe note, time |
-| `inventory.transfer_ledger_links` | Tenant-local movements created by one transfer | transfer, organisation, movement; unique transfer/organisation/movement role |
-| `inventory.alerts` | Low/out-of-stock and expiry alert instance | organisation, location, item/variant/lot, kind, threshold/current quantity, state, acknowledged/resolved by/at |
-| `inventory.imports` | CSV item/opening-balance import batch | organisation, source file/hash, mapping, state, idempotency key, preview/commit/reversal times |
-| `inventory.import_rows` | Validated staging row and result | import, row number, normalized payload, state/errors, created entity/movement nullable |
+| Table                             | Purpose                                                                    | Important columns                                                                                                                         |
+| --------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `inventory.reservations`          | Stock held for a public event, private mission, or kit batch               | organisation, target kind/ID, location, state, reserved/released/consumed times, creator                                                  |
+| `inventory.reservation_lines`     | Reserved item quantity                                                     | reservation, item/variant/lot nullable, quantity, unit, fulfilled/released quantity                                                       |
+| `inventory.kit_definitions`       | Stable kit identity                                                        | organisation, code, active state                                                                                                          |
+| `inventory.kit_versions`          | Effective immutable bill of materials                                      | kit, version, effective dates, status, approved by/at                                                                                     |
+| `inventory.kit_components`        | Item quantities/substitutions in a kit version                             | kit version, item/variant, quantity/unit, substitution group, required state                                                              |
+| `inventory.transfer_requests`     | Internal or cross-organisation stock offer and logistics                   | source organisation/location, destination organisation/location nullable, kind, state, expiry, dispatch/receipt times, initiator/acceptor |
+| `inventory.transfer_lines`        | Offered/dispatched/received item quantities                                | transfer, source item/variant/lot, destination item mapping nullable, offered/dispatched/received quantity, unit, discrepancy reason      |
+| `inventory.transfer_events`       | Append-only offer/note/accept/decline/dispatch/receipt/discrepancy history | transfer, actor organisation/member, event type, safe note, time                                                                          |
+| `inventory.transfer_ledger_links` | Tenant-local movements created by one transfer                             | transfer, organisation, movement; unique transfer/organisation/movement role                                                              |
+| `inventory.alerts`                | Low/out-of-stock and expiry alert instance                                 | organisation, location, item/variant/lot, kind, threshold/current quantity, state, acknowledged/resolved by/at                            |
+| `inventory.imports`               | CSV item/opening-balance import batch                                      | organisation, source file/hash, mapping, state, idempotency key, preview/commit/reversal times                                            |
+| `inventory.import_rows`           | Validated staging row and result                                           | import, row number, normalized payload, state/errors, created entity/movement nullable                                                    |
 
 Anonymous distributions use a `distribution` movement header linked to an optional event and aggregate movement lines. No inventory table contains a beneficiary/person foreign key. Cross-organisation transfers expose the request, lines, logistics, and notes to the two party organisations through explicit policies; they do not open either inventory workspace to the other party. Each side posts its own ledger movement and links it through `transfer_ledger_links`.
 
 ## 16. Notifications and Reliable Background Work
 
-| Table | Purpose | Important columns |
-| --- | --- | --- |
-| `notifications.preferences` | Per-user/org/channel preferences | user, organisation nullable, notification kind, email/SMS/push/in-app enabled |
-| `notifications.endpoints` | Verified email, phone, or push endpoint | user, channel, encrypted address/token, verified/disabled times |
-| `notifications.notifications` | Safe in-app notification | recipient, organisation, kind, safe title/body key, entity reference, read time |
-| `notifications.delivery_attempts` | Delivery lifecycle | notification, endpoint/channel, provider ID, status, attempt count, error code, sent/delivered times |
-| `notifications.outbox` | Transactional jobs emitted with database changes | event type, aggregate ID, payload, available time, processed time, attempt count |
+| Table                             | Purpose                                          | Important columns                                                                                    |
+| --------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `notifications.preferences`       | Per-user/org/channel preferences                 | user, organisation nullable, notification kind, email/SMS/push/in-app enabled                        |
+| `notifications.endpoints`         | Verified email, phone, or push endpoint          | user, channel, encrypted address/token, verified/disabled times                                      |
+| `notifications.notifications`     | Safe in-app notification                         | recipient, organisation, kind, safe title/body key, entity reference, read time                      |
+| `notifications.delivery_attempts` | Delivery lifecycle                               | notification, endpoint/channel, provider ID, status, attempt count, error code, sent/delivered times |
+| `notifications.outbox`            | Transactional jobs emitted with database changes | event type, aggregate ID, payload, available time, processed time, attempt count                     |
 
 Use an outbox worker for invitation emails, approval request notes/reminders, approval-projection regeneration, review reminders, schedule changes, cancellations, inventory alerts/transfers, and signing-provider synchronization. Approval/note emails contain an opaque expiring link and safe context, not the unpublished content or note body. Never send an external notification before the database transaction creating its state has committed.
 
@@ -682,20 +685,20 @@ Use an outbox worker for invitation emails, approval request notes/reminders, ap
 
 Append-only event table:
 
-| Column | Type | Notes |
-| --- | --- | --- |
-| `id` | `uuid PK` | Random event ID |
-| `organization_id` | `uuid nullable` | Null for platform-wide events |
-| `actor_user_id` | `uuid nullable` | Human account |
-| `actor_member_id` | `uuid nullable` | Organisation membership used |
-| `actor_type` | enum | user, system, provider, support |
-| `action` | `text` | Namespaced code such as `article.published`, `article.custody_transferred`, or `inventory.movement_posted` |
-| `subject_type` | `text` | Safe entity type |
-| `subject_id` | `uuid/text nullable` | Safe entity identifier |
-| `reason` | `text nullable` | Required for sensitive administrative actions |
-| `metadata` | `jsonb` | Allowlisted safe metadata only |
-| `occurred_at` | `timestamptz` | Event time |
-| `request_id` | `text nullable` | Correlation without raw request data |
+| Column            | Type                 | Notes                                                                                                      |
+| ----------------- | -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `id`              | `uuid PK`            | Random event ID                                                                                            |
+| `organization_id` | `uuid nullable`      | Null for platform-wide events                                                                              |
+| `actor_user_id`   | `uuid nullable`      | Human account                                                                                              |
+| `actor_member_id` | `uuid nullable`      | Organisation membership used                                                                               |
+| `actor_type`      | enum                 | user, system, provider, support                                                                            |
+| `action`          | `text`               | Namespaced code such as `article.published`, `article.custody_transferred`, or `inventory.movement_posted` |
+| `subject_type`    | `text`               | Safe entity type                                                                                           |
+| `subject_id`      | `uuid/text nullable` | Safe entity identifier                                                                                     |
+| `reason`          | `text nullable`      | Required for sensitive administrative actions                                                              |
+| `metadata`        | `jsonb`              | Allowlisted safe metadata only                                                                             |
+| `occurred_at`     | `timestamptz`        | Event time                                                                                                 |
+| `request_id`      | `text nullable`      | Correlation without raw request data                                                                       |
 
 Do not put passwords, tokens, simulator answers, signed-document content, assistance information, or unrestricted before/after objects in audit metadata.
 

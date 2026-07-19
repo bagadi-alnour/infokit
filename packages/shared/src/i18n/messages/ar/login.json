@@ -1,0 +1,11 @@
+{
+  "auth.login.eyebrow": "دخول المحرر",
+  "auth.login.title": "تسجيل الدخول إلى وحدة التحرير",
+  "auth.login.description": "استخدم عنوان البريد الإلكتروني المعتمد لهذه الأداة الخاصة. سنرسل رابطًا آمنًا، ثم نؤكد دخولك برسالة نصية.",
+  "auth.login.emailLabel": "عنوان البريد الإلكتروني المعتمد",
+  "auth.login.emailPlaceholder": "you@example.org",
+  "auth.login.submit": "إرسال الرابط الآمن",
+  "auth.login.submitting": "جارٍ إرسال الرابط…",
+  "auth.login.error": "تعذر بدء تسجيل الدخول. تحقق من العنوان وحاول مرة أخرى.",
+  "auth.login.privacy": "يمكن للمحررين المعيّنين فقط تسجيل الدخول. لا نكشف عناوين البريد المعتمدة."
+}

@@ -1,0 +1,11 @@
+{
+  "auth.dashboard.console": "Editor console",
+  "auth.dashboard.overview": "Overview",
+  "auth.dashboard.organizations": "Organisations",
+  "auth.dashboard.places": "Places",
+  "auth.dashboard.services": "Services",
+  "auth.dashboard.signedIn": "Signed in as {email}",
+  "auth.dashboard.role": "Role",
+  "auth.dashboard.role.editor": "Editor",
+  "auth.dashboard.signOut": "Sign out"
+}
