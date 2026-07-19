@@ -5,6 +5,9 @@
 import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
-const config = {};
+const config = {
+  // Workspace packages ship raw TypeScript; Next compiles them in place.
+  transpilePackages: ["@calais/tokens"],
+};
 
 export default config;
