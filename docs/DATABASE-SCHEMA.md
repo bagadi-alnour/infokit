@@ -30,7 +30,7 @@ Use PostgreSQL schemas as domain boundaries while keeping one Drizzle project:
 | ----------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------- |
 | `auth`            | Login identities, linked providers, sessions, verification, recovery                          | No                                            |
 | `core`            | Organisations, membership, invitations, roles, languages, terms                               | No                                            |
-| `content`         | Public profiles, places, services, events, editorial information, files                       | Published records only through the public API |
+| `content`         | Public profiles, activities, reusable services, places, events, editorial information, files  | Published records only through the public API |
 | `simulator`       | Versioned anonymous information-decision graphs                                               | Published versions only                       |
 | `operations`      | Members, teams, availability, absences, planning, assignments                                 | No                                            |
 | `documents`       | Restricted templates, files, signers, signature evidence                                      | No                                            |
@@ -87,9 +87,11 @@ flowchart LR
 ### Translations
 
 - Keep translatable text in translation tables with a `language_code` foreign key.
-- Do not store translations as a single JSON object; per-language rows need independent review, fallback, and publication states.
+- Do not store translations as a single JSON object; per-language rows need independent review and fallback behavior.
 - Translation uniqueness is normally `(parent_id, language_code)` or `(revision_id, language_code)`.
-- Store whether a translation is `draft`, `machine_generated`, `needs_review`, `verified`, or `rejected`, plus source language and `human`/`ai`/`ai_then_human_review` provenance.
+- Keep translation quality (`draft`, `machine_generated`, `needs_review`, `verified`, `rejected`), assignment lifecycle, and locale publication in separate columns/tables.
+- Pin each target translation and external assignment to an immutable source version with a source language, canonical payload, SHA-256 hash, author, and change impact.
+- Store `human`/`ai`/`ai_then_human_review` provenance, provider job reference, target content hash, verification actor/time, and carry-forward source when applicable.
 
 ### Publication and revisions
 
@@ -174,62 +176,55 @@ Authentication library choice may rename these tables, but the data boundaries s
 
 Global login identity.
 
-| Column                     | Type                   | Notes                       |
-| -------------------------- | ---------------------- | --------------------------- |
-| `id`                       | `uuid PK`              | Random identifier           |
-| `display_name`             | `text nullable`        | Account-level display only  |
-| `preferred_language_code`  | `text FK nullable`     | UI preference               |
-| `disabled_at`              | `timestamptz nullable` | Platform account suspension |
-| `last_login_at`            | `timestamptz nullable` | Security metadata           |
-| `created_at`, `updated_at` | `timestamptz`          | Standard timestamps         |
+| Column                     | Type                   | Notes                                                         |
+| -------------------------- | ---------------------- | ------------------------------------------------------------- |
+| `id`                       | `uuid PK`              | Random identifier                                             |
+| `display_name`             | `text nullable`        | Account-level display only                                    |
+| `email`                    | `text`                 | Sole normalized sign-in address; globally unique              |
+| `email_verified_at`        | `timestamptz nullable` | Authentication verification                                   |
+| `password_hash`            | `text nullable`        | Versioned salted memory-hard hash; null until password is set |
+| `password_updated_at`      | `timestamptz nullable` | Password security metadata                                    |
+| `preferred_language_code`  | `text FK nullable`     | UI preference                                                 |
+| `disabled_at`              | `timestamptz nullable` | Platform account suspension                                   |
+| `last_login_at`            | `timestamptz nullable` | Security metadata                                             |
+| `created_at`, `updated_at` | `timestamptz`          | Standard timestamps                                           |
 
-### `auth.user_emails`
-
-A user may keep a personal email and add one or more organisation emails without creating a second identity.
-
-| Column                     | Type                   | Notes                                               |
-| -------------------------- | ---------------------- | --------------------------------------------------- |
-| `id`                       | `uuid PK`              | Email record ID                                     |
-| `user_id`                  | `uuid FK`              | Owning global user                                  |
-| `email`                    | `text`                 | Original display form                               |
-| `normalized_email`         | `text`                 | Trimmed and lower-cased for lookup; globally unique |
-| `is_primary`               | `boolean`              | One primary email per user                          |
-| `verified_at`              | `timestamptz nullable` | Authentication verification                         |
-| `created_at`, `updated_at` | `timestamptz`          | Standard timestamps                                 |
-
-The global uniqueness of `normalized_email` prevents two login identities from claiming the same verified address. It does **not** limit a user to one organisation. Organisation relationships are stored in `core.organization_members`, and an organisation-specific contact address may also be stored on that membership.
+One account has one sign-in email. Organisation-specific contact addresses may remain on `core.organization_members`, but they do not authenticate the global account. The one-email rule does not limit the number of organisation memberships.
 
 ### Authentication support tables
 
-| Table                           | Purpose                                             | Important columns/constraints                                                                                                                        |
-| ------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth.accounts`                 | Password or external identity-provider linkage      | `user_id`, optional `user_email_id`, `provider`, `provider_account_id`, optional `password_hash`; unique provider identity                           |
-| `auth.sessions`                 | Revocable login sessions                            | hashed `session_token`, `user_id`, `expires_at`, `last_seen_at`, nullable `second_factor_verified_at`; never store raw tokens                        |
-| `auth.verification_tokens`      | Email verification and passwordless login           | hashed token, purpose, email/user, expiry, consumed time                                                                                             |
-| `auth.second_factor_challenges` | Short-lived SMS verification for a specific session | user, hashed session token, keyed code digest, locale, delivery state, bounded attempts, expiry, consumed time; never store the phone number or code |
-| `auth.password_reset_tokens`    | Single-use password recovery                        | hashed token, user, expiry, consumed time                                                                                                            |
-| `auth.authenticators`           | Optional WebAuthn/passkey credentials               | credential ID, public key, counter, transports                                                                                                       |
-| `auth.recovery_codes`           | Optional MFA recovery                               | one-way hash, user, consumed time                                                                                                                    |
+| Table                            | Purpose                                             | Important columns/constraints                                                                                                                        |
+| -------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth.accounts`                  | External identity-provider linkage                  | `user_id`, `provider`, `provider_account_id`; unique provider identity                                                                               |
+| `auth.sessions`                  | Revocable login sessions                            | hashed `session_token`, `user_id`, `expires_at`, `last_seen_at`, nullable `second_factor_verified_at`; never store raw tokens                        |
+| `auth.verification_tokens`       | Email verification and passwordless login           | hashed token, purpose, email/user, expiry, consumed time                                                                                             |
+| `auth.second_factor_challenges`  | Short-lived SMS verification for a specific session | user, hashed session token, keyed code digest, locale, delivery state, bounded attempts, expiry, consumed time; never store the phone number or code |
+| `auth.password_reset_tokens`     | Single-use password recovery                        | hashed token, user, expiry, consumed time                                                                                                            |
+| `auth.password_sign_in_attempts` | Identifier-level password throttle ledger           | HMACed normalized identifier, nullable resolved user, success flag, attempted time; bounded retention                                                |
+| `auth.authenticators`            | Optional WebAuthn/passkey credentials               | credential ID, public key, counter, transports                                                                                                       |
+| `auth.recovery_codes`            | Optional MFA recovery                               | one-way hash, user, consumed time                                                                                                                    |
 
 Security events such as login failure, recovery, session revocation, MFA changes, and account disablement also create `audit.events` rows. IP addresses and user-agent retention require an explicit policy.
 
-Slice 0 has a fixed invited-editor allowlist. Its email-to-phone mapping is deployment configuration rather than account data: there is no public enrolment, phone-number editing, or recovery flow. A successful magic-link login still requires a session-bound, single-use SMS challenge before any private read or mutation is allowed.
+Slice 0 has a fixed invited-editor allowlist. Its email-to-phone mapping is deployment configuration rather than account data: there is no public enrolment or phone-number editing. Password and magic-link authentication both create the same revocable database session and require a session-bound, single-use SMS challenge before any private read or mutation. An authenticated, SMS-verified user may set or replace the password; the magic-link path remains the recovery route until a dedicated reset flow ships.
 
 ## 5. Organisations, Invitations, and Authorization
 
 ### Organisation tables
 
-| Table                             | Purpose                                                                   | Important columns                                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `core.organizations`              | Stable private organisation identity                                      | `id`, `slug`, legal/display name, timezone, status, publishing suspension                         |
-| `core.organization_verifications` | Platform verification and duplicate/impersonation review                  | organisation, reviewer, method, status, notes, evidence asset, decision times                     |
-| `core.organization_members`       | Stable person/account identity inside one organisation                    | organisation, nullable user, operational name/contact, status, first/last seen times              |
-| `core.member_types`               | Extensible participation type catalogue                                   | code such as staff/volunteer/intern, label key, active state, display order                       |
-| `core.member_engagements`         | Historical period and type of participation                               | organisation, member, member type, start/end dates, status, ended reason                          |
-| `core.invitations`                | Phase 1 publisher, Phase 2 admin/editor, and Phase 3 member invitations   | organisation, email/phone, invitation kind, hashed token, inviter, expiry, accepted/revoked times |
-| `core.invitation_roles`           | Roles that will be granted on acceptance                                  | invitation, role                                                                                  |
-| `core.legal_documents`            | Versioned privacy notice, platform terms, and publishing responsibilities | kind, version, language, asset/content, effective date                                            |
-| `core.legal_acceptances`          | Evidence that a user accepted a specific version                          | user, organisation nullable, legal document, accepted time, evidence metadata                     |
+| Table                             | Purpose                                                                   | Important columns                                                                                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core.organizations`              | Stable private organisation identity                                      | `id`, `slug`, legal/display name, optional founding year, timezone, status, publishing suspension                                                         |
+| `core.organization_verifications` | Platform verification and duplicate/impersonation review                  | organisation, reviewer, method, status, notes, evidence asset, decision times                                                                             |
+| `core.organization_members`       | Stable person/account identity inside one organisation                    | organisation, nullable user, operational name/contact, status, first/last seen times                                                                      |
+| `core.city_teams`                 | Full area team responsible for one organisation's work in one city        | organisation, city, name, active state; unique organisation/city                                                                                          |
+| `core.city_team_members`          | Private membership of an organisation's city team                         | organisation, city team, member, active state                                                                                                             |
+| `core.member_types`               | Extensible participation type catalogue                                   | code such as staff/volunteer/intern, label key, active state, display order                                                                               |
+| `core.member_engagements`         | Historical period and type of participation                               | organisation, member, member type, start/end dates, status, ended reason                                                                                  |
+| `core.invitations`                | Phase 1 publisher, Phase 2 admin/editor, and Phase 3 member invitations   | organisation, email/phone, invitation kind, hashed token, inviter, nullable inviting member (Phase 1.3 colleague invites), expiry, accepted/revoked times |
+| `core.invitation_roles`           | Roles that will be granted on acceptance                                  | invitation, role                                                                                                                                          |
+| `core.legal_documents`            | Versioned privacy notice, platform terms, and publishing responsibilities | kind, version, language, asset/content, effective date                                                                                                    |
+| `core.legal_acceptances`          | Evidence that a user accepted a specific version                          | user, organisation nullable, legal document, accepted time, evidence metadata                                                                             |
 
 `core.organization_members.user_id` stays nullable until an invited person creates or links an account. One `auth.users` row may be referenced by memberships in any number of organisations. Offboarding deactivates only that organisation relationship and its permissions; it does not delete the global account, affect another organisation, move content custody, or rewrite authored audit history.
 
@@ -237,53 +232,78 @@ Slice 0 has a fixed invited-editor allowlist. Its email-to-phone mapping is depl
 
 ### Role and permission tables
 
-| Table                          | Purpose                                       | Key                                                                       |
-| ------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------- |
-| `core.roles`                   | Platform-defined or organisation-defined role | `id`; nullable `organization_id` means platform template                  |
-| `core.permissions`             | Extensible permission catalogue               | text `code PK`, description, sensitivity level                            |
-| `core.role_permissions`        | Permission grant to role                      | `(role_id, permission_code)`                                              |
-| `core.member_roles`            | Role assignment inside one organisation       | `(organization_id, member_id, role_id)` plus grant/review/expiry metadata |
-| `core.permission_reviews`      | Periodic review campaign                      | organisation, due date, state, reviewer                                   |
-| `core.permission_review_items` | Decision for one assignment                   | review, member role, keep/revoke, decision metadata                       |
+| Table                          | Purpose                                       | Key                                                                                  |
+| ------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `core.roles`                   | Platform-defined or organisation-defined role | `id`; nullable `organization_id` means platform template                             |
+| `core.permissions`             | Extensible permission catalogue               | text `code PK`, description, sensitivity level                                       |
+| `core.role_permissions`        | Permission grant to role                      | `(role_id, permission_code)`                                                         |
+| `core.member_roles`            | Role assignment inside one organisation       | `(organization_id, member_id, role_id)` plus grant/review/expiry metadata            |
+| `core.user_platform_roles`     | Global platform-role assignment               | `(user_id, role_id)` plus grant/expiry metadata                                      |
+| `core.role_test_contexts`      | Session-bound superadmin role test context    | session, real actor, compatibility primary role, optional organisation, start/update |
+| `core.role_test_context_roles` | Roles combined in one superadmin test context | `(session, role)`; permissions are the union of every selected role                  |
+| `core.permission_reviews`      | Periodic review campaign                      | organisation, due date, state, reviewer                                              |
+| `core.permission_review_items` | Decision for one assignment                   | review, member role, keep/revoke, decision metadata                                  |
 
-Example permission codes:
+Currently approved permission catalogue:
 
 ```text
-content.article.create       content.article.publish
-content.joint_publication.approve
-content.article_custody.transfer
-content.service.manage      content.simulator.review
-organization.profile.manage
-members.read                members.manage
-teams.manage                planning.manage
-coordination.event.manage
-documents.prepare           documents.send
-documents.read_all          documents.audit
-inventory.read              inventory.move
-inventory.transfer.approve  inventory.financial.read
-audit.read
+support.superadmin                  organization.verify
+taxonomy.manage                     audit.read
+content.article.write               content.article.publish
+content.article.review              content.joint_publication.approve
+content.article_custody.transfer    content.activity.manage
+content.activity.verify             content.simulator.review
+content.translation.request         content.translation.submit
+content.translation.review          organization.profile.manage
+members.read                        members.manage
+roles.manage                        teams.manage
+planning.manage                     coordination.event.manage
+documents.prepare                   documents.send
+documents.sign_assigned             documents.read_all
+documents.audit                     inventory.read
+inventory.locations.manage          inventory.catalog.manage
+inventory.move                      inventory.transfer.approve
+inventory.financial.read            inventory.audit.read
 ```
+
+Permissions are atomic and do not inherit from one another. Platform-defined
+role templates explicitly grant every capability they provide; an organisation
+member may hold several roles, whose grants combine only within that membership.
+For example, an article publisher template grants both `content.article.write`
+and `content.article.publish`, while a translation reviewer may hold only
+`content.article.review`. Likewise, `content.activity.manage` does not imply
+`content.activity.verify`.
+
+`platform_superadmin` grants only `support.superadmin` and `audit.read`. A
+global assignment in `core.user_platform_roles` authorizes role testing. A
+test context replaces effective feature permissions with the union of the
+selected roles' explicit grants without rewriting memberships or global
+assignments. Every enter, switch, and exit records the real actor and selected
+roles. The authorization service must recheck the actor's actual
+`support.superadmin` grant on every request and ignore or remove the context if
+that grant or its database session expires.
 
 ## 6. Languages, Taxonomies, and Public Organisation Profiles
 
 ### Shared catalogue tables
 
-| Table                                    | Purpose                                                                                                                                                                                               |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core.languages`                         | BCP 47 code, native name, English/French name, direction, enabled state, fallback code, public sort order                                                                                             |
-| `core.cities`                            | City/territory catalogue: code, name translations, timezone, map bounds, ordered public areas (used by the simulator location question), active state                                                 |
-| `content.service_categories`             | Stable service category code, icon, public color token, enabled state                                                                                                                                 |
-| `content.service_category_translations`  | Category label and description by language                                                                                                                                                            |
-| `content.service_features`               | Controlled amenity or intervention code, icon, enabled state, and default display order; examples include laundry, shower, charging, social assistance, drinking water, welcome kit, and nursing care |
-| `content.service_feature_translations`   | Public feature label and description by language                                                                                                                                                      |
-| `content.audience_categories`            | Controlled audience code (`all_public`, `women_only`, `children_only`, `under_18_only`, `families_only`, `adult_men_only`), icon/token, enabled state, display order                                  |
-| `content.audience_category_translations` | Audience label and explanation by language; providers still supply record-specific eligibility detail                                                                                                 |
-| `content.specialities`                   | Controlled association-speciality code and icon                                                                                                                                                       |
-| `content.speciality_translations`        | Speciality label and description by language                                                                                                                                                          |
-| `content.search_concepts`                | Stable need/topic concept such as breakfast, shoes, tents, water, or device charging, with optional mapped service category                                                                           |
-| `content.search_concept_translations`    | Preferred search label by language                                                                                                                                                                    |
-| `content.search_concept_aliases`         | Language-specific normalized synonyms, common spellings, and typo aliases for autocomplete                                                                                                            |
-| `content.service_search_concepts`        | Verified need concepts satisfied by a service                                                                                                                                                         | `(service_id, search_concept_id)`, verified by/at |
+| Table                                    | Purpose                                                                                                                                                              |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core.languages`                         | BCP 47 code, native name, English/French name, direction, enabled state, fallback code, public sort order                                                            |
+| `core.cities`                            | City/territory catalogue: code, timezone, active state; activating one surfaces it in public filters and the simulator city question                                 |
+| `core.city_translations`                 | City name by language                                                                                                                                                |
+| `core.city_areas`                        | Ordered public areas of a city, used by the simulator location question: code, display order, optional latitude/longitude, active state                              |
+| `core.city_area_translations`            | City-area label by language                                                                                                                                          |
+| `content.service_categories`             | Broad grouping code (for example essentials, health/wellbeing, or connectivity), icon, public color token, enabled state                                             |
+| `content.service_category_translations`  | Category label and description by language                                                                                                                           |
+| `content.audience_categories`            | Controlled audience code (`all_public`, `women_only`, `children_only`, `under_18_only`, `families_only`, `adult_men_only`), icon/token, enabled state, display order |
+| `content.audience_category_translations` | Audience label and explanation by language; providers still supply record-specific eligibility detail                                                                |
+| `content.specialities`                   | Controlled association-speciality code and icon                                                                                                                      |
+| `content.speciality_translations`        | Speciality label and description by language                                                                                                                         |
+| `content.search_concepts`                | Stable need/topic concept such as breakfast, shoes, tents, water, or device charging, with optional mapped service category                                          |
+| `content.search_concept_translations`    | Preferred search label by language                                                                                                                                   |
+| `content.search_concept_aliases`         | Language-specific normalized synonyms, common spellings, and typo aliases for autocomplete                                                                           |
+| `content.service_search_concepts`        | Verified need concepts satisfied by a service                                                                                                                        | `(service_id, search_concept_id)`, verified by/at |
 
 ### Flexible tags
 
@@ -316,8 +336,8 @@ Recommended `core.tags` behavior:
 
 | Table                                       | Purpose                                                     | Important columns                                                                                                                                       |
 | ------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content.organization_profiles`             | Public, reviewable part of an organisation                  | organisation, logo asset, website, visibility, last verified, review due, active publication snapshot                                                   |
-| `content.organization_profile_translations` | Public purpose/summary by language                          | profile, language, purpose, accessibility summary, translation state                                                                                    |
+| `content.organization_profiles`             | Public, reviewable part of an organisation                  | organisation, logo asset, website, discovery source URL/check date, visibility, last verified, review due, active publication snapshot                  |
+| `content.organization_profile_translations` | Public narrative by language                                | profile, language, purpose, optional goals/values, accessibility summary, translation state                                                             |
 | `content.organization_search_aliases`       | Verified former/common names used by autocomplete           | organisation, language, alias, normalized alias, active state, verified by/at                                                                           |
 | `content.organization_specialities`         | Effective-dated speciality assignment/history               | organisation, speciality, state (`requested`, `verified`, `rejected`, `retired`), `is_primary`, display order, requested/verified/retired by/at, reason |
 | `content.speciality_change_requests`        | One admin-submitted change set                              | organisation, requester, state, submitted/decided times, reviewer, reason                                                                               |
@@ -328,56 +348,76 @@ Recommended `core.tags` behavior:
 
 An organisation can have many specialities. Enforce no more than one effective verified assignment with `is_primary = true` through a partial unique index. Marking a primary is optional: an organisation providing several services with equal weight (water and food, showers and laundry, mental and physical care) marks none, and the public card renders its specialities co-equally. Admins can retire a public assignment without deleting history. Additions and changed claims remain non-public until a platform reviewer verifies them. The Phase 1 product currently displays up to four secondary specialities, but that is a configurable publication/UI rule, not a storage limit or database trigger.
 
-## 7. Places, Services, Schedules, and Public Events
+## 7. Places, Activities, Reusable Services, Schedules, and Public Events
 
 ### Places and service delivery
 
-| Table                                             | Purpose                                                                      | Important columns                                                                                                                       |
-| ------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `content.places`                                  | A public or internal physical place                                          | organisation, address fields, PostGIS point, visibility, accessibility flags, directions metadata                                       |
-| `content.place_translations`                      | Name, directions, landmark, accessibility text                               | place, language, translation state                                                                                                      |
-| `content.services`                                | Stable service identity, usually at a place                                  | coordinating organisation, place, category, public status, contact, last verified, review due, archive state                            |
-| `content.service_providers`                       | One or more verified associations that provide the service                   | service, organisation, provider role, display order, effective dates; at least one active provider before publication                   |
-| `content.service_translations`                    | Public name, short description, instructions, uncertainty/cancellation copy  | service, language, translation state                                                                                                    |
-| `content.service_feature_assignments`             | A verified feature available within one service offering                     | service, feature, availability mode (`available`, `scheduled`, `on_request`, `limited`), display order, effective dates, verified by/at |
-| `content.service_feature_assignment_translations` | Offering-specific feature detail or condition                                | assignment, language, short detail, translation state                                                                                   |
-| `content.service_audience_policies`               | Required launch audience classification and exact age bounds when applicable | service PK/FK, audience category, nullable minimum/maximum age, verified by/at                                                          |
-| `content.service_audience_translations`           | Provider-supplied eligibility explanation                                    | audience policy, language, plain-language details, translation state                                                                    |
-| `content.service_languages`                       | Languages available for this service                                         | service, language, verification metadata                                                                                                |
-| `content.service_accessibility_features`          | Controlled accessibility feature assignment                                  | service/place, feature code, verification metadata                                                                                      |
+| Table                                    | Purpose                                                                                        | Important columns                                                                                                                                                                                                        |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `content.places`                         | A public or internal physical place                                                            | organisation, city, address fields, point/coordinates, publication precision, archive state                                                                                                                              |
+| `content.place_translations`             | Name and safe directions text                                                                  | place, language, translation state                                                                                                                                                                                       |
+| `content.activities`                     | Scheduled, confirmable visitor-facing offering                                                 | nullable coordinating organisation/team, city, optional place, category, audience, source language, creation actor/scope, platform-provisioned flag, status, publication state, last verified, review due, archive state |
+| `content.activity_translations`          | Public name, description, instructions, uncertainty/cancellation copy                          | activity, language, source version, quality state, method, content hash, provider job, carry-forward source version, verified by/at                                                                                      |
+| `content.activity_publications`          | Active/history pointer for one locale translation                                              | activity, language, source version, translation content hash, approved/published time, optional scheduled activation time, unpublished actor/time; one active row per activity/language                                  |
+| `content.activity_creator_organizations` | Organisations that originated or co-authored the activity                                      | activity, organisation, proposed/confirmed/rejected/retired state, proposing/confirming actors and times                                                                                                                 |
+| `content.activity_providers`             | One or more associations proposed or confirmed to provide the activity                         | activity, organisation, relationship state, role, display order, proposing/confirming actors and effective times; at least one confirmed verified provider before publication                                            |
+| `content.activity_verifications`         | Immutable organisation-scoped activity verification evidence                                   | activity/provider organisation, verifying user/member, method, optional scope hash/source version, verification and validity times                                                                                       |
+| `content.activity_audience_translations` | Provider-supplied audience/eligibility explanation                                             | activity, language, plain-language details, translation state                                                                                                                                                            |
+| `content.services`                       | Reusable capability such as food, showers, legal information, or phone connectivity            | optional owning organisation (`null` for platform-managed global catalogue capability), broad category, stable code, icon, active/archive state                                                                          |
+| `content.service_translations`           | Reusable service label and description                                                         | service, language, translation state                                                                                                                                                                                     |
+| `content.activity_services`              | Many-to-many service availability within an activity                                           | `(activity_id, service_id)`, active state, display order                                                                                                                                                                 |
+| `content.activity_tags`                  | Flexible public labels selected from the shared or organisation catalogue                      | `(activity_id, tag_id)`, display order; tags never grant access                                                                                                                                                          |
+| `content.activity_contacts`              | Organisation-approved safe contact methods attached as public next steps                       | `(activity_id, contact_id)`, display order; application validation keeps contacts inside the coordinating organisation                                                                                                   |
+| `content.activity_member_assignments`    | Private activity-team subset assignment with expertise and optional approved public projection | organisation, activity, city-team member, expertise, visibility, separately authored public display name/expertise, active state                                                                                         |
+| `content.activity_assets`                | Images, flyers, audio, or documents attached to the mutable activity                           | activity, asset, attachment role, language, display order, active state                                                                                                                                                  |
+| `content.activity_claim_requests`        | Secure provisional claim or coordinating-custody transfer request                              | activity, destination organisation/team, previous coordinator/team snapshot, token hash, state, expiry/consumption/decision actors and times                                                                             |
+| `content.activity_custody_events`        | Typed append-only activity claim/transfer history                                              | activity/request, action, actor/scope, old/new organisation and team, asset/assignment disposition, occurred time                                                                                                        |
 
 Every place references a `core.cities` row. Activating a city automatically surfaces it in public city filters and as a simulator city question — territory expansion is a data change, not a schema or code change.
 
-Treat `content.services` as visitor-facing offerings, not as organisation-wide capability rows. An organisation can own many service records at one place. Each record keeps its own schedule, audience, status, contact, and feature assignments. Organisation specialities summarize the organisation for directory discovery; they do not create feature assignments. The application must not union features across an organisation or copy them to another service.
+Treat `content.activities` as visitor-facing offerings and `content.services` as reusable capabilities. Broad service categories group the catalogue; they are not selectable substitutes for concrete services. Global services have `organization_id = null` and are managed only by the audited superadmin; organisation-scoped services carry their owner ID. Editors see this scope explicitly when selecting either services or tags. `activities.organization_id` identifies the one coordinating tenant/custodian and `team_id` its city team; neither column is the complete factual attribution model. An activity may have several creator organisations, confirmed providers, and verifying organisations through typed many-to-many/event tables. A known organisation is linked provisionally when the platform enters information on its behalf; `organization_id` is null only for unknown-provider provisional intake. The activity team in `content.activity_member_assignments` is an operational subset of the coordinating city team, not a second owner and not a replacement for the activity's city-team relationship. Each activity keeps its own place, schedule, audience, status, contact, and freshness. Capabilities are attached through `content.activity_services`: an activity can have many services and a service can belong to many activities. Sharing a service never shares or copies an activity's schedule, status, place, audience, or verification evidence.
 
-Example: one MFS day-centre service can assign laundry, shower, charging, social assistance, mental-health support, food, drinking water, and welcome-kit features. A separate MFS nurse-led health service can assign nursing care, dressing changes, basic pain-relief support, and treatment of minor health issues. Both records require provider verification before publication and remain independent even when they share a provider or place.
+`created_by_id` identifies the initiating account; `created_by_scope` is the actor scope (`platform`, `organization`, or `system`), not an RBAC role. `provisioned_by_platform` is immutable origin provenance and may remain true after an organisation accepts or claims the activity. It never inserts the platform as a factual provider. Creator/provider relationships added on behalf of organisations start as `proposed`; an authorised representative confirms them. Verification remains separate from provision and is append-only per organisation.
+
+An activity claim request stores only a token hash. Acceptance locks the activity, checks destination authority and token expiry/consumption, maps or creates the destination city team, updates coordinating custody only when needed, and inserts an immutable custody event. An already-linked provisional organisation confirms without an ID change. Previous member assignments are ended or flagged for reconfirmation rather than silently re-scoped. Asset transfer/copy disposition is explicit and recorded; immutable publication snapshots continue referencing the exact historical asset hashes.
+
+`content.activity_translations` stores the localized title plus sanitized rich-description HTML and server-derived plain text. The plain text supports previews and search without re-parsing author input; `short_description` remains a bounded compatibility preview. Authoring never stores unsanitized editor HTML, and media elements are excluded from activity descriptions.
+
+Example: one MFS day-centre activity can attach laundry, shower, charging, social assistance, food, drinking water, and welcome-kit services. A separate MFS mobile-outreach activity can attach drinking water and phone charging again. Both activities remain independent even though they share capabilities, a provider, or a place.
+
+An email-first member assignment creates or reuses `core.organization_members`; `user_id` stays null until an account authenticates with that verified address. The assignment first adds or reactivates `core.city_team_members`, then adds the member to the activity team through `content.activity_member_assignments`, so both memberships are present after identity linking. Public mode does not project the member row. It may expose only the separately approved public display name and public expertise stored on the activity assignment; email, account ID, private display name, profile, availability, and other assignments remain excluded.
+
+This member-assignment path remains behind the Phase 3 legal/operator gate in persistent environments. Before the gate, it may be developed and verified only against clearly labelled fictional local data; it must not become a route for collecting real volunteer personal data.
 
 Use PostGIS `geography(Point, 4326)` with a GiST index for distance queries. If PostGIS is deliberately deferred, use validated latitude/longitude numeric columns and accept that radius search will be less capable.
 
-### Recurring service availability
+### Recurring activity availability
 
-| Table                                 | Purpose                                                    | Important columns                                                                          |
-| ------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `content.service_schedule_rules`      | Weekly recurring service hours                             | service, weekday, local start/end time, timezone, effective dates, public-holiday behavior |
-| `content.service_schedule_exceptions` | Closure, cancellation, exceptional opening, or uncertainty | service, affected date/time, state, public reason, created by                              |
-| `content.service_status_history`      | Trace important manual status changes                      | service, old/new state, effective interval, actor, reason                                  |
+| Table                                       | Purpose                                                                | Important columns                                                                                                                           |
+| ------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content.schedule_rules`                    | Weekly recurring activity hours                                        | activity, weekday, fixed/flexible timing mode, local start/end window, effective dates, public-holiday behavior                             |
+| `content.schedule_exceptions`               | Date-scoped closure, cancellation, exceptional opening, or uncertainty | activity, affected date/time, kind, created by; localized public reason lives in the translation table                                      |
+| `content.schedule_exception_translations`   | Localized public reason for one exception                              | exception, language, public reason, translation state                                                                                       |
+| `content.activity_occurrence_confirmations` | Immutable evidence that one scheduled occurrence was checked that day  | activity, confirming provider organisation nullable for platform intake, local date, confirmed time/user; unique activity/date/organisation |
 
-Schedule checks enforce `start_time < end_time` unless an explicit `ends_next_day` flag is true. French public-holiday behavior is stored on the rule, not inferred from UI copy.
+Schedule checks enforce `start_time < end_time` unless an explicit `ends_next_day` flag is true. `fixed` means the window is expected to be exact; `flexible` means the window is approximate and public UI must advise confirmation. Creation accepts one to seven independently timed weekday rows, with add/remove controls; multiple rules per weekday represent split days, and transactional server validation rejects overlaps. An exception is either full-day (both times null) or partial-day (both present with start before end); several non-overlapping windows of the same kind may exist on one date. French public-holiday behavior is stored on the rule, not inferred from UI copy. Same-day confirmation inserts immutable date- and organisation-scoped evidence and may update the activity-level `last_verified_at`/`review_due_at` summary. A later cancellation or uncertainty does not delete the earlier evidence. Browsing another calendar date never refreshes public data.
 
 ### Public events
 
 Public events remain separate from private shifts and missions. Linking them must never expose assigned member names or availability.
 
-| Table                                        | Purpose                                                  | Important columns                                                                                                   |
-| -------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `content.public_events`                      | Stable public event/temporary distribution identity      | coordinating organisation, place, category, status, recurrence series, last verified, review due                    |
-| `content.public_event_providers`             | One or more verified associations that provide the event | event, organisation, provider role, display order, effective dates; at least one active provider before publication |
-| `content.public_event_audience_policies`     | Required launch audience classification and age bounds   | event PK/FK, audience category, nullable minimum/maximum age, verified by/at                                        |
-| `content.public_event_audience_translations` | Provider-supplied event eligibility explanation          | audience policy, language, plain-language details, translation state                                                |
-| `content.public_event_translations`          | Name, description, instructions, cancellation reason     | event, language, translation state                                                                                  |
-| `content.public_event_series`                | Recurrence definition                                    | event, timezone, local start, duration, RRULE or controlled recurrence fields, effective dates                      |
-| `content.public_event_occurrences`           | Materialized concrete occurrences                        | event, starts/ends at, state, exception source; unique event/start                                                  |
-| `content.public_event_services`              | Services available during the event                      | `(event_id, service_id)`                                                                                            |
+| Table                                          | Purpose                                                    | Important columns                                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `content.public_events`                        | Stable public event/temporary distribution identity        | coordinating organisation, place, category, source language, status, recurrence series, last verified, review due                    |
+| `content.public_event_providers`               | One or more verified associations that provide the event   | event, organisation, provider role, display order, effective dates; at least one active provider before publication                  |
+| `content.public_event_audience_policies`       | Required launch audience classification and age bounds     | event PK/FK, audience category, nullable minimum/maximum age, verified by/at                                                         |
+| `content.public_event_audience_translations`   | Provider-supplied event eligibility explanation            | audience policy, language, plain-language details, translation state                                                                 |
+| `content.public_event_translations`            | Name, description, instructions, cancellation reason       | event, language, source version, quality state, method, content hash, provider job, carry-forward source version, verified by/at     |
+| `content.public_event_publications`            | Active/history pointer for one locale translation          | event, language, source version, translation content hash, published/unpublished actors and times; one active row per event/language |
+| `content.public_event_series`                  | Recurrence definition                                      | event, timezone, local start, duration, RRULE or controlled recurrence fields, effective dates                                       |
+| `content.public_event_occurrences`             | Materialized concrete occurrences                          | event, starts/ends at, state, exception source; unique event/start                                                                   |
+| `content.public_event_occurrence_translations` | Localized public reason for a changed/cancelled occurrence | occurrence, language, public reason, translation state                                                                               |
+| `content.public_event_services`                | Services available during the event                        | `(event_id, service_id)`                                                                                                             |
 
 Materialize a rolling occurrence window, for example the next six months, whenever a series or exception changes. Public `open now` and calendar queries should not have to interpret every recurrence rule at request time.
 
@@ -389,39 +429,96 @@ These three products share revision, translation, source, freshness, and publica
 
 ### Stable entry and immutable revisions
 
-| Table                                         | Purpose                                                            | Important columns                                                                                                                                             |
-| --------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content.editorial_entries`                   | Stable identity and URL                                            | kind (`article`, `fixed_information`, `basic_information`), slug, workflow state, archived time; custody and public attribution use separate tables           |
-| `content.editorial_revisions`                 | Immutable authored revision                                        | entry, revision number, author, structured body schema version, can become outdated, unreliable from, last reviewed, review due, source summary, created time |
-| `content.editorial_revision_translations`     | Localized content for one revision                                 | revision, language, title, summary, structured body JSON, plain-text fallback, translation state, verified by/at                                              |
-| `content.editorial_publications`              | Typed pointer to the exact revision/snapshot public for one locale | entry, language, revision, publication snapshot, approval bundle nullable, published by/at, unpublished at; one active publication per entry/language         |
-| `content.article_details`                     | Article-only metadata                                              | entry PK/FK, article date, featured state                                                                                                                     |
-| `content.fixed_information_details`           | Fixed-information metadata                                         | entry PK/FK, topic code, review interval days                                                                                                                 |
-| `content.basic_information_details`           | Basic-information tile metadata                                    | entry PK/FK, icon, priority, matching service-category filter, emergency flag                                                                                 |
-| `content.editorial_custodianships`            | Effective-dated administrative control of an entry                 | entry, custodian kind (`organization`/`platform`), nullable organisation, started/ended times, accepted by; one active row                                    |
-| `content.editorial_custody_transfer_requests` | Admin-only proposed custody change                                 | entry, source custodian, destination kind/organisation, initiator, state, token hash, expiry, accepted/declined/cancelled times and actors                    |
-| `content.editorial_custody_transfer_events`   | Append-only transfer history and notes                             | transfer request, actor, event type, safe note, time                                                                                                          |
+| Table                                         | Purpose                                                            | Important columns                                                                                                                                                                                                                   |
+| --------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content.editorial_entries`                   | Stable editorial identity                                          | kind (`article`, `fixed_information`, `basic_information`), internal slug, nullable city, workflow state, archived time; null city means global reach                                                                               |
+| `content.editorial_entry_routes`              | Stable localized public URL                                        | entry, language, slug, retired time; one active route per entry/language and one owner of a language/slug pair, including retired routes                                                                                            |
+| `content.editorial_entry_tags`                | Approved public tags on an entry                                   | entry, tag, display order                                                                                                                                                                                                           |
+| `content.editorial_entry_assets`              | Entry-level media identity                                         | entry, asset, role (`cover`/`inline`), display order; at most one cover image                                                                                                                                                       |
+| `content.editorial_revisions`                 | Immutable authored revision                                        | entry, revision number, author, source language, structured body schema version, can become outdated, unreliable from, last reviewed, review due, source summary, created time                                                      |
+| `content.editorial_revision_translations`     | Localized content for one revision                                 | revision, language, source version, title, summary, structured body JSON, plain-text fallback, quality state, method, content hash, provider job, carry-forward revision, verified by/at                                            |
+| `content.editorial_publications`              | Typed pointer to the exact revision/snapshot public for one locale | entry, language, revision, source version, translation content hash, publication snapshot, approval bundle nullable, published by/at, optional scheduled activation time, unpublished at; one active publication per entry/language |
+| `content.article_details`                     | Article-only metadata                                              | entry PK/FK, article date, featured state                                                                                                                                                                                           |
+| `content.fixed_information_details`           | Fixed-information metadata                                         | entry PK/FK, topic code, review interval days                                                                                                                                                                                       |
+| `content.basic_information_details`           | Basic-information tile metadata                                    | entry PK/FK, icon, priority, matching service-category filter, emergency flag                                                                                                                                                       |
+| `content.editorial_custodianships`            | Effective-dated administrative control of an entry                 | entry, custodian kind (`organization`/`platform`), nullable organisation, started/ended times, accepted by; one active row                                                                                                          |
+| `content.editorial_custody_transfer_requests` | Admin-only proposed custody change                                 | entry, source custodian, destination kind/organisation, initiator, state, token hash, expiry, accepted/declined/cancelled times and actors                                                                                          |
+| `content.editorial_custody_transfer_events`   | Append-only transfer history and notes                             | transfer request, actor, event type, safe note, time                                                                                                                                                                                |
 
 `structured_body` may use a versioned editor JSON format, but it must be validated and rendered through an allowlist. Keep `plain_text_fallback` for low-bandwidth rendering and search.
 
 ### Sources, approvals, relationships, and review
 
-| Table                                      | Purpose                                                                 | Important columns                                                                                                                      |
-| ------------------------------------------ | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `content.sources`                          | Traceable factual source                                                | title, publisher, URL/reference, source/retrieval dates, owner                                                                         |
-| `content.editorial_revision_sources`       | Sources supporting a revision                                           | revision, source, role, display order                                                                                                  |
-| `content.editorial_revision_organizations` | Organisations named in or responsible for the authored revision         | revision, organisation, relationship role; public attribution is separately sealed in the approval bundle                              |
-| `content.review_tasks`                     | Review/freshness queue                                                  | entity/revision, assignee, due date, status, resolution                                                                                |
-| `content.editorial_related_entries`        | Editorial relationships                                                 | source entry, related entry, relation kind                                                                                             |
-| `content.editorial_related_services`       | Related service links                                                   | entry, service, relation kind, display order                                                                                           |
-| `content.editorial_related_organizations`  | Related association links                                               | entry, organisation, relation kind, display order                                                                                      |
-| `content.editorial_revision_assets`        | Download/media embedded or attached to an exact authored revision       | revision, asset, role, language, display order, optional structured block key                                                          |
-| `content.translation_jobs`                 | Provider-neutral AI translation request/provenance                      | entity kind/ID, source/target language, source revision/hash, method, provider/model/job ID, state, requester, created/completed times |
-| `content.translation_provenance`           | Public notice and review provenance attached to a typed translation row | translation job, translated entity kind/ID, method, AI-used flag, reviewer, verified time                                              |
+| Table                                      | Purpose                                                                 | Important columns                                                                                                                                |
+| ------------------------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `content.sources`                          | Traceable factual source                                                | title, publisher, URL/reference, source/retrieval dates, owner                                                                                   |
+| `content.editorial_revision_sources`       | Sources supporting a revision                                           | revision, source, role, display order                                                                                                            |
+| `content.editorial_revision_organizations` | Organisations named in or responsible for the authored revision         | revision, organisation, relationship role; public attribution is separately sealed in the approval bundle                                        |
+| `content.review_tasks`                     | Review/freshness queue                                                  | entity/revision, assignee, due date, status, resolution                                                                                          |
+| `content.editorial_related_entries`        | Editorial relationships                                                 | source entry, related entry, relation kind                                                                                                       |
+| `content.editorial_related_services`       | Related service links                                                   | entry, service, relation kind, display order                                                                                                     |
+| `content.editorial_related_organizations`  | Related association links                                               | entry, organisation, relation kind, display order                                                                                                |
+| `content.editorial_related_contacts`       | Related safe contact links                                              | entry, contact                                                                                                                                   |
+| `content.editorial_revision_assets`        | Download/media embedded or attached to an exact authored revision       | revision, asset, role, language, display order, optional structured block key                                                                    |
+| `content.translation_jobs`                 | Provider-neutral AI translation request/provenance                      | entity kind/ID, immutable source version, target language, method, provider/model/job ID, state, output payload/hash, requester, lifecycle times |
+| `content.translation_provenance`           | Public notice and review provenance attached to a typed translation row | translation job, translated entity kind/ID, method, AI-used flag, reviewer, verified time                                                        |
 
 The public outdated warning is derived from the published revision's `unreliable_from`; it should not be stored as manually edited display text. Public translation views derive a localized “translated from X to Y using AI” notice from `translation_provenance` whenever `ai_used = true`, including after human verification.
 
 Custody transfer does not update historical revision organisations or publication parties. A transaction locks the entry, validates source-admin/platform-admin authority and destination acceptance, ends the old custodianship, and inserts the new row. Moving a user between organisation memberships does not call this workflow.
+
+### Translator assignments (Phase 1.3)
+
+Human translator link sharing (`PHASE-1.3-COLLABORATION.md`) stays distinct
+from the AI `translation_jobs`/`translation_provenance` tables above. A sender
+assigns one pinned content source version and target language to one external
+translator who has no account or dashboard access.
+
+| Table                                   | Purpose                                                              | Important columns                                                                                                                                                                                                                                                  |
+| --------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `content.translation_source_versions`   | Immutable translatable source for one content version                | organisation nullable, polymorphic entity kind/ID, version, previous version, optional editorial revision ID, source language, canonical source payload/hash, impact, author, created time                                                                         |
+| `content.translation_assignments`       | Expiring assignment pinned to one source version and target language | organisation, polymorphic entity kind/ID, source version, target language, translator email/name, assigner, hashed activation token, consumed/expiry/expired/revocation times, state, submitted target payload/hash, review/promotion/publication actors and times |
+| `content.translation_assignment_events` | Explicit per-assignment state-transition history                     | assignment, from/to state, actor user (sender/reviewer) or `by_translator` flag, note, created time                                                                                                                                                                |
+
+The source and assignment targets are polymorphic over `editorial_entry`,
+`activity`, and `public_event`. This is the documented `content.review_tasks`
+exception because the workflow spans three typed content tables. Application
+services validate each generic entity reference. The source-version row freezes
+the payload a translator sees; activity or event edits cannot alter an open
+assignment. Assignment rows reference the immutable source-version primary key;
+the creation service validates that their denormalized organisation and entity
+scope matches that source. This avoids making assignment integrity depend on a
+replaceable composite unique constraint during push-mode schema synchronization.
+For the same reason, publication services validate the matching typed
+translation row transactionally instead of expressing that redundant pairing
+as a composite foreign key; the content identity and source version still have
+ordinary primary-key foreign keys.
+
+The emailed link uses an opaque route and reveals no entity ID. The database
+stores the token hash. The first valid request consumes the raw token, creates a
+scoped HttpOnly assignment session, and redirects to a token-free URL. At most
+one live assignment exists per item and target language. A revoked or rejected
+assignment, recorded expiry, or completed publication frees the slot. The
+assignment-creation transaction records expiry on an elapsed predecessor before
+inserting its replacement.
+
+The assignment holds submitted target text until a reviewer accepts and
+promotes it into the content type's translation row. A separate publication
+action requires the relevant content publication permission. Assignment state
+follows `requested -> draft -> submitted -> reviewed -> accepted | rejected ->
+published`; content translation quality remains independent.
+
+Source versions classify translation impact as `initial`, `none`,
+`review_required`, or `regenerate`. The service may use `none` only when the
+canonical translatable payload did not change. A reviewer confirms any carried-
+forward verified translation before the publication service keeps it active for
+the new source version.
+
+The source-version creation transaction locks the latest row for the item,
+requires `previous_version_id` to reference that same item and organisation,
+increments `version` by one, canonicalizes the payload, and calculates the
+SHA-256 hash. The database enforces the first-version and predecessor-presence
+shape; the transaction enforces adjacency and tenant scope.
 
 ## 9. Files, PDFs, Audio, and Video
 
@@ -438,7 +535,7 @@ Binary files belong in private/public object storage, not PostgreSQL.
 
 Article media roles include `cover_image`, `inline_image`, `gallery_image`, `video`, `video_poster`, `audio`, and `attachment`. Images require localized alt text or an explicit decorative role. Video publication requires a poster/thumbnail, caption or transcript policy, rights confirmation, processing success, and a low-bandwidth representation.
 
-Storage keys must be opaque. Signed document storage uses the separate `documents` schema and private bucket; it must never reuse a public asset URL.
+Storage keys must be opaque. The authoring UI uploads directly to a private S3-compatible bucket with a short-lived, content-type and size-bound signed URL. The application creates the pending asset row before upload; a cleanup job removes abandoned pending objects and rows after the approved retention window. Publication fails until rights are confirmed, required localized accessibility metadata exists, and malware/media processing reports `clean`. Public delivery uses an approved rendition or signed delivery layer, never the private upload URL. Signed document storage uses the separate `documents` schema and private bucket; it must never reuse a public asset URL.
 
 ## 10. Information Simulator
 
@@ -446,15 +543,15 @@ The simulator is an immutable, versioned directed graph. Draft editing happens o
 
 ### Flow and version tables
 
-| Table                           | Purpose                                              | Important columns                                                                                          |
-| ------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `simulator.flows`               | Stable simulator identity                            | slug, owner organisation nullable, title key, status, archived time                                        |
-| `simulator.flow_versions`       | Immutable version envelope                           | flow, version number, entry node, owner, source summary, last reviewed, review due, status, published time |
-| `simulator.nodes`               | Question, information, or result node                | version, stable node key, node kind, optional/help flags, owner, review metadata                           |
-| `simulator.node_translations`   | Prompt, explanation, result heading/body, disclaimer | node, language, translation state                                                                          |
-| `simulator.options`             | Selectable answer for a question                     | node, stable option key, sort order, prefer-not-to-say flag                                                |
-| `simulator.option_translations` | Answer label/help by language                        | option, language, translation state                                                                        |
-| `simulator.edges`               | Allowed transition in the graph                      | version, from node, optional option, to node, priority; unique transition                                  |
+| Table                           | Purpose                                              | Important columns                                                                                                        |
+| ------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `simulator.flows`               | Stable simulator identity                            | slug, internal workspace name, owner organisation nullable, city nullable, archived/created/updated times                |
+| `simulator.flow_versions`       | Immutable version envelope                           | flow, version number, entry node key, source language, source summary, last reviewed, review due, status, published time |
+| `simulator.nodes`               | Question, information, or result node                | version, stable node key, node kind, optional flag, workspace canvas X/Y position                                        |
+| `simulator.node_translations`   | Prompt, explanation, result heading/body, disclaimer | node, language, translation state                                                                                        |
+| `simulator.options`             | Selectable answer for a question                     | node, stable option key, sort order, prefer-not-to-say flag                                                              |
+| `simulator.option_translations` | Answer label/help by language                        | option, language, translation state                                                                                      |
+| `simulator.edges`               | Allowed transition in the graph                      | version, from node, optional option, to node, priority; unique transition                                                |
 
 ### Reviewed result composition
 
@@ -479,24 +576,24 @@ Before publishing, validate that:
 
 ## 11. Publishing Snapshots and Moderation
 
-Places, services, events, profiles, and downloads are typed mutable records. Editorial records already have typed revisions. An `organization_id` on a typed record identifies its coordinating tenant/data custodian; it does not cap public attribution at one organisation. The following immutable publication layer makes every public representation attributable and reversible and supports approval by several organisations:
+Places, services, events, profiles, and downloads are typed mutable records. Editorial records already have typed revisions. An `organization_id` on a typed record identifies its coordinating tenant/data custodian; it does not cap creator, provider, verifier, or public attribution at one organisation. The following immutable publication layer makes every public representation attributable and reversible and supports approval by several organisations:
 
-| Table                                    | Purpose                                                                                                          | Important columns                                                                                                                                                            |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content.publication_snapshots`          | Immutable exact public projection                                                                                | entity kind, entity ID, version, locale, source bundle, approved-party-set hash, payload JSON/hash, actor/system cause, created time                                         |
-| `content.publication_approval_bundles`   | Immutable manifest submitted for organisation approval                                                           | entity kind/ID, optional typed editorial revision, manifest version, manifest hash, creator, sealed/superseded times                                                         |
-| `content.publication_bundle_snapshots`   | Exact localized public views included in a bundle                                                                | bundle, snapshot, locale, display scope; unique bundle/snapshot                                                                                                              |
-| `content.publication_bundle_assets`      | Exact audio, video, image, or file variants covered by approval                                                  | bundle, asset/variant, role, language, content hash                                                                                                                          |
-| `content.publication_parties`            | Every organisation proposed for public attribution on that exact bundle                                          | bundle, organisation, attribution role code, display order; unique bundle/organisation/role                                                                                  |
-| `content.publication_party_fragments`    | Structured logos, attribution rows, claims, and body/media block keys conditional on one organisation's approval | bundle, organisation, fragment kind/key, asset nullable, display order                                                                                                       |
-| `content.publication_approval_requests`  | Secure email-linked review request for one organisation                                                          | bundle, organisation, authorised representative member, verified `auth.user_emails` record, token hash, state, sent/viewed/token-consumed/expiry/cancelled/invalidated times |
-| `content.publication_approval_decisions` | Append-only approval or decline evidence                                                                         | request, bundle hash, organisation, representative/member, verified-email evidence, decision, decided at, safe evidence metadata                                             |
-| `content.publication_approval_messages`  | Revision-linked discussion between requester and representative                                                  | request, author user/member, body, created time, optional supersedes message; notify participants through outbox                                                             |
-| `content.publication_approval_events`    | Append-only request/reminder/view/decision lifecycle                                                             | request, actor, event type, safe metadata, time                                                                                                                              |
-| `content.publication_snapshot_parties`   | Organisations visible in one immutable public projection                                                         | snapshot, organisation, attribution role, display order, approval decision                                                                                                   |
-| `content.active_publications`            | Snapshot currently served                                                                                        | entity kind, entity ID, locale, snapshot, approval bundle nullable, published by/at                                                                                          |
-| `content.moderation_cases`               | Duplicate, impersonation, conflict, unsafe content, suspension                                                   | organisation, entity reference, reason, status, assignee, resolution                                                                                                         |
-| `content.moderation_events`              | Append-only case history                                                                                         | case, actor, action, reason, time                                                                                                                                            |
+| Table                                    | Purpose                                                                                                          | Important columns                                                                                                                                                              |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `content.publication_snapshots`          | Immutable exact public projection                                                                                | entity kind, entity ID, version, locale, source bundle, approved-party-set hash, payload JSON/hash, actor/system cause, created time                                           |
+| `content.publication_approval_bundles`   | Immutable manifest submitted for organisation approval                                                           | entity kind/ID, optional typed editorial revision, manifest version, manifest hash, creator, sealed/superseded times                                                           |
+| `content.publication_bundle_snapshots`   | Exact localized public views included in a bundle                                                                | bundle, snapshot, locale, display scope; unique bundle/snapshot                                                                                                                |
+| `content.publication_bundle_assets`      | Exact audio, video, image, or file variants covered by approval                                                  | bundle, asset/variant, role, language, content hash                                                                                                                            |
+| `content.publication_parties`            | Every organisation proposed for public attribution on that exact bundle                                          | bundle, organisation, attribution role code, display order; unique bundle/organisation/role                                                                                    |
+| `content.publication_party_fragments`    | Structured logos, attribution rows, claims, and body/media block keys conditional on one organisation's approval | bundle, organisation, fragment kind/key, asset nullable, display order                                                                                                         |
+| `content.publication_approval_requests`  | Secure email-linked review request for one organisation                                                          | bundle, organisation, authorised representative member/user, verified account email snapshot, token hash, state, sent/viewed/token-consumed/expiry/cancelled/invalidated times |
+| `content.publication_approval_decisions` | Append-only approval or decline evidence                                                                         | request, bundle hash, organisation, representative/member, verified-email evidence, decision, decided at, safe evidence metadata                                               |
+| `content.publication_approval_messages`  | Revision-linked discussion between requester and representative                                                  | request, author user/member, body, created time, optional supersedes message; notify participants through outbox                                                               |
+| `content.publication_approval_events`    | Append-only request/reminder/view/decision lifecycle                                                             | request, actor, event type, safe metadata, time                                                                                                                                |
+| `content.publication_snapshot_parties`   | Organisations visible in one immutable public projection                                                         | snapshot, organisation, attribution role, display order, approval decision                                                                                                     |
+| `content.active_publications`            | Snapshot currently served                                                                                        | entity kind, entity ID, locale, snapshot, approval bundle nullable, published by/at                                                                                            |
+| `content.moderation_cases`               | Duplicate, impersonation, conflict, unsafe content, suspension                                                   | organisation, entity reference, reason, status, assignee, resolution                                                                                                           |
+| `content.moderation_events`              | Append-only case history                                                                                         | case, actor, action, reason, time                                                                                                                                              |
 
 The bundle manifest is canonicalized before hashing. It includes the exact snapshot hashes, translation set, asset hashes, sources, freshness dates, claims, and ordered public attribution. A request stores only a hash of its single-use token. Email is the notification/identity-verification channel; the decision is recorded in the application after the representative reviews the complete manifest. The representative must be an active member of the requested organisation, the selected verified email must belong to that member's linked global user, and the member must hold the joint-publication approval permission at decision time.
 
@@ -506,11 +603,23 @@ The public projection contains only parties with a valid `approved` decision for
 
 Implement projection activation in one idempotent database transaction or transactional outbox consumer. It checks bundle immutability, snapshot hashes, visible-party/decision equality, organisation publishing status, provider/logo requirements, and permissions before writing `active_publications`. Initial publication requires at least one approved party. Every subsequent approval produces the same result if the worker retries.
 
+For articles, activities, and public events, an authorised source publication
+may activate before target translations are ready. `active_publications` keeps
+locale activation separate from translation quality. A requested locale with
+no verified active snapshot receives the current source snapshot and a
+localized fallback notice that names the source language. The public read model
+never substitutes machine-generated, rejected, stale, or unreviewed target
+text. A translation reviewer may promote accepted text into a verified
+translation row; only an actor with the content publication permission may
+activate its locale snapshot.
+
 The generic entity reference in publication/moderation tables is a deliberate exception because it spans several typed content tables. Application services must validate that the referenced typed entity exists. Editorial content and simulator graphs retain stronger typed revision foreign keys because their revision history is central to their behavior.
 
 ## 12. Team Members, Teams, Skills, and Languages
 
 `core.organization_members` is the primary staff/volunteer/intern record. Operational profile extensions stay outside the login account.
+
+Phase 1 already ships two minimal workspace facets in the `core` schema: `core.member_skills` (`member_id`, `skill` text) and `core.member_languages` (`member_id`, `language_code`). They are admin-authored, stay private to the organisation, and feed activity-assignment expertise; public attribution is approved per assignment and never derives from them. The richer verification-tracking `operations.member_skills`/`operations.member_languages` below (organisation-scoped, with level, verification actor/time, and expiry) are the Phase 2+ proposal that supersedes them.
 
 | Table                                             | Purpose                                                     | Important columns                                                                                                                                                                         |
 | ------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -747,39 +856,50 @@ Do not expose content authoring tables directly to the anonymous API. Create rea
 
 ```text
 public_api.organization_profiles
-public_api.service_search
-public_api.service_occurrences
+public_api.activity_search
+public_api.activity_occurrences
 public_api.public_events
 public_api.editorial_content
 public_api.downloads
 public_api.simulator_versions
 ```
 
-These views include active publication snapshots, safe contacts, verified taxonomies, per-service feature assignments and translated labels/details, permitted translations, approved provider names/logos, audience labels/details, and organisations listed in `publication_snapshot_parties`. They exclude pending parties/fragments, approval-recipient identities, draft metadata, internal contacts, member identities, assignments, coordination events, inventory, audit notes, and document references.
+These views include active activity publication snapshots, safe contacts, verified taxonomies, activity-to-service assignments and translated labels/details, permitted translations, approved provider names/logos, audience labels/details, organisations listed in `publication_snapshot_parties`, and—only where explicitly approved—the assignment's separately authored public display name/expertise. They exclude the underlying member identity/row, email, user ID, private name/profile, team membership, availability, other assignments, pending parties/fragments, approval-recipient identities, draft metadata, internal contacts, coordination events, inventory, audit notes, and document references.
 
-For autocomplete, create a materialized `public_api.search_suggestions` read model with language, normalized term, display label, suggestion kind (`location`, `organization`, `need`, `service`, `service_feature`, `speciality`), target ID, subtitle, optional point/bounds, and rank. Build it from active place/address/landmark translations, approved organisation names/aliases, search concepts/aliases, service categories, service features, specialities, and active service snapshots. Use `unaccent`, `pg_trgm`, normalized prefix indexes, and language-aware `tsvector`/GIN indexes where supported. Return grouped kinds and stable target IDs; search remains a derived read model.
+For autocomplete, create a materialized `public_api.search_suggestions` read model with language, normalized term, display label, suggestion kind (`location`, `organization`, `need`, `activity`, `service`, `speciality`), target ID, subtitle, optional point/bounds, and rank. Build it from active place/address/landmark translations, approved organisation names/aliases, search concepts/aliases, activity categories, reusable services, specialities, and active activity snapshots. Use `unaccent`, `pg_trgm`, normalized prefix indexes, and language-aware `tsvector`/GIN indexes where supported. Return grouped kinds and stable target IDs; search remains a derived read model.
 
 ## 20. Key Constraints and Indexes
 
 At minimum:
 
-- Globally unique `auth.user_emails.normalized_email`; this protects account identity and does not constrain organisation membership.
-- One primary email per user through a partial unique index.
+- Exactly one normalized `auth.users.email` per account, with a global case-insensitive unique index; this protects account identity and does not constrain organisation membership.
 - Unique organisation slug.
 - Unique `(organization_id, user_id)` membership identity where `user_id` is not null; the same user ID may appear in other organisations.
+- Unique `(organization_id, contact_email)` for non-null normalized email-first memberships; identity linking updates the stable row rather than recreating assignments.
+- Unique one city team per `(organization_id, city_id)`; composite tenant foreign keys prevent a member or activity from being attached across organisations.
+- Activity coordinating team belongs to the coordinating organisation; a null organisation/team is allowed only for provisional unknown-provider intake.
+- Unique activity creator/provider relationship per `(activity_id, organization_id)`, with several organisations allowed per activity.
+- Unique reusable-service assignment `(activity_id, service_id)` and member assignment `(activity_id, member_id)`.
+- Activity verification and occurrence-confirmation evidence is append-only and organisation-scoped; an organisation confirms a given activity/date at most once, while a separate platform-intake confirmation may exist.
+- Schedule exceptions require both or neither time boundary, enforce ordered partial windows, and reject overlapping effective windows transactionally; several non-overlapping windows of the same kind may exist on one date.
 - Engagement indexes on `(organization_id, member_id, started_at, ended_at)` and an optional one-active-engagement partial unique constraint.
 - Unique taxonomy codes.
-- Unique tag code within `(organization_id, namespace)`, with a separate/global null-safe uniqueness rule.
-- Unique translation `(parent_id, language_code)`.
+- Unique tag code within `(organization_id, namespace)`, with a separate/global null-safe uniqueness rule. A translated tag label is also unique per language within its platform or organisation scope, regardless of namespace, after trimming, internal-whitespace normalization, and case folding.
+- Unique translation `(parent_id, language_code)`. Reusable-service translated names follow the same normalized per-language, per-platform-or-organisation-scope uniqueness rule. Service-category translated labels are normalized and unique per language across the platform because categories are platform-only.
+- Unique translation source version `(entity_kind, entity_id, version)`, with an entity/hash index for comparison and carry-forward checks.
+- At most one live translator assignment per `(entity_kind, entity_id, target_language_code)`; its source version must match the same organisation and entity scope.
 - Unique editorial revision `(entry_id, revision_number)`.
+- Unique editorial route `(language_code, slug)`, including retired routes, and at most one active route per `(entry_id, language_code)`.
+- At most one cover asset per editorial entry; every published entry asset has confirmed rights, required accessibility metadata, and a clean safety scan.
 - One active editorial publication per `(entry_id, language_code)`.
+- One active activity publication per `(activity_id, language_code)` and public-event publication per `(event_id, language_code)`.
 - Exactly one active editorial custodianship per entry; an accepted transfer atomically ends the prior row and starts the destination row.
 - Unique publication bundle hash and immutable sealed bundle contents.
 - Unique publication party `(bundle_id, organization_id, attribution_role_code)` and deterministic display order.
 - Unique approval-request token hash, with at most one active request per `(bundle_id, organization_id)`.
 - At most one terminal approval decision per request; resending may rotate the token, while a new decision attempt uses a new request.
 - An approval decision's organisation and bundle hash must match its request and an organisation listed in `publication_parties`.
-- An approval request's representative must belong to its organisation; its selected `auth.user_emails` row must be verified and belong to that member's linked user. Enforce the cross-table identity check in the approval transaction/trigger.
+- An approval request's representative must belong to its organisation; the linked user's sole `auth.users.email` must be verified when the request is issued. Store an immutable recipient snapshot and enforce the cross-table identity check in the approval transaction/trigger.
 - Every `publication_snapshot_parties` row must reference an approved decision for the snapshot's exact source bundle/hash; unapproved party fragments cannot enter the snapshot payload.
 - Any number of organisation specialities, with a partial unique constraint on the one effective verified assignment marked primary.
 - A published service/event requires exactly one active audience policy and at least one effective verified provider; provider organisation/name/logo appears in its snapshot.
@@ -847,9 +967,9 @@ Define physical foreign keys in the table files. Define Drizzle query relations 
 1. PostgreSQL extensions and schemas: `pgcrypto`, `unaccent`, `pg_trgm`, optional `postgis`, domain schemas.
 2. `core.languages`, `auth.users`, and authentication support tables.
 3. Organisations, verification, members, engagement types/periods, invitations, legal acceptance, roles, and permissions.
-4. Taxonomies, audiences, search concepts/aliases, service features, tags, typed tag assignments, public profiles, speciality change history, contacts, places, services, feature assignments, and provider joins.
-5. Schedule rules, exceptions, public events, and occurrence generation.
-6. Editorial entries, custodianships/transfers, revisions, translations/provenance, sources, immutable approval bundles/party fragments/messages/projections, files, and public read models.
+4. Taxonomies, audiences, search concepts/aliases, reusable services, tags, typed tag assignments, public profiles, speciality change history, contacts, places, city teams, activities, activity-service assignments, creator/provider joins, verification evidence, attached assets, and activity claim/custody history.
+5. Activity schedule rules, exceptions, organisation-scoped date confirmations, public events, and occurrence generation.
+6. Editorial entries, custodianships/transfers, revisions, immutable translation source versions, translation provenance/assignments, per-locale publication pointers, sources, immutable approval bundles/party fragments/messages/projections, files, and public read models.
 7. Simulator flows, immutable graph versions, translations, source/result links, and validation.
 8. Teams, skills, languages, driving permits, training, availability, absences, calendar events/imports, typed requirements, checks, and assignments.
 9. Restricted document templates, member documents, signers, files, evidence, and access grants.
@@ -867,11 +987,12 @@ Define physical foreign keys in the table files. Define Drizzle query relations 
 - How far ahead public and private recurring occurrences are materialized.
 - Signature provider, required signature levels, identity checks, webhook contract, and evidence retention.
 - Required document types and retention periods for each pilot association.
-- Which of the 15 languages must block publication when missing versus visibly fall back.
+- Which content outside articles, activities, and public events requires target languages to block publication rather than use a visible source fallback.
 - Whether association editors may publish directly or require reviewer approval per content type.
 - Which organisation roles may approve joint content, how verified representative endpoints are established, approval-link lifetime/reminders, note retention, and evidence-retention periods.
 - Projection activation timing and validation of conditional organisation fragments/free-text mentions.
 - Article custody-transfer expiry, platform-custody policy, and recovery when the source organisation has no active admin.
+- Activity claim/transfer expiry, representative evidence retention, assignment reconfirmation policy, and the rules for transferring versus copying attached asset custody.
 - AI translation provider/provenance retention and the content types allowed to leave the platform for translation.
 - Driving-permit categories, language proficiency scale, training verification/evidence, field-purpose policies, and override permissions.
 - Inventory units/tracking policies, negative-stock policy, cost permissions, cross-organisation transfer mapping, physical-count procedure, and ledger-retention/export rules.

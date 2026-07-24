@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  doublePrecision,
   integer,
   primaryKey,
   text,
@@ -33,6 +34,7 @@ import { services } from "./services";
 export const flows = simulator.table("flows", {
   id: uuid("id").primaryKey().defaultRandom(),
   slug: varchar("slug", { length: 150 }).notNull().unique(),
+  internalName: varchar("internal_name", { length: 180 }).notNull(),
   ownerOrganizationId: uuid("owner_organization_id").references(
     () => organizations.id,
   ),
@@ -55,6 +57,9 @@ export const flowVersions = simulator.table(
       .references(() => flows.id, { onDelete: "cascade" }),
     versionNumber: integer("version_number").notNull(),
     entryNodeKey: varchar("entry_node_key", { length: 50 }),
+    sourceLanguageCode: varchar("source_language_code", { length: 35 })
+      .notNull()
+      .references(() => languages.code),
     status: flowVersionStatus("status").notNull().default("draft"),
     sourceSummary: text("source_summary"),
     lastReviewedAt: timestamp("last_reviewed_at", { withTimezone: true }),
@@ -79,6 +84,8 @@ export const nodes = simulator.table(
     nodeKey: varchar("node_key", { length: 50 }).notNull(),
     kind: simulatorNodeKind("kind").notNull(),
     optional: boolean("optional").notNull().default(true),
+    positionX: doublePrecision("position_x").notNull().default(0),
+    positionY: doublePrecision("position_y").notNull().default(0),
   },
   (t) => [uniqueIndex("nodes_version_key_uq").on(t.versionId, t.nodeKey)],
 );

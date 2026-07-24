@@ -251,19 +251,24 @@ export function AuthShell({
 export function AuthTextField({
   id,
   label,
+  labelAction,
   description,
   inputProps,
 }: {
   id: string;
   label: string;
+  labelAction?: ReactNode;
   description?: string;
   inputProps?: Omit<ComponentProps<typeof Input>, "id">;
 }) {
   return (
     <YStack gap="$calais2">
-      <Label htmlFor={id} fontSize="$3" fontWeight="600">
-        {label}
-      </Label>
+      <XStack alignItems="center" justifyContent="space-between" gap="$calais3">
+        <Label htmlFor={id} fontSize="$3" fontWeight="600" flexShrink={1}>
+          {label}
+        </Label>
+        {labelAction}
+      </XStack>
       <Input
         id={id}
         minHeight={44}

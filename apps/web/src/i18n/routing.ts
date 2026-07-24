@@ -1,4 +1,10 @@
-import { isLocale, supportedLocales, type Locale } from "@calais/shared/i18n";
+import {
+  isPublicLocale,
+  publicSupportedLocales,
+  supportedLocales,
+  type Locale,
+  type PublicLocale,
+} from "@calais/shared/i18n";
 
 export type AuthRoute = "login" | "check" | "error" | "verify";
 
@@ -13,7 +19,7 @@ type QueryValue = string | number | boolean | null | undefined;
 
 export function localizedPath(
   pathname: string,
-  locale: Locale,
+  locale: PublicLocale,
   query: Readonly<Record<string, QueryValue>> = {},
 ): string {
   const normalizedPath =
@@ -32,7 +38,7 @@ export function localizedPath(
 /** Removes the leading route locale so the same page can be relocalized. */
 export function unlocalizedPath(pathname: string): string {
   const segments = pathname.split("/");
-  if (isLocale(segments[1])) segments.splice(1, 1);
+  if (isPublicLocale(segments[1])) segments.splice(1, 1);
   const path = segments.join("/");
   return path === "" ? "/" : path;
 }
@@ -56,20 +62,20 @@ export function authLanguageAlternates(
   } as Record<Locale | "x-default", string>;
 }
 
-export function localeStaticParams(): Array<{ locale: Locale }> {
-  return supportedLocales.map((locale) => ({ locale }));
+export function localeStaticParams(): Array<{ locale: PublicLocale }> {
+  return publicSupportedLocales.map((locale) => ({ locale }));
 }
 
 export function languageAlternates(
   pathname: string,
-): Record<Locale | "x-default", string> {
+): Record<PublicLocale | "x-default", string> {
   return {
     ...Object.fromEntries(
-      supportedLocales.map((locale) => [
+      publicSupportedLocales.map((locale) => [
         locale,
         localizedPath(pathname, locale),
       ]),
     ),
     "x-default": localizedPath(pathname, "fr"),
-  } as Record<Locale | "x-default", string>;
+  } as Record<PublicLocale | "x-default", string>;
 }

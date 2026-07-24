@@ -1,4 +1,4 @@
-import type { Locale } from "@calais/shared/i18n";
+import type { PublicLocale } from "@calais/shared/i18n";
 
 import { siteConfig } from "~/seo/site";
 
@@ -7,7 +7,7 @@ export function WebsiteJsonLd({
   description,
   url,
 }: {
-  locale: Locale;
+  locale: PublicLocale;
   description: string;
   url: string;
 }) {

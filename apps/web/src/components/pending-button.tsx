@@ -2,7 +2,10 @@
 
 import { useFormStatus } from "react-dom";
 
-import { buttonVariants } from "~/components/ui";
+import {
+  Button,
+  type WorkspaceButtonVariant,
+} from "~/components/admin/workspace";
 
 /**
  * Submit button with built-in pending feedback — every one-tap action in
@@ -12,20 +15,29 @@ import { buttonVariants } from "~/components/ui";
 export function PendingButton({
   variant = "primary",
   className = "",
+  name,
+  value,
+  disabled = false,
   children,
 }: {
-  variant?: keyof typeof buttonVariants;
+  variant?: WorkspaceButtonVariant;
   className?: string;
+  name?: string;
+  value?: string;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   const { pending } = useFormStatus();
   return (
-    <button
-      disabled={pending}
+    <Button
+      disabled={pending || disabled}
       aria-busy={pending}
-      className={`rounded-[10px] px-3 py-1.5 text-sm font-semibold transition-opacity disabled:opacity-50 ${buttonVariants[variant]} ${className}`}
+      variant={variant}
+      className={className}
+      name={name}
+      value={value}
     >
       {children}
-    </button>
+    </Button>
   );
 }

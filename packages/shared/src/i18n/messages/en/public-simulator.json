@@ -1,0 +1,22 @@
+{
+  "simulator.brand": "Calais Info",
+  "simulator.languages": "Choose language",
+  "simulator.privacy": "Your answers stay private",
+  "simulator.privacyDetail": "Answers remain only on this screen. They are not saved, sent, linked to an identity or included in analytics. Start again at any time to clear them.",
+  "simulator.source": "Reviewed information path",
+  "simulator.lastReviewed": "Last reviewed",
+  "simulator.reviewDue": "Next review due",
+  "simulator.notAvailable": "Not available",
+  "simulator.fallback": "This path is not yet available in your language. Reviewed source-language content is shown instead.",
+  "simulator.preview": "Private preview — not published",
+  "simulator.previewDetail": "This is the visitor view for testing. Draft and demo content remains private and cannot appear on the public route.",
+  "simulator.begin": "Start",
+  "simulator.continue": "Continue",
+  "simulator.back": "Back",
+  "simulator.startAgain": "Start again",
+  "simulator.step": "Step {number}",
+  "simulator.question": "Question",
+  "simulator.information": "Information",
+  "simulator.result": "Your information",
+  "simulator.disclaimer": "Important"
+}

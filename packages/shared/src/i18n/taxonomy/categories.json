@@ -1,0 +1,93 @@
+{
+  "essentials": {
+    "fr": "Alimentation et boissons",
+    "en": "Food & drink",
+    "ar": "الطعام والشراب",
+    "fa": "غذا و نوشیدنی",
+    "prs": "غذا و نوشیدنی",
+    "ps": "خواړه او څښاک",
+    "ckb": "خواردن و خواردنەوە",
+    "ti": "ምግብን መስተያን",
+    "am": "ምግብ እና መጠጥ",
+    "om": "Nyaataa fi dhugaatii",
+    "so": "Cunto iyo cabbitaan"
+  },
+  "hygiene_material": {
+    "fr": "Hygiène",
+    "en": "Hygiene",
+    "ar": "النظافة",
+    "fa": "بهداشت",
+    "prs": "حفظ‌الصحه",
+    "ps": "پاکوالی",
+    "ckb": "پاکوخاوێنی",
+    "ti": "ጽሬት",
+    "am": "ንጽህና",
+    "om": "Qulqullina",
+    "so": "Nadaafad"
+  },
+  "health_wellbeing": {
+    "fr": "Santé et bien-être",
+    "en": "Health & wellbeing",
+    "ar": "الصحة والعافية",
+    "fa": "سلامت و بهزیستی",
+    "prs": "صحت و رفاه",
+    "ps": "روغتیا او هوساینه",
+    "ckb": "تەندروستی و خۆشگوزەرانی",
+    "ti": "ጥዕናን ደሓንነትን",
+    "am": "ጤና እና ደህንነት",
+    "om": "Fayyaa fi nageenya",
+    "so": "Caafimaad iyo fayo-qab"
+  },
+  "legal_orientation": {
+    "fr": "Information et droits",
+    "en": "Information & legal",
+    "ar": "المعلومات والحقوق",
+    "fa": "اطلاعات و حقوق",
+    "prs": "معلومات و حقوق",
+    "ps": "معلومات او حقوق",
+    "ckb": "زانیاری و ماف",
+    "ti": "ሓበሬታን መሰላትን",
+    "am": "መረጃ እና መብቶች",
+    "om": "Odeeffannoo fi mirga",
+    "so": "Macluumaad iyo xuquuq"
+  },
+  "shelter_access": {
+    "fr": "Accueil et accès",
+    "en": "Shelter & access",
+    "ar": "المأوى والوصول",
+    "fa": "سرپناه و دسترسی",
+    "prs": "سرپناه و دسترسی",
+    "ps": "سرپناه او لاسرسی",
+    "ckb": "پەناگە و دەستگەیشتن",
+    "ti": "መዕቆቢን ተበጻሕነትን",
+    "am": "መጠለያ እና ተደራሽነት",
+    "om": "Daʼoo fi dhaqqabummaa",
+    "so": "Hoy iyo helitaan"
+  },
+  "connectivity": {
+    "fr": "Communication et connexion",
+    "en": "Communication & connectivity",
+    "ar": "الاتصال والتواصل",
+    "fa": "ارتباطات و دسترسی",
+    "prs": "ارتباطات و دسترسی",
+    "ps": "اړیکې او اتصال",
+    "ckb": "پەیوەندی و تۆڕ",
+    "ti": "ርክብን መራኸብን",
+    "am": "ግንኙነት እና ተያያዥነት",
+    "om": "Qunnamtii fi walitti hidhamiinsa",
+    "so": "Isgaarsiin iyo isku xirnaanta"
+  },
+  "community": {
+    "fr": "Vie sociale et activités",
+    "en": "Community & activities",
+    "ar": "المجتمع والأنشطة",
+    "fa": "جامعه و فعالیت‌ها",
+    "prs": "جامعه و فعالیت‌ها",
+    "ps": "ټولنه او فعالیتونه",
+    "ckb": "کۆمەڵگا و چالاکییەکان",
+    "ti": "ማሕበረሰብን ንጥፈታትን",
+    "am": "ማህበረሰብ እና እንቅስቃሴዎች",
+    "om": "Hawaasaa fi sochiiwwan",
+    "so": "Bulsho iyo waxqabadyo"
+  }
+}

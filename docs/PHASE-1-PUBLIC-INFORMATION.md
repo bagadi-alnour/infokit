@@ -62,6 +62,8 @@ On small screens, combine lower-priority destinations under **More**, but keep M
 - Priority articles provide reviewed localized audio and may provide video, with accessible controls, captions/transcripts, duration/file-size metadata, no autoplay, and a low-bandwidth alternative.
 - Images require rights confirmation and localized alt text/equivalent description. Video requires a poster/thumbnail, captions/transcript policy, and low-bandwidth fallback.
 - AI-assisted translations display a localized note naming the source and target languages and stating that AI translated the text; human-review state appears separately.
+- The author selects one source language. Saving creates a draft source version; an authorised publisher activates that exact version after the normal publication gates pass.
+- Missing target translations do not block source publication. The requested locale displays the current source with a localized fallback notice until an authorised publisher activates a verified target translation.
 - Freshness question: **Could this information become outdated?**
 - When yes, show a reliability date and a public warning from that date.
 - Related services, associations, fixed information, and downloads.
@@ -128,9 +130,13 @@ Each public association profile includes:
 
 - Name and approved logo where permission exists.
 - Short purpose statement.
+- Organisation-confirmed founding year, goals, and values when supplied; these
+  remain optional profile detail and do not displace current service information.
 - Any number of verified specialities, with at most one optional primary. Organisations that provide several services with equal weight (water and food, shower and laundry, mental and physical care) mark no primary, and the card shows up to five co-equal specialities; otherwise it shows the primary plus up to four secondary specialities.
 - Speciality icons with visible text labels.
 - Locations, schedules, supported languages, accessibility information, safe contact methods, website, and last-verified date.
+- Official source and date checked for pre-onboarding drafts; neither substitutes
+  for organisation verification.
 - Service offerings grouped by activity and place. Each offering shows its own status, audience, next opening, short description, and icon-labelled included features.
 - Related articles and downloads.
 
@@ -176,18 +182,43 @@ Phase 1 includes the minimum account workflow needed for associations to publish
 2. The operator sends an expiring invitation to a designated representative.
 3. The representative accepts the invitation, creates credentials, and reviews publishing responsibilities.
 4. The representative receives only the association author/publisher permissions approved for Phase 1.
-5. The representative creates, translates, previews, and publishes articles owned by that association.
+5. The representative creates a source-language draft, previews fallback and translation states, and publishes articles owned by that association when their permissions allow it.
 6. Every action is versioned and audited.
 
 If the publisher changes organisation, offboarding removes access to the former organisation without moving its articles. The new organisation grants a separate membership. Historical revisions, factual ownership, public attribution, URLs, and audit events remain unchanged.
 
 There is no public organisation signup, self-initiated organisation request, or automatic workspace creation. The platform controls which organisations are invited. A Phase 1 invite does not grant member administration, team management, organisation settings, or access to another organisation.
 
+## Phase 1.3 Extension — Invited Verifier & Translator Collaboration
+
+Phase 1.3 is a narrow extension of this phase, specified in
+`PHASE-1.3-COLLABORATION.md`. It adds two controlled collaboration flows while
+preserving the Phase 1 public-information scope — it is not Phase 2 workspace
+onboarding.
+
+1. **Invited organisation verifier onboarding.** A verified organisation
+   representative accepts an invitation and joins as a Phase 1
+   publisher/verifier with an organisation-scoped experience limited to
+   reviewing and refreshing their organisation's public activity, service, and
+   article information and its freshness metadata. That representative may
+   invite a small, capped number of trusted colleagues into the same limited
+   workflow for the same organisation. No full workspace, org settings, team
+   management, inventory, or general role administration is granted.
+2. **Translator link sharing.** A user with the translation-request permission
+   assigns a pinned article, event, or activity source version and one target
+   language to an external translator through an opaque expiring link. The
+   translator exchanges the one-use token for a scoped session, sees only that
+   source and the target fields, and submits work without dashboard access.
+   Translation quality, assignment lifecycle, and locale publication remain
+   separate visible states.
+
+See `PHASE-1.3-COLLABORATION.md` for the schema summary and full UX contract.
+
 ## Content Operations
 
 During Phase 1, content is managed through a restricted publishing tool shared by platform editors and invited association publishers according to their permissions. It must support:
 
-- Create, edit, preview, publish, unpublish, and archive.
+- Create, edit, preview, save as draft by default, publish immediately or at a scheduled date, unpublish, and archive.
 - Translation and verification state.
 - Content owner, source, last-reviewed date, and review/expiry date.
 - Service status and schedule exceptions.

@@ -1,0 +1,22 @@
+{
+  "simulator.brand": "Calais Info",
+  "simulator.languages": "Choisir la langue",
+  "simulator.privacy": "Vos réponses restent privées",
+  "simulator.privacyDetail": "Les réponses restent uniquement sur cet écran. Elles ne sont ni enregistrées, ni envoyées, ni liées à une identité, ni incluses dans les statistiques. Recommencez à tout moment pour les effacer.",
+  "simulator.source": "Parcours d’information vérifié",
+  "simulator.lastReviewed": "Dernière vérification",
+  "simulator.reviewDue": "Prochaine vérification",
+  "simulator.notAvailable": "Non disponible",
+  "simulator.fallback": "Ce parcours n’est pas encore disponible dans votre langue. Le contenu vérifié dans la langue source est affiché à la place.",
+  "simulator.preview": "Aperçu privé — non publié",
+  "simulator.previewDetail": "Voici la vue destinée au public pour les tests. Les brouillons et données de démonstration restent privés et ne peuvent pas apparaître sur la page publique.",
+  "simulator.begin": "Commencer",
+  "simulator.continue": "Continuer",
+  "simulator.back": "Retour",
+  "simulator.startAgain": "Recommencer",
+  "simulator.step": "Étape {number}",
+  "simulator.question": "Question",
+  "simulator.information": "Information",
+  "simulator.result": "Vos informations",
+  "simulator.disclaimer": "Important"
+}

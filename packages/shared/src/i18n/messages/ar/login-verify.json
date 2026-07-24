@@ -2,7 +2,7 @@
   "auth.verify.eyebrow": "التحقق الثاني",
   "auth.verify.title": "أكد رمز الرسالة النصية",
   "auth.verify.description": "أرسل رمزًا من ستة أرقام إلى {phone}. تنتهي صلاحيته بعد 10 دقائق.",
-  "auth.verify.signedInAs": "تم تأكيد البريد: {email}",
+  "auth.verify.signedInAs": "تم تسجيل الدخول باسم: {email}",
   "auth.verify.send": "إرسال رمز برسالة نصية",
   "auth.verify.sending": "جارٍ إرسال الرمز…",
   "auth.verify.codeLabel": "الرمز المكوّن من ستة أرقام",

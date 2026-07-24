@@ -79,6 +79,20 @@ export const translationMethod = pgEnum("translation_method", [
   "ai",
   "ai_then_human_review",
 ]);
+/** Effect of one source version on translations tied to its predecessor. */
+export const translationImpact = pgEnum("translation_impact", [
+  "initial",
+  "none",
+  "review_required",
+  "regenerate",
+]);
+export const translationJobState = pgEnum("translation_job_state", [
+  "queued",
+  "submitted",
+  "succeeded",
+  "failed",
+  "cancelled",
+]);
 /** RISKS.md R5: how precisely a place may be published. */
 export const locationPrecision = pgEnum("location_precision", [
   "exact",
@@ -100,6 +114,25 @@ export const holidayBehavior = pgEnum("holiday_behavior", [
   "closed",
   "open",
   "unchanged",
+]);
+/** Originating actor scope; this is provenance, not an RBAC role code. */
+export const activityActorScope = pgEnum("activity_actor_scope", [
+  "platform",
+  "organization",
+  "system",
+]);
+export const activityRelationshipState = pgEnum("activity_relationship_state", [
+  "proposed",
+  "confirmed",
+  "rejected",
+  "retired",
+]);
+export const activityClaimState = pgEnum("activity_claim_state", [
+  "pending",
+  "accepted",
+  "declined",
+  "expired",
+  "cancelled",
 ]);
 export const specialityAssignmentState = pgEnum("speciality_assignment_state", [
   "requested",
@@ -164,6 +197,30 @@ export const reviewTaskStatus = pgEnum("review_task_status", [
   "done",
   "dismissed",
 ]);
+
+/**
+ * Phase 1.3 translator collaboration (docs/PHASE-1.3-COLLABORATION.md).
+ * The explicit assignment lifecycle: a sender requests a translation, the
+ * external translator drafts and submits it, a reviewer reviews and then
+ * accepts or rejects it, and an accepted translation is finally published.
+ */
+export const translationAssignmentState = pgEnum(
+  "translation_assignment_state",
+  [
+    "requested",
+    "draft",
+    "submitted",
+    "reviewed",
+    "accepted",
+    "rejected",
+    "published",
+  ],
+);
+/** The public content types a translator link may target. */
+export const translationAssignmentEntity = pgEnum(
+  "translation_assignment_entity",
+  ["editorial_entry", "activity", "public_event", "simulator_flow"],
+);
 
 /* Assets and media (docs/DATABASE-SCHEMA.md §9) */
 export const mediaKind = pgEnum("media_kind", [

@@ -1,5 +1,8 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -28,6 +31,7 @@ import {
 } from "./schemas";
 import { services } from "./services";
 import { audienceCategories, serviceCategories } from "./taxonomies";
+import { translationSourceVersions } from "./translation-sources";
 
 /**
  * Public events — dated or recurring public activity such as a temporary
@@ -51,6 +55,10 @@ export const publicEvents = content.table(
     audienceCategoryId: uuid("audience_category_id")
       .notNull()
       .references(() => audienceCategories.id),
+    sourceLanguageCode: varchar("source_language_code", { length: 35 })
+      .notNull()
+      .default("fr")
+      .references(() => languages.code),
     minAge: smallint("min_age"),
     maxAge: smallint("max_age"),
     manualStatus: serviceManualStatus("manual_status")
@@ -105,8 +113,77 @@ export const publicEventTranslations = content.table(
     cancellationNote: text("cancellation_note"),
     state: translationState("state").notNull().default("draft"),
     method: translationMethod("method").notNull().default("human"),
+    sourceVersionId: uuid("source_version_id"),
+    contentHash: varchar("content_hash", { length: 64 }),
+    providerCode: varchar("provider_code", { length: 100 }),
+    providerJobReference: varchar("provider_job_reference", { length: 255 }),
+    carriedForwardFromSourceVersionId: uuid(
+      "carried_forward_from_source_version_id",
+    ),
+    verifiedById: varchar("verified_by_id", { length: 255 }).references(
+      () => users.id,
+    ),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
   },
-  (t) => [primaryKey({ columns: [t.eventId, t.languageCode] })],
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.languageCode] }),
+    foreignKey({
+      name: "public_event_translations_source_scope_fk",
+      columns: [t.sourceVersionId],
+      foreignColumns: [translationSourceVersions.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "public_event_translations_carried_source_scope_fk",
+      columns: [t.carriedForwardFromSourceVersionId],
+      foreignColumns: [translationSourceVersions.id],
+    }).onDelete("restrict"),
+  ],
+);
+
+/** Locale activation for one verified public-event translation. */
+export const publicEventPublications = content.table(
+  "public_event_publications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => publicEvents.id, { onDelete: "cascade" }),
+    languageCode: varchar("language_code", { length: 35 })
+      .notNull()
+      .references(() => languages.code),
+    sourceVersionId: uuid("source_version_id").notNull(),
+    translationContentHash: varchar("translation_content_hash", {
+      length: 64,
+    }).notNull(),
+    publishedById: varchar("published_by_id", { length: 255 })
+      .notNull()
+      .references(() => users.id),
+    publishedAt: timestamp("published_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    unpublishedById: varchar("unpublished_by_id", { length: 255 }).references(
+      () => users.id,
+    ),
+    unpublishedAt: timestamp("unpublished_at", { withTimezone: true }),
+  },
+  (t) => [
+    foreignKey({
+      name: "public_event_publications_source_scope_fk",
+      columns: [t.sourceVersionId],
+      foreignColumns: [translationSourceVersions.id],
+    }).onDelete("restrict"),
+    check(
+      "public_event_publications_content_hash_check",
+      sql`${t.translationContentHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "public_event_publications_unpublish_check",
+      sql`(${t.unpublishedAt} is null and ${t.unpublishedById} is null) or (${t.unpublishedAt} >= ${t.publishedAt} and ${t.unpublishedById} is not null)`,
+    ),
+    uniqueIndex("public_event_publications_active_uq")
+      .on(t.eventId, t.languageCode)
+      .where(sql`${t.unpublishedAt} is null`),
+  ],
 );
 
 export const publicEventAudienceTranslations = content.table(

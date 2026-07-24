@@ -41,24 +41,24 @@ Use semantic tokens rather than raw color values in components.
 
 | Token                         | Value     | Role                                     |
 | ----------------------------- | --------- | ---------------------------------------- |
-| `--color-canvas`              | `#FFFFFF` | Main page background                     |
+| `--color-canvas`              | `#F4F8FA` | Main page background                     |
 | `--color-surface`             | `#FFFFFF` | Cards, panels, dialogs                   |
-| `--color-surface-subtle`      | `#F8FAFC` | Secondary regions, table headers         |
-| `--color-ink`                 | `#181D26` | Primary text                             |
-| `--color-text-muted`          | `#56606F` | Secondary text and metadata              |
-| `--color-border`              | `#E0E2E6` | Default borders and dividers             |
-| `--color-border-strong`       | `#B8C0CC` | Selected or emphasized boundaries        |
-| `--color-accent`              | `#1B61C9` | Primary actions, links, focus indicators |
-| `--color-accent-hover`        | `#154EA3` | Hover/pressed primary action             |
-| `--color-accent-soft`         | `#EAF2FF` | Selected rows and informational surfaces |
-| `--color-success`             | `#16794B` | Open, confirmed, complete                |
-| `--color-success-soft`        | `#EAF7F0` | Success background                       |
-| `--color-warning`             | `#9A6700` | Uncertain, review soon                   |
-| `--color-warning-soft`        | `#FFF4D6` | Warning background                       |
-| `--color-danger`              | `#B4232C` | Cancelled, destructive actions, errors   |
-| `--color-danger-soft`         | `#FDEBEC` | Danger background                        |
-| `--color-neutral-status`      | `#5F6876` | Closed or inactive                       |
-| `--color-neutral-status-soft` | `#EEF0F3` | Neutral status background                |
+| `--color-surface-subtle`      | `#EAF1F4` | Secondary regions, table headers         |
+| `--color-ink`                 | `#142A35` | Primary text                             |
+| `--color-text-muted`          | `#536B76` | Secondary text and metadata              |
+| `--color-border`              | `#D2DFE4` | Default borders and dividers             |
+| `--color-border-strong`       | `#9FB5BE` | Selected or emphasized boundaries        |
+| `--color-accent`              | `#245F8F` | Primary actions, links, focus indicators |
+| `--color-accent-hover`        | `#1B4B72` | Hover/pressed primary action             |
+| `--color-accent-soft`         | `#DFEDF7` | Selected rows and informational surfaces |
+| `--color-success`             | `#267254` | Open, confirmed, complete                |
+| `--color-success-soft`        | `#E3F2EB` | Success background                       |
+| `--color-warning`             | `#8A5B12` | Uncertain, review soon                   |
+| `--color-warning-soft`        | `#F9ECCE` | Warning background                       |
+| `--color-danger`              | `#A53E49` | Cancelled, destructive actions, errors   |
+| `--color-danger-soft`         | `#F8E5E7` | Danger background                        |
+| `--color-neutral-status`      | `#586D77` | Closed or inactive                       |
+| `--color-neutral-status-soft` | `#E7EEF1` | Neutral status background                |
 
 ### Service-category accents
 
@@ -204,9 +204,9 @@ Reuse components before inventing new controls. Components should expose default
 ### Public-service components
 
 - **Search autocomplete:** one input with grouped, labelled location, association, and need suggestions; keyboard/touch navigation, typo/no-result/loading/error states, and selected-term clearing.
-- **Service card:** category, service-offering name, audience label, open/closed/cancelled/uncertain status, next time, place, a compact preview of included features, every approved provider logo plus text name, last verified time, and one primary action.
-- **Included-feature list:** verified amenities and interventions available within the selected service offering. Pair each controlled icon with a visible translated label. Expanded desktop results may use two columns; mobile and low-bandwidth layouts use one column. A compact card may show up to four features plus a localized “+N more” link, while the detail view shows the complete list.
-- **Service-offering group:** an association profile groups separate offering cards by activity and place. Each card owns its description, audience, schedule, status, contact, and included-feature list. Never show an organisation-wide union of features as if all features were available during each offering.
+- **Activity card:** category, activity name, audience label, open/closed/cancelled/uncertain status, next time, place, a compact preview of reusable services, every approved provider logo plus text name, last verified time, and one primary action.
+- **Activity service list:** verified capabilities available within the selected activity. Pair each controlled icon with a visible translated label. Expanded desktop results may use two columns; mobile and low-bandwidth layouts use one column. A compact card may show up to four services plus a localized “+N more” link, while the detail view shows the complete list.
+- **Activity group:** an association profile groups separate activity cards by place. Each card owns its description, audience, schedule, status, contact, freshness, and service list. Never show an organisation-wide union of services as if every service were available during every activity.
 - **Audience label:** icon and translated text for all public, women only, children only, under 18 only, families only, or adult men only; details show provider wording and exact age range where relevant.
 - **Freshness warning:** dated warning shown near the title, never hidden in metadata.
 - **Map/list switch:** segmented control with list as the reliable low-bandwidth default.
@@ -218,6 +218,7 @@ Reuse components before inventing new controls. Components should expose default
 - **Article image:** responsive rendition, localized alt text or explicit decorative role, credit/rights metadata when public, loading/error state, and low-bandwidth behavior.
 - **AI translation notice:** small visible note naming source/target languages and AI use; show human-verification state beside it rather than replacing provenance.
 - **Association card:** name, purpose, and verified specialities — one highlighted primary with up to four secondary icons, or up to five co-equal icons when no primary is marked — with visible labels, supported languages/location, and last verified date.
+- **Association profile narrative:** optional organisation-confirmed founding year, goals, and values appear below the current-service summary with source and verification metadata. They stay off compact cards and never push actionable service information below decorative history.
 - **Speciality icon:** one icon from the controlled taxonomy plus a localized text label. For example, medical care uses a stethoscope, medication a pill, and doctors/clinical consultation a clinician icon. Icons describe verified services, not brand identity.
 - **Contact card:** purpose, supported languages, safe contact methods, schedule, and last verified date.
 - **Download row:** title, language, file type, file size, publisher, updated date, and freshness state.
@@ -227,11 +228,17 @@ Reuse components before inventing new controls. Components should expose default
 
 ### Workspace components
 
+Implementation boundary: universal/public/mobile components use the Tamagui layer in `packages/ui`; authenticated web-workspace primitives use the shadcn layer in `apps/web`. Both consume `packages/tokens`. See `UI-ARCHITECTURE.md`. Reuse the appropriate layer before creating a raw control.
+
 - **Record table:** sticky header, sort/filter controls, visible row selection, status cells, and explicit bulk-action mode.
 - **Record inspector:** summary first, edit fields second, audit metadata last.
-- **Publish bar:** draft state, translation completeness, freshness/review date, preview, and publish action.
+- **Publish bar:** draft state, translation completeness, freshness/review date, preview, immediate publish, scheduled publish, and unpublish actions.
 - **Schedule editor:** recurrence summary in plain language plus exception dates and French public-holiday behavior.
-- **Member row:** role, team, invitation/account state, last activity, and overflow actions.
+- **Runbook calendar:** a full month on wide screens with labelled status dots. Selecting a date changes the runbook; only the current local date offers occurrence confirmation. The containing information rail has an explicit hide control and collapses to a narrow restore control; on narrow screens it remains in document flow.
+- **City-team ownership context (Phase 3 gate):** read-only organisation, city, and city-team identity on an activity. It explains that the city team manages every activity for that organisation in the area. Moving an activity to another city is a separate record-level operation, never presented as activity-team assignment.
+- **Activity-team assignment (Phase 3 gate):** autocomplete searches the current city team; a valid new email adds or reactivates city-team membership before creating the activity assignment. Show expertise, invitation/account state, and association-only/public-attribution choice. Public attribution fields are separately approved and never reuse the member email or private profile. Before the gate, use labelled fictional local data only.
+- **Activity authoring:** require a French title and provide explicit French, English, and Arabic title/description tabs. Rich description controls support headings, emphasis, links, quotes, and lists, but not inline media. Public target and icon-labelled reusable services are first-class fields; services use searchable multiple choice and remain editable in the activity workspace. Existing city-team members use autocomplete, while a valid new email remains assignable for the pending-account path.
+- **Member row:** role, city team, invitation/account state, assigned activities, last activity, and overflow actions.
 - **Staffing board:** member rows against day/week columns, sticky identity/date headers, team/member filters, labelled availability/absence/assignment/conflict states, coverage warnings, and a mobile personal-agenda alternative.
 - **Qualification field:** value/status plus an adjacent explanation of purpose, viewers, required/preferred context, retention, verification, and expiry.
 - **Mission requirements:** required/preferred groups for skills, spoken language/proficiency, driving-permit category, and training; show match/gap and audited override state.
@@ -243,6 +250,7 @@ Reuse components before inventing new controls. Components should expose default
 - **Inventory ledger:** immutable movement rows, balance filters, correction link, actor/reason, and restricted cost columns only for financial viewers.
 - **Inventory transfer:** source/destination, offered/dispatched/received quantities, destination acceptance, notes, discrepancy states, and tenant-local movement links.
 - **Inventory alert:** low/out-of-stock or expiry context, threshold/current quantity, location/item, acknowledge/resolve actions, and related review task.
+- **Freshness action:** one exact record or occurrence, why it needs attention, public impact, last verification, and adjacent confirm/correct/cancel/uncertain actions. Confirmation never follows from a page view and must record actor, time, and scope.
 
 ## 7. Motion, Interaction & Feedback
 
@@ -297,7 +305,7 @@ Reuse components before inventing new controls. Components should expose default
 - Hide freshness, uncertainty, cancellation, or translation state.
 - Use flags as language selectors or color as the only status signal.
 - Show association speciality as an unlabeled icon or infer it from a logo/name without verification.
-- Merge features from separate service offerings or imply that an organisation provides every listed feature during every activity.
+- Merge services from separate activities or imply that an organisation provides every listed capability during every activity.
 - Use tiny text, low-contrast gray, glassmorphism, heavy shadows, gradients, or decorative illustration around urgent content.
 - Present a long wall of text before the answer, next action, or listen control.
 - Put more than one dominant primary button in the same panel.

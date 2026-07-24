@@ -1,8 +1,10 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   integer,
   primaryKey,
   text,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -37,7 +39,13 @@ export const serviceCategoryTranslations = content.table(
     label: varchar("label", { length: 100 }).notNull(),
     description: text("description"),
   },
-  (t) => [primaryKey({ columns: [t.categoryId, t.languageCode] })],
+  (t) => [
+    primaryKey({ columns: [t.categoryId, t.languageCode] }),
+    uniqueIndex("service_category_translations_language_label_uq").on(
+      t.languageCode,
+      sql`lower(regexp_replace(btrim(${t.label}), '[[:space:]]+', ' ', 'g'))`,
+    ),
+  ],
 );
 
 /** Verified organisation specialities; icons always carry a text label. */

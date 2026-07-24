@@ -1,16 +1,16 @@
 "use client";
 
 import { CalaisUIProvider, type CalaisColorTheme } from "@calais/ui";
+import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
 import {
+  useCallback,
   createContext,
   type ReactNode,
   useContext,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useState,
 } from "react";
-import { usePathname } from "next/navigation";
 
 export const themeStorageKey = "calais-info-theme";
 export type ThemePreference = "system" | CalaisColorTheme;
@@ -23,61 +23,54 @@ interface ThemePreferenceContextValue {
 const ThemePreferenceContext =
   createContext<ThemePreferenceContextValue | null>(null);
 
-function isThemePreference(value: string | null): value is ThemePreference {
+function isThemePreference(
+  value: string | undefined,
+): value is ThemePreference {
   return value === "system" || value === "light" || value === "dark";
 }
 
-function preferredSystemTheme(): CalaisColorTheme {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-}
-
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const [preference, setPreferenceState] = useState<ThemePreference>("system");
-  const [systemTheme, setSystemTheme] = useState<CalaisColorTheme>("light");
-  const [preferenceReady, setPreferenceReady] = useState(false);
+function CalaisThemeBridge({ children }: { children: ReactNode }) {
+  const { resolvedTheme, setTheme, theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const synchronizeSystemTheme = () => {
-      setSystemTheme(preferredSystemTheme());
-    };
-    const stored = window.localStorage.getItem(themeStorageKey);
-    const initialPreference = isThemePreference(stored) ? stored : "system";
-
-    setPreferenceState(initialPreference);
-    document.documentElement.dataset.theme = initialPreference;
-    synchronizeSystemTheme();
-    setPreferenceReady(true);
-    media.addEventListener("change", synchronizeSystemTheme);
-    return () => {
-      media.removeEventListener("change", synchronizeSystemTheme);
-    };
+    setMounted(true);
   }, []);
 
-  // A locale change replaces attributes owned by the dynamic root layout.
-  // Restore the client preference before paint so CSS variables and Tamagui
-  // never resolve different themes during navigation.
-  useLayoutEffect(() => {
-    if (!preferenceReady) return;
-    document.documentElement.dataset.theme = preference;
-  }, [pathname, preference, preferenceReady]);
+  // next-themes reads localStorage after mount. Keep the server and the first
+  // client render identical, then reveal the stored preference.
+  const preference = mounted && isThemePreference(theme) ? theme : "system";
+  const setPreference = useCallback(
+    (nextPreference: ThemePreference) => {
+      setTheme(nextPreference);
+    },
+    [setTheme],
+  );
 
-  const setPreference = (nextPreference: ThemePreference) => {
-    setPreferenceState(nextPreference);
-    document.documentElement.dataset.theme = nextPreference;
-    window.localStorage.setItem(themeStorageKey, nextPreference);
-  };
-
-  const value = useMemo(() => ({ preference, setPreference }), [preference]);
-  const resolvedTheme = preference === "system" ? systemTheme : preference;
+  const value = useMemo(
+    () => ({ preference, setPreference }),
+    [preference, setPreference],
+  );
+  const calaisTheme: CalaisColorTheme =
+    mounted && resolvedTheme === "dark" ? "dark" : "light";
 
   return (
     <ThemePreferenceContext.Provider value={value}>
-      <CalaisUIProvider theme={resolvedTheme}>{children}</CalaisUIProvider>
+      <CalaisUIProvider theme={calaisTheme}>{children}</CalaisUIProvider>
     </ThemePreferenceContext.Provider>
+  );
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  return (
+    <NextThemesProvider
+      attribute="data-theme"
+      defaultTheme="system"
+      enableSystem
+      storageKey={themeStorageKey}
+    >
+      <CalaisThemeBridge>{children}</CalaisThemeBridge>
+    </NextThemesProvider>
   );
 }
 

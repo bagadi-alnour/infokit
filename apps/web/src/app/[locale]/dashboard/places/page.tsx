@@ -12,7 +12,7 @@ import {
   PageHeader,
   Select,
   TextInput,
-} from "~/components/ui";
+} from "~/components/admin/workspace";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { db } from "~/server/db";
 import {
@@ -99,7 +99,7 @@ export default async function PlacesPage({
                     <p className="text-sm font-medium">
                       {place.name ?? messages["places.noName"]}
                     </p>
-                    <p className="text-muted text-xs">
+                    <p className="text-copy-muted text-xs">
                       {[place.org, place.areaCode, place.addressLine]
                         .filter(Boolean)
                         .join(" · ") || "—"}

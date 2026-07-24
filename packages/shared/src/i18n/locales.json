@@ -1,5 +1,13 @@
 [
   { "code": "fr", "label": "Français", "direction": "ltr" },
   { "code": "en", "label": "English", "direction": "ltr" },
-  { "code": "ar", "label": "العربية", "direction": "rtl" }
+  { "code": "ar", "label": "العربية", "direction": "rtl" },
+  { "code": "fa", "label": "فارسی", "direction": "rtl" },
+  { "code": "prs", "label": "دری", "direction": "rtl" },
+  { "code": "ps", "label": "پښتو", "direction": "rtl" },
+  { "code": "ckb", "label": "کوردیی ناوەندی", "direction": "rtl" },
+  { "code": "ti", "label": "ትግርኛ", "direction": "ltr" },
+  { "code": "am", "label": "አማርኛ", "direction": "ltr" },
+  { "code": "om", "label": "Afaan Oromoo", "direction": "ltr" },
+  { "code": "so", "label": "Soomaali", "direction": "ltr" }
 ]

@@ -26,46 +26,46 @@ export interface SemanticTheme {
 }
 
 export const light: SemanticTheme = {
-  canvas: "#FFFFFF",
+  canvas: "#F4F8FA",
   surface: "#FFFFFF",
-  surfaceSubtle: "#F8FAFC",
-  ink: "#181D26",
-  textMuted: "#56606F",
-  border: "#E0E2E6",
-  borderStrong: "#B8C0CC",
-  accent: "#1B61C9",
-  accentHover: "#154EA3",
-  accentSoft: "#EAF2FF",
-  success: "#16794B",
-  successSoft: "#EAF7F0",
-  warning: "#9A6700",
-  warningSoft: "#FFF4D6",
-  danger: "#B4232C",
-  dangerSoft: "#FDEBEC",
-  neutralStatus: "#5F6876",
-  neutralStatusSoft: "#EEF0F3",
+  surfaceSubtle: "#EAF1F4",
+  ink: "#142A35",
+  textMuted: "#536B76",
+  border: "#D2DFE4",
+  borderStrong: "#9FB5BE",
+  accent: "#245F8F",
+  accentHover: "#1B4B72",
+  accentSoft: "#DFEDF7",
+  success: "#267254",
+  successSoft: "#E3F2EB",
+  warning: "#8A5B12",
+  warningSoft: "#F9ECCE",
+  danger: "#A53E49",
+  dangerSoft: "#F8E5E7",
+  neutralStatus: "#586D77",
+  neutralStatusSoft: "#E7EEF1",
 };
 
 /** Dark set derived in the prototype; same hierarchy, AA contrast kept. */
 export const dark: SemanticTheme = {
-  canvas: "#0F141C",
-  surface: "#161C26",
-  surfaceSubtle: "#1C2330",
-  ink: "#E7EAF0",
-  textMuted: "#9AA4B4",
-  border: "#2A3242",
-  borderStrong: "#414D63",
-  accent: "#6FA3EF",
-  accentHover: "#8FB8F4",
-  accentSoft: "#182A47",
-  success: "#4CC38A",
-  successSoft: "#132A1E",
-  warning: "#E3B558",
-  warningSoft: "#2C2310",
-  danger: "#F0808A",
-  dangerSoft: "#331519",
-  neutralStatus: "#9AA4B4",
-  neutralStatusSoft: "#232B39",
+  canvas: "#0E1B22",
+  surface: "#14262F",
+  surfaceSubtle: "#1B303A",
+  ink: "#E8F0F3",
+  textMuted: "#A6B8C0",
+  border: "#29434E",
+  borderStrong: "#46626E",
+  accent: "#7DB6E0",
+  accentHover: "#9BC9E9",
+  accentSoft: "#173A54",
+  success: "#67C59A",
+  successSoft: "#17382B",
+  warning: "#E4B765",
+  warningSoft: "#3B2D14",
+  danger: "#EE919A",
+  dangerSoft: "#421E24",
+  neutralStatus: "#A6B8C0",
+  neutralStatusSoft: "#233740",
 };
 
 /**
@@ -102,10 +102,14 @@ export const categoryAccents: Record<
   info: { light: "#52606D", dark: "#94A3B4" },
 };
 
-/** Radii (docs/DESIGN.md §4): buttons 12, cards 16, feature panels 24. */
+/**
+ * Radii (docs/DESIGN.md §4). One rounded family across the product: controls,
+ * cards, and feature panels all use the 24px panel radius so buttons and cards
+ * match the filter-panel corner the design settled on.
+ */
 export const radii = {
-  control: 12,
-  card: 16,
+  control: 24,
+  card: 24,
   panel: 24,
 } as const;
 

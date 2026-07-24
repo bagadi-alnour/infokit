@@ -11,14 +11,14 @@
    Light is the source palette; dark is derived, same hierarchy.
    ============================================================ */
 :root{
-  --canvas:#FFFFFF; --surface:#FFFFFF; --surface-subtle:#F8FAFC;
-  --ink:#181D26; --muted:#56606F;
-  --border:#E0E2E6; --border-strong:#B8C0CC;
-  --accent:#1B61C9; --accent-hover:#154EA3; --accent-soft:#EAF2FF;
-  --success:#16794B; --success-soft:#EAF7F0;
-  --warning:#9A6700; --warning-soft:#FFF4D6;
-  --danger:#B4232C; --danger-soft:#FDEBEC;
-  --neutral:#5F6876; --neutral-soft:#EEF0F3;
+  --canvas:#F4F8FA; --surface:#FFFFFF; --surface-subtle:#EAF1F4;
+  --ink:#142A35; --muted:#536B76;
+  --border:#D2DFE4; --border-strong:#9FB5BE;
+  --accent:#245F8F; --accent-hover:#1B4B72; --accent-soft:#DFEDF7;
+  --success:#267254; --success-soft:#E3F2EB;
+  --warning:#8A5B12; --warning-soft:#F9ECCE;
+  --danger:#A53E49; --danger-soft:#F8E5E7;
+  --neutral:#586D77; --neutral-soft:#E7EEF1;
   --cat-food:#D97706; --cat-water:#1677A8; --cat-clothing:#7C5CC4;
   --cat-showers:#167C80; --cat-charging:#B25E09; --cat-health:#C13F5A;
   --cat-legal:#4867B1; --cat-info:#52606D; --cat-shelter:#3E7A4E;
@@ -1276,11 +1276,11 @@ function wrapCanvasText(ctx,text,maxWidth){const words=String(text).split(/\s+/)
 function downloadSimPdf(){
   toast(t('sim.downloading'));const canvas=document.createElement('canvas');canvas.width=1240;canvas.height=1754;const ctx=canvas.getContext('2d');const rtl=state.lang==='ar';
   ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.textAlign=rtl?'right':'left';ctx.direction=rtl?'rtl':'ltr';const x=rtl?1120:120,max=1000;let y=130;
-  const draw=(text,size=26,color='#181D26',weight=400,gap=12)=>{ctx.font=`${weight} ${size}px Arial, sans-serif`;ctx.fillStyle=color;const lines=wrapCanvasText(ctx,text,max);for(const line of lines){ctx.fillText(line,x,y);y+=size*1.35}y+=gap};
-  draw('Calais Info',30,'#1B61C9',700,8);draw(t('sim.result'),48,'#181D26',700,36);draw(t('sim.summary'),28,'#56606F',700,14);
-  simSummaryData().forEach(([,k,v])=>draw(`${t(k)}: ${v}`,25,'#181D26',600,5));y+=24;draw(t('sim.recommendations'),30,'#181D26',700,16);
-  const ranked=simRankedItems().slice(0,4);if(!ranked.length)draw(t('sim.noMatch'),24,'#56606F',400,18);ranked.forEach(({svc},i)=>{draw(`${i+1}. ${tx(svc.name).text}`,27,'#1B61C9',700,2);draw(`${t('status.'+svc.status)} · ${tx(svc.time).text}`,22,'#16794B',600,0);draw(tx(svc.place).text,22,'#56606F',400,18)});
-  y=Math.min(y+20,1600);draw(t('sim.pdfNote'),20,'#56606F',400,4);draw(t('sim.source'),18,'#56606F',400,0);
+  const draw=(text,size=26,color='#142A35',weight=400,gap=12)=>{ctx.font=`${weight} ${size}px Arial, sans-serif`;ctx.fillStyle=color;const lines=wrapCanvasText(ctx,text,max);for(const line of lines){ctx.fillText(line,x,y);y+=size*1.35}y+=gap};
+  draw('Calais Info',30,'#245F8F',700,8);draw(t('sim.result'),48,'#142A35',700,36);draw(t('sim.summary'),28,'#536B76',700,14);
+  simSummaryData().forEach(([,k,v])=>draw(`${t(k)}: ${v}`,25,'#142A35',600,5));y+=24;draw(t('sim.recommendations'),30,'#142A35',700,16);
+  const ranked=simRankedItems().slice(0,4);if(!ranked.length)draw(t('sim.noMatch'),24,'#536B76',400,18);ranked.forEach(({svc},i)=>{draw(`${i+1}. ${tx(svc.name).text}`,27,'#245F8F',700,2);draw(`${t('status.'+svc.status)} · ${tx(svc.time).text}`,22,'#267254',600,0);draw(tx(svc.place).text,22,'#536B76',400,18)});
+  y=Math.min(y+20,1600);draw(t('sim.pdfNote'),20,'#536B76',400,4);draw(t('sim.source'),18,'#536B76',400,0);
   const data=canvas.toDataURL('image/jpeg',.9),jpg=Uint8Array.from(atob(data.split(',')[1]),c=>c.charCodeAt(0)),enc=new TextEncoder(),parts=[];let offset=0;const offsets=[0];
   const add=v=>{const b=typeof v==='string'?enc.encode(v):v;parts.push(b);offset+=b.length};const obj=(n,body)=>{offsets[n]=offset;add(`${n} 0 obj\n${body}\nendobj\n`)};
   add('%PDF-1.4\n%PDFJS\n');obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,'<< /Type /Pages /Kids [3 0 R] /Count 1 >>');obj(3,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>');

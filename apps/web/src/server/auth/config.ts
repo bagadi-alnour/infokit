@@ -8,6 +8,7 @@ import { auditEvents } from "~/server/db/schema";
 import { authAdapter } from "./adapter";
 import { sendMagicLinkEmail } from "./aws";
 import { editorRecipient } from "./editors";
+import { linkPendingMemberships } from "./link-memberships";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -90,6 +91,9 @@ export function createAuthConfig(locale: Locale): NextAuthConfig {
     },
     events: {
       async signIn({ user }) {
+        if (user.email && user.id) {
+          await linkPendingMemberships({ userId: user.id, email: user.email });
+        }
         await db.insert(auditEvents).values({
           actorUserId: user.id,
           action: "auth.magic_link.signed_in",

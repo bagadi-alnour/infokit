@@ -125,14 +125,14 @@ On mobile, keep no more than four primary navigation destinations visible. Prior
 
 ### Phase 2 organisation workspace navigation
 
-- Overview
-- Places & services
+- Today’s runbook
+- Activities — place, recurring hours, audience, and reusable services are managed inside each activity record
 - Events & schedules
 - Shared agenda (inter-organisation coordination events)
 - Articles
 - Simulator content
 - Contacts
-- Downloads
+- Downloads & flyers
 - Audit log
 - Organisation settings
 
@@ -141,7 +141,7 @@ The current organisation name and user role remain visible in the workspace shel
 ### Phase 3 additions
 
 - Members
-- Teams
+- City teams and their per-activity team subsets, always labelled distinctly
 - Availability
 - Planning
 - Missions
@@ -184,14 +184,15 @@ The current organisation name and user role remain visible in the workspace shel
 4. Visitor opens a profile to see verified services, schedules, safe contacts, and related information.
 5. The design never relies on icons alone and never infers an unverified speciality from an association's name.
 
-### Journey 5 — Publish an exceptional closure — Phase 2
+### Journey 5 — Create an activity and publish an exceptional change — Phase 2
 
-1. Editor opens a service/event record inside their organisation.
-2. Editor sees the next occurrences and current public state.
-3. Editor adds an exceptional closure, reason, and effective period.
-4. A preview shows the exact public message in available languages.
-5. Editor publishes and receives confirmation; the audit event records actor and timestamp.
-6. Missing translations use the visible fallback behavior instead of blocking an urgent cancellation.
+1. Editor opens a dedicated activity page and chooses the authoritative source language, coordinating organisation, creator/provider organisations, category, audience, tags, services, and safe public contacts.
+2. Editor writes the source title and description; optional target-language drafts stay visibly separate from the source and require review before locale publication.
+3. Editor reuses a place, creates one through address autocomplete, or marks the activity mobile. A new place explicitly chooses exact, area-only, or contact-to-learn publication precision; contact-to-learn requires a safe contact.
+4. Editor chooses a one-off dated occurrence or recurring weekly hours with optional effective dates, then adds split ranges later without overlap.
+5. Editor may add a full- or partial-day closure, cancellation, exceptional opening, or uncertainty while creating the draft or from the activity record later.
+6. A preview shows the exact public message in available languages. Missing translations use the visible source-language fallback rather than hiding urgent changes.
+7. Editor publishes and receives confirmation; audit and immutable occurrence/verification evidence record the responsible actors and timestamps.
 
 ### Journey 6 — Publish an article that can become outdated — Phase 1
 
@@ -249,42 +250,42 @@ The current organisation name and user role remain visible in the workspace shel
 
 Build every Phase 1 P0 screen before designing later phases. Open Design produces single-page artifacts, so treat each row as one focused artifact or one tightly related interactive state set.
 
-| ID   | Phase | Phase priority | Screen/artifact                          | Required content and states                                                                                                                                                                                                                                                   |
-| ---- | ----- | -------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P-01 | 1     | P0             | Public service finder                    | Multilingual grouped autocomplete for location/association/need, audience/category filters, list/map switch, provider logos/names, low-bandwidth list default                                                                                                                 |
-| P-02 | 1     | P0             | Service detail                           | Status, audience eligibility detail, freshness, schedule, exceptions, address/directions, all verified provider logos/names, safe contact, share/print, uncertainty state                                                                                                     |
-| P-03 | 1     | P0             | Basic information                        | Large task-oriented tiles, urgent short summaries, listen controls for priority content, matching map links, last-reviewed metadata, language behavior                                                                                                                        |
-| P-04 | 1     | P0             | Information simulator                    | Intro/privacy note, one question, optional choices, skip, progress, personalized result/referral, restart                                                                                                                                                                     |
-| P-05 | 1     | P0             | Articles                                 | Article index/detail, short actionable summary, images/video/audio, accessible media states, AI translation notice, publisher, source, freshness, print/download                                                                                                              |
-| P-06 | 1     | P0             | Association directory/profile            | Speciality filters, icon-and-text labels, purpose, languages, services, safe contact, verification date                                                                                                                                                                       |
-| P-07 | 1     | P0             | Fixed information                        | Topic index/detail, owner/source, review interval, related services/articles, print/low-bandwidth                                                                                                                                                                             |
-| P-08 | 1     | P1             | Downloads                                | Search/filter, file metadata, language/freshness, preview/download states                                                                                                                                                                                                     |
-| E-01 | 1     | P0             | Association publisher invitation/sign-in | Platform-issued invitation, association identity, narrow permission summary, accept/expired/revoked states                                                                                                                                                                    |
-| E-02 | 1     | P0             | Minimal article editor                   | Images/video, AI provenance, per-organisation approval notes/state, approval-filtered projection, draft, preview, publish, revision history                                                                                                                                   |
-| W-01 | 2     | P0             | Workspace overview                       | Current organisation, items needing review, today's schedules, recent changes, quick publishing actions                                                                                                                                                                       |
-| W-02 | 2     | P0             | Places & services table                  | Airtable-like records, filters, status/freshness cells, selected row inspector, mobile list alternative                                                                                                                                                                       |
-| W-03 | 2     | P0             | Schedule/closure editor                  | Recurrence, holiday default, exception dates, public preview, publish confirmation                                                                                                                                                                                            |
-| W-04 | 2     | P0             | Article editor                           | Draft/published state, media, AI provenance, translation tabs, proposed organisations, approval notes/projection, custody transfer/history, preview, revision history                                                                                                         |
-| W-05 | 2     | P0             | Organisation profile editor              | Verified identity, purpose, effective/pending speciality changes, primary/order, languages, contacts, freshness, public preview                                                                                                                                               |
-| W-06 | 2     | P1             | Simulator-content editor                 | Question tree, result content, source/owner/review dates, anonymous-public preview                                                                                                                                                                                            |
-| W-07 | 2     | P1             | Roles, invitations, and audit            | Phase 2 publishing roles, invite/account state, permission summary, audit events                                                                                                                                                                                              |
-| W-08 | 2     | P0             | Shared inter-organisation agenda         | Calendar/list of coordination events across organisations for the active city, visibility badges (organisation/inter-organisation), recurring occurrences, participation states (attending/interested/declined), cancellation with visible reason, event editor; never public |
-| T-01 | 3     | P0             | Members and teams                        | Staff/volunteer/intern state, team assignment, skills/languages, permissions, offboarding                                                                                                                                                                                     |
-| T-02 | 3     | P0             | Availability and weekly planning         | Member-row/day-column board, team/member filters, availability, absence, assignments, coverage, conflicts, skill/language gaps, shift assignment                                                                                                                              |
-| T-03 | 3     | P0             | Mission and mobile agenda                | Mission detail, required/preferred language/permit/training/skills, match/gap explanation, accept/decline, notifications                                                                                                                                                      |
-| T-04 | 3     | P0             | Restricted documents                     | Template/version, member, signers/order, review, signature states, reminders, final copy/evidence, access and audit                                                                                                                                                           |
-| T-05 | 3     | P0             | Member qualifications and training       | Purpose/visibility/retention notices, spoken languages, permit categories, course catalogue/completion, verification/expiry                                                                                                                                                   |
-| T-06 | 3     | P0             | Agenda import                            | ICS/CSV upload, timezone/mapping, duplicate/error preview, commit results, undo batch                                                                                                                                                                                         |
-| I-01 | 4     | P0             | Inventory overview/catalogue             | Location/item search, balances, lots/expiry, alerts, recent movements, role-safe cost visibility                                                                                                                                                                              |
-| I-02 | 4     | P0             | Stock movement                           | Receive/adjust/damage/expire/distribute, scan/manual input, preview, reason, resulting balance                                                                                                                                                                                |
-| I-03 | 4     | P0             | Transfers/reservations/kits              | Internal and cross-org acceptance, dispatch/receipt/discrepancy, event/mission reservations, versioned kit components                                                                                                                                                         |
-| I-04 | 4     | P1             | Inventory import                         | CSV mapping/unit validation, duplicate/error preview, idempotent results, compensating reversal                                                                                                                                                                               |
+| ID   | Phase | Phase priority | Screen/artifact                          | Required content and states                                                                                                                                                                                                                                                                        |
+| ---- | ----- | -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P-01 | 1     | P0             | Public service finder                    | Multilingual grouped autocomplete for location/association/need, audience/category filters, list/map switch, provider logos/names, low-bandwidth list default                                                                                                                                      |
+| P-02 | 1     | P0             | Service detail                           | Status, audience eligibility detail, freshness, schedule, exceptions, address/directions, all verified provider logos/names, safe contact, share/print, uncertainty state                                                                                                                          |
+| P-03 | 1     | P0             | Basic information                        | Large task-oriented tiles, urgent short summaries, listen controls for priority content, matching map links, last-reviewed metadata, language behavior                                                                                                                                             |
+| P-04 | 1     | P0             | Information simulator                    | Intro/privacy note, one question, optional choices, skip, progress, personalized result/referral, restart                                                                                                                                                                                          |
+| P-05 | 1     | P0             | Articles                                 | Article index/detail, short actionable summary, images/video/audio, accessible media states, AI translation notice, publisher, source, freshness, print/download                                                                                                                                   |
+| P-06 | 1     | P0             | Association directory/profile            | Speciality filters, icon-and-text labels, purpose, languages, services, safe contact, verification date                                                                                                                                                                                            |
+| P-07 | 1     | P0             | Fixed information                        | Topic index/detail, owner/source, review interval, related services/articles, print/low-bandwidth                                                                                                                                                                                                  |
+| P-08 | 1     | P1             | Downloads                                | Search/filter, file metadata, language/freshness, preview/download states                                                                                                                                                                                                                          |
+| E-01 | 1     | P0             | Association publisher invitation/sign-in | Platform-issued invitation, association identity, narrow permission summary, accept/expired/revoked states                                                                                                                                                                                         |
+| E-02 | 1     | P0             | Minimal article editor                   | Images/video, AI provenance, per-organisation approval notes/state, approval-filtered projection, draft, preview, immediate or scheduled publish, unpublish, revision history                                                                                                                      |
+| W-01 | 2     | P0             | Workspace overview                       | Current organisation, items needing review, today's schedules, recent changes, quick publishing actions                                                                                                                                                                                            |
+| W-02 | 2     | P0             | Activity runbook and records             | Date-driven occurrence list, full month calendar in a collapsible information rail on wide screens, same-day confirm/correct/cancel/uncertain actions, multilingual title/rich description, public target, icon-labelled reusable-service CRUD and multi-assignment, and a mobile list alternative |
+| W-03 | 2     | P0             | Schedule/closure editor                  | Recurrence, holiday default, exception dates, public preview, publish confirmation                                                                                                                                                                                                                 |
+| W-04 | 2     | P0             | Article editor                           | Draft/published state, media, AI provenance, translation tabs, proposed organisations, approval notes/projection, custody transfer/history, preview, revision history                                                                                                                              |
+| W-05 | 2     | P0             | Organisation profile editor              | Verified identity, purpose, effective/pending speciality changes, primary/order, languages, contacts, freshness, public preview                                                                                                                                                                    |
+| W-06 | 2     | P1             | Simulator-content editor                 | Question tree, result content, source/owner/review dates, anonymous-public preview                                                                                                                                                                                                                 |
+| W-07 | 2     | P1             | Roles, invitations, and audit            | Phase 2 publishing roles, invite/account state, permission summary, audit events                                                                                                                                                                                                                   |
+| W-08 | 2     | P0             | Shared inter-organisation agenda         | Calendar/list of coordination events across organisations for the active city, visibility badges (organisation/inter-organisation), recurring occurrences, participation states (attending/interested/declined), cancellation with visible reason, event editor; never public                      |
+| T-01 | 3     | P0             | Members and teams                        | Staff/volunteer/intern state, team assignment, skills/languages, permissions, offboarding                                                                                                                                                                                                          |
+| T-02 | 3     | P0             | Availability and weekly planning         | Member-row/day-column board, team/member filters, availability, absence, assignments, coverage, conflicts, skill/language gaps, shift assignment                                                                                                                                                   |
+| T-03 | 3     | P0             | Mission and mobile agenda                | Mission detail, required/preferred language/permit/training/skills, match/gap explanation, accept/decline, notifications                                                                                                                                                                           |
+| T-04 | 3     | P0             | Restricted documents                     | Template/version, member, signers/order, review, signature states, reminders, final copy/evidence, access and audit                                                                                                                                                                                |
+| T-05 | 3     | P0             | Member qualifications and training       | Purpose/visibility/retention notices, spoken languages, permit categories, course catalogue/completion, verification/expiry                                                                                                                                                                        |
+| T-06 | 3     | P0             | Agenda import                            | ICS/CSV upload, timezone/mapping, duplicate/error preview, commit results, undo batch                                                                                                                                                                                                              |
+| I-01 | 4     | P0             | Inventory overview/catalogue             | Location/item search, balances, lots/expiry, alerts, recent movements, role-safe cost visibility                                                                                                                                                                                                   |
+| I-02 | 4     | P0             | Stock movement                           | Receive/adjust/damage/expire/distribute, scan/manual input, preview, reason, resulting balance                                                                                                                                                                                                     |
+| I-03 | 4     | P0             | Transfers/reservations/kits              | Internal and cross-org acceptance, dispatch/receipt/discrepancy, event/mission reservations, versioned kit components                                                                                                                                                                              |
+| I-04 | 4     | P1             | Inventory import                         | CSV mapping/unit validation, duplicate/error preview, idempotent results, compensating reversal                                                                                                                                                                                                    |
 
 ## 10. P0 Screen Requirements
 
 ### P-01 — Public service finder
 
-**Primary action:** Open a relevant service record.  
+**Primary action:** Open a relevant activity record.
 **Top information:** Current language, page purpose, search/autocomplete, audience, service need, “Open now” filter.  
 **Service-card order:** Status → offering name → audience → next time → place/distance → compact included-feature preview → provider logos/names → last verified → primary action.
 **Desktop:** list/map split view.  
@@ -324,7 +325,8 @@ Build every Phase 1 P0 screen before designing later phases. Open Design produce
 **Primary action:** Find an association by verified speciality or open its service information.  
 **Card order:** Name → purpose → primary speciality → secondary speciality icons with text → languages/location → last verified.  
 **Icon rule:** Use a controlled taxonomy and always pair icons with visible labels. A medical example may use `Stethoscope`, `Pill`, and `UserRoundPlus`; never infer services from a logo or organisation name.  
-**Profile service structure:** Group visitor-facing service offerings by activity and place. Each offering card shows its own status, audience, next opening, description, safe contact, and icon-labelled included features. Do not merge features from separate offerings.
+**Profile narrative:** After current services and contact information, the full profile may show an organisation-confirmed founding year, goals, and values with its official source and check date. These fields are optional, translated content and remain non-public while the profile is a discovery draft.
+**Profile activity structure:** Group visitor-facing activities by place. Each activity card shows its own status, audience, next opening, description, safe contact, freshness, and icon-labelled reusable services. Do not merge services from separate activities.
 **Required states:** filter by speciality, multiple specialities, organisation with several distinct offerings, one place with several offerings, no matches, unverified/outdated profile, missing logo, missing translation, RTL.
 
 ### P-07 — Fixed information
@@ -351,8 +353,8 @@ Build every Phase 1 P0 screen before designing later phases. Open Design produce
 
 ### W-04 — Article editor
 
-**Primary action:** Save draft or publish.  
-**Form order:** Title/body → translations → can become outdated? → validity/review → owner/source → preview → publish.  
+**Primary action:** Save draft (default), publish now, or schedule publication.
+**Form order:** Title/body → translations → can become outdated? → validity/review → owner/source → preview → publication choice.
 **Safety:** Public preview must show fallback and warning behavior.  
 **Required states:** clean draft, autosave in progress, missing required validity date, missing translation, revision comparison, unpublished, archived.
 
@@ -427,7 +429,7 @@ Choices: **Food**, **Healthcare**, **Legal information**, **Something else**. In
 
 Use fictional organisation names in prototypes. A real organisation such as MSF may only receive these labels after it verifies the services offered at the relevant Calais location.
 
-### Example organisation with separate service offerings
+### Example organisation with separate activities
 
 Use this structure with a fictional provider in prototypes. The MFS name and programme claims require provider verification before public use.
 
@@ -438,7 +440,7 @@ Use this structure with a fictional provider in prototypes. The MFS name and pro
    - Category: Healthcare
    - Included features: nursing care, dressing changes, basic pain-relief support, and treatment of minor health issues
 
-The interface renders two offering cards. It does not place the day-centre features on the nurse-led activity. Each offering displays its own place, schedule, audience, status, description, contact, and verification date.
+The interface renders two activity cards. It does not place all day-centre services on the nurse-led activity. Each activity displays its own place, schedule, audience, status, description, contact, and verification date; reusable services appear only where explicitly assigned.
 
 Do not use real association names, real contact details, or claims about current programmes in prototypes unless a responsible editor has verified and approved them.
 

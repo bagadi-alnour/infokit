@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
+  date,
   integer,
   primaryKey,
   text,
@@ -26,18 +28,30 @@ import {
 import { specialities } from "./taxonomies";
 
 /** Stable private organisation identity (docs/DATABASE-SCHEMA.md §5). */
-export const organizations = core.table("organizations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  slug: varchar("slug", { length: 100 }).notNull().unique(),
-  legalName: varchar("legal_name", { length: 200 }),
-  displayName: varchar("display_name", { length: 200 }).notNull(),
-  timezone: varchar("timezone", { length: 50 })
-    .notNull()
-    .default("Europe/Paris"),
-  status: organizationStatus("status").notNull().default("draft"),
-  publishingSuspended: boolean("publishing_suspended").notNull().default(false),
-  ...timestamps,
-});
+export const organizations = core.table(
+  "organizations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: varchar("slug", { length: 100 }).notNull().unique(),
+    legalName: varchar("legal_name", { length: 200 }),
+    displayName: varchar("display_name", { length: 200 }).notNull(),
+    foundedYear: integer("founded_year"),
+    timezone: varchar("timezone", { length: 50 })
+      .notNull()
+      .default("Europe/Paris"),
+    status: organizationStatus("status").notNull().default("draft"),
+    publishingSuspended: boolean("publishing_suspended")
+      .notNull()
+      .default(false),
+    ...timestamps,
+  },
+  (t) => [
+    check(
+      "organizations_founded_year_check",
+      sql`${t.foundedYear} between 1800 and 2100`,
+    ),
+  ],
+);
 
 /** Public, reviewable part of an organisation. */
 export const organizationProfiles = content.table("organization_profiles", {
@@ -45,6 +59,8 @@ export const organizationProfiles = content.table("organization_profiles", {
     .primaryKey()
     .references(() => organizations.id, { onDelete: "cascade" }),
   website: varchar("website", { length: 255 }),
+  sourceUrl: text("source_url"),
+  sourceCheckedOn: date("source_checked_on"),
   logoUrl: text("logo_url"),
   logoRightsConfirmed: boolean("logo_rights_confirmed")
     .notNull()
@@ -66,6 +82,8 @@ export const organizationProfileTranslations = content.table(
       .notNull()
       .references(() => languages.code),
     purpose: text("purpose").notNull(),
+    goals: text("goals"),
+    values: text("values"),
     accessibilitySummary: text("accessibility_summary"),
     state: translationState("state").notNull().default("draft"),
     method: translationMethod("method").notNull().default("human"),

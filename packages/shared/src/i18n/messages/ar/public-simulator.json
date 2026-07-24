@@ -1,0 +1,22 @@
+{
+  "simulator.brand": "Calais Info",
+  "simulator.languages": "اختيار اللغة",
+  "simulator.privacy": "تبقى إجاباتك خاصة",
+  "simulator.privacyDetail": "تبقى الإجابات على هذه الشاشة فقط. لا يتم حفظها أو إرسالها أو ربطها بهوية أو تضمينها في التحليلات. يمكنك البدء من جديد في أي وقت لمسحها.",
+  "simulator.source": "مسار معلومات مُراجع",
+  "simulator.lastReviewed": "آخر مراجعة",
+  "simulator.reviewDue": "موعد المراجعة التالية",
+  "simulator.notAvailable": "غير متاح",
+  "simulator.fallback": "هذا المسار غير متاح بلغتك بعد. يتم عرض المحتوى المُراجع باللغة المصدر بدلاً منه.",
+  "simulator.preview": "معاينة خاصة — غير منشورة",
+  "simulator.previewDetail": "هذه معاينة لواجهة الزائر بغرض الاختبار. تبقى المسودات وبيانات العرض خاصة ولا تظهر في الصفحة العامة.",
+  "simulator.begin": "ابدأ",
+  "simulator.continue": "متابعة",
+  "simulator.back": "رجوع",
+  "simulator.startAgain": "ابدأ من جديد",
+  "simulator.step": "الخطوة {number}",
+  "simulator.question": "سؤال",
+  "simulator.information": "معلومات",
+  "simulator.result": "معلوماتك",
+  "simulator.disclaimer": "مهم"
+}

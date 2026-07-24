@@ -7,6 +7,8 @@ const statuses = {
   cooldown: "warning",
   rate_limited: "warning",
   send_error: "danger",
+  reset: "info",
+  reset_error: "danger",
 } as const satisfies Record<string, "info" | "warning" | "danger">;
 
 export type AuthStatusCode = keyof typeof statuses;

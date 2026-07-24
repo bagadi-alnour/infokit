@@ -41,7 +41,7 @@ Team coordinators, staff, volunteers, interns, and restricted participation-docu
 
 ### Public-profile management
 
-- Edit purpose, verified locations, safe contacts, supported languages, accessibility information, and website.
+- Edit purpose, optional founding year, goals, values, verified locations, safe contacts, supported languages, accessibility information, website, and source metadata inherited from the pre-onboarding draft.
 - Store any number of verified specialities from the Phase 1 taxonomy, mark at most one as primary, order them, and select up to four secondary specialities for the initial public summary card.
 - Organisation admins can request speciality additions, removal, reordering, or a new primary. New/changed claims require platform reverification; removal can take effect with effective-dated audit history.
 - Preview speciality icons and labels in public contexts.

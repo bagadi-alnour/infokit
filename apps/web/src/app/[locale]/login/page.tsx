@@ -1,12 +1,11 @@
 import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { AuthTextField, YStack } from "@calais/ui";
+import { YStack } from "@calais/ui";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { requestMagicLink } from "./actions";
 import { AuthShell } from "~/components/auth/auth-shell";
 import { AuthStatus } from "~/components/auth/auth-status";
-import { SubmitButton } from "~/components/auth/submit-button";
+import { LoginForms } from "~/components/auth/login-forms";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { authPath } from "~/i18n/routing";
 import { localizedAuthMetadata } from "~/seo/site";
@@ -18,6 +17,7 @@ interface LoginPageProps {
   searchParams: Promise<{
     returnTo?: string;
     error?: string;
+    status?: string;
   }>;
 }
 
@@ -58,34 +58,25 @@ export default async function LoginPage({
       description={messages["auth.login.description"]}
       messages={messages}
     >
-      <form action={requestMagicLink}>
-        <input type="hidden" name="locale" value={locale} />
-        <input type="hidden" name="returnTo" value={returnTo} />
-        <YStack gap="$calais5">
-          <AuthStatus
-            status={query.error ? "login_error" : undefined}
-            labels={{ login_error: messages["auth.login.error"] }}
-          />
-          <AuthTextField
-            id="email"
-            label={messages["auth.login.emailLabel"]}
-            description={messages["auth.login.privacy"]}
-            inputProps={{
-              name: "email",
-              type: "email",
-              autoComplete: "email",
-              inputMode: "email",
-              required: true,
-              autoFocus: true,
-              placeholder: messages["auth.login.emailPlaceholder"],
-            }}
-          />
-          <SubmitButton
-            label={messages["auth.login.submit"]}
-            pendingLabel={messages["auth.login.submitting"]}
-          />
-        </YStack>
-      </form>
+      <YStack gap="$calais6">
+        <AuthStatus
+          status={
+            query.error === "reset"
+              ? "reset_error"
+              : query.error
+                ? "login_error"
+                : query.status === "reset"
+                  ? "reset"
+                  : undefined
+          }
+          labels={{
+            login_error: messages["auth.login.error"],
+            reset: messages["auth.login.resetSuccess"],
+            reset_error: messages["auth.login.resetError"],
+          }}
+        />
+        <LoginForms locale={locale} returnTo={returnTo} labels={messages} />
+      </YStack>
     </AuthShell>
   );
 }

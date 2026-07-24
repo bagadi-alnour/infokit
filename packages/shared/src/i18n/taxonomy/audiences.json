@@ -1,0 +1,80 @@
+{
+  "all_public": {
+    "fr": "Tout public",
+    "en": "All public",
+    "ar": "للجميع",
+    "fa": "برای همه",
+    "prs": "برای همه",
+    "ps": "د ټولو لپاره",
+    "ckb": "بۆ هەمووان",
+    "ti": "ንኹሉ",
+    "am": "ለሁሉም",
+    "om": "Hundaaf",
+    "so": "Qof walba"
+  },
+  "women_only": {
+    "fr": "Femmes uniquement",
+    "en": "Women only",
+    "ar": "للنساء فقط",
+    "fa": "فقط زنان",
+    "prs": "فقط زنان",
+    "ps": "یوازې ښځې",
+    "ckb": "تەنها ژنان",
+    "ti": "ንደቂ ኣንስትዮ ጥራይ",
+    "am": "ለሴቶች ብቻ",
+    "om": "Dubartoota qofa",
+    "so": "Haweenka oo keliya"
+  },
+  "children_only": {
+    "fr": "Enfants uniquement",
+    "en": "Children only",
+    "ar": "للأطفال فقط",
+    "fa": "فقط کودکان",
+    "prs": "فقط اطفال",
+    "ps": "یوازې ماشومان",
+    "ckb": "تەنها منداڵان",
+    "ti": "ንህጻናት ጥራይ",
+    "am": "ለልጆች ብቻ",
+    "om": "Daaʼimman qofa",
+    "so": "Carruurta oo keliya"
+  },
+  "under_18_only": {
+    "fr": "Moins de 18 ans",
+    "en": "Under 18 only",
+    "ar": "لمن هم دون 18",
+    "fa": "فقط زیر ۱۸ سال",
+    "prs": "فقط زیر ۱۸ سال",
+    "ps": "یوازې تر ۱۸ کلونو کم",
+    "ckb": "تەنها خوار ١٨ ساڵ",
+    "ti": "ትሕቲ 18 ዓመት ጥራይ",
+    "am": "ከ18 ዓመት በታች ብቻ",
+    "om": "Umurii 18 gadi qofa",
+    "so": "Ka yar 18 oo keliya"
+  },
+  "families_only": {
+    "fr": "Familles uniquement",
+    "en": "Families only",
+    "ar": "للعائلات فقط",
+    "fa": "فقط خانواده‌ها",
+    "prs": "فقط خانواده‌ها",
+    "ps": "یوازې کورنۍ",
+    "ckb": "تەنها خێزانەکان",
+    "ti": "ንስድራቤታት ጥራይ",
+    "am": "ለቤተሰቦች ብቻ",
+    "om": "Maatii qofa",
+    "so": "Qoysaska oo keliya"
+  },
+  "adult_men_only": {
+    "fr": "Hommes adultes",
+    "en": "Adult men only",
+    "ar": "للرجال البالغين",
+    "fa": "فقط مردان بزرگسال",
+    "prs": "فقط مردان بالغ",
+    "ps": "یوازې بالغ نارینه",
+    "ckb": "تەنها پیاوانی پێگەیشتوو",
+    "ti": "ንዓበይቲ ሰብኡት ጥራይ",
+    "am": "ለአዋቂ ወንዶች ብቻ",
+    "om": "Dhiira gaʼeessa qofa",
+    "so": "Ragga qaangaarka ah oo keliya"
+  }
+}

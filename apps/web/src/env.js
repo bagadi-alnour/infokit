@@ -17,13 +17,30 @@ export const env = createEnv({
     AUTH_EMAIL_FROM: z.string().default(""),
     AWS_PROFILE: z.string().default("ep"),
     AWS_REGION: z.string().default("eu-west-3"),
+    /** Private object storage for public-content source assets. */
+    AWS_S3_ASSET_BUCKET: z.string().min(3).optional(),
+    AWS_S3_ENDPOINT: z.string().url().optional(),
+    AWS_S3_FORCE_PATH_STYLE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
     AWS_SNS_SENDER_ID: z
       .string()
       .regex(/^[A-Za-z0-9]{1,11}$/)
       .optional(),
+    /** Standard OpenAI key plus the legacy spelling already used locally. */
+    OPENAI_API_KEY: z.string().min(1).optional(),
+    OPEN_AI_API_KEY: z.string().min(1).optional(),
+    AI_TRANSLATION_PROVIDER: z.enum(["openai"]).default("openai"),
+    AI_TRANSLATION_MODEL: z.string().min(1).default("gpt-5.6-terra"),
     SITE_URL: z.string().url().default("http://localhost:3030"),
     /** Dev/test only: log magic links + SMS codes to the server console instead of AWS. */
     AUTH_DEV_LOG_DELIVERY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+    /** Phase 3 gate: never enable with real member data before legal/operator approval. */
+    ENABLE_PHASE3_MEMBER_ASSIGNMENTS: z
       .enum(["true", "false"])
       .default("false")
       .transform((value) => value === "true"),
@@ -53,9 +70,18 @@ export const env = createEnv({
     AUTH_EMAIL_FROM: process.env.AUTH_EMAIL_FROM,
     AWS_PROFILE: process.env.AWS_PROFILE,
     AWS_REGION: process.env.AWS_REGION,
+    AWS_S3_ASSET_BUCKET: process.env.AWS_S3_ASSET_BUCKET,
+    AWS_S3_ENDPOINT: process.env.AWS_S3_ENDPOINT,
+    AWS_S3_FORCE_PATH_STYLE: process.env.AWS_S3_FORCE_PATH_STYLE,
     AWS_SNS_SENDER_ID: process.env.AWS_SNS_SENDER_ID,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPEN_AI_API_KEY: process.env.OPEN_AI_API_KEY,
+    AI_TRANSLATION_PROVIDER: process.env.AI_TRANSLATION_PROVIDER,
+    AI_TRANSLATION_MODEL: process.env.AI_TRANSLATION_MODEL,
     SITE_URL: process.env.SITE_URL,
     AUTH_DEV_LOG_DELIVERY: process.env.AUTH_DEV_LOG_DELIVERY,
+    ENABLE_PHASE3_MEMBER_ASSIGNMENTS:
+      process.env.ENABLE_PHASE3_MEMBER_ASSIGNMENTS,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
   },

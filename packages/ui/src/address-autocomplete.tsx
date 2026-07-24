@@ -230,6 +230,10 @@ export function AddressAutocomplete({
             position="absolute"
             right={12}
             size="small"
+            width={18}
+            height={18}
+            maxWidth={18}
+            maxHeight={18}
             color="$accent"
           />
         ) : null}

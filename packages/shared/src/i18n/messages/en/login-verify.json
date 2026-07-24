@@ -2,7 +2,7 @@
   "auth.verify.eyebrow": "Second check",
   "auth.verify.title": "Confirm the SMS code",
   "auth.verify.description": "Send a six-digit code to {phone}. The code expires after 10 minutes.",
-  "auth.verify.signedInAs": "Email confirmed: {email}",
+  "auth.verify.signedInAs": "Signed in as: {email}",
   "auth.verify.send": "Send SMS code",
   "auth.verify.sending": "Sending code…",
   "auth.verify.codeLabel": "Six-digit code",

@@ -19,6 +19,7 @@
     "lint": "turbo run lint",
     "prepare": "simple-git-hooks",
     "start": "pnpm --filter @calais/web start",
+    "test:unit": "pnpm --filter @calais/web test:unit",
     "typecheck": "turbo run typecheck"
   },
   "simple-git-hooks": {

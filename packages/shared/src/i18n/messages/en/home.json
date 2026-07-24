@@ -1,6 +1,17 @@
 {
-  "home.title": "Calais Info",
-  "home.description": "Private Slice 0 instrument. Public pages will open after the first services have been entered and verified with the organisations providing them.",
+  "home.title": "Find practical help in Calais",
+  "home.eyebrow": "Clear information, when you need it",
+  "home.description": "Browse published activities, read reviewed practical information, or use the private guide to find the closest next step.",
+  "home.primaryAction": "Find an activity",
+  "home.activities": "Activities",
+  "home.activitiesDescription": "Filter services and see exact public locations in a low-data map.",
+  "home.articles": "Articles",
+  "home.articlesDescription": "Read dated information with a clear factual owner and review status.",
+  "home.guide": "Guide",
+  "home.guideDescription": "Answer optional questions one at a time. Your answers are never stored.",
+  "home.reliability": "Know when information was checked",
+  "home.reliabilityDescription": "Published records show their owner, review date and uncertainty. Time-sensitive information should still be confirmed with the provider.",
+  "home.open": "Open",
   "home.editorAction": "Open the editor console",
   "home.metaDescription": "Multilingual, verified information about services and practical help in Calais."
 }

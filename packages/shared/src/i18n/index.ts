@@ -3,16 +3,42 @@ import localeRows from "./locales.json";
 export const supportedLocales = ["fr", "en", "ar"] as const;
 export type Locale = (typeof supportedLocales)[number];
 
+export const publicSupportedLocales = [
+  "fr",
+  "en",
+  "ar",
+  "fa",
+  "prs",
+  "ps",
+  "ckb",
+  "ti",
+  "am",
+  "om",
+  "so",
+] as const;
+export type PublicLocale = (typeof publicSupportedLocales)[number];
+
+export const translatedInterfaceLocales = ["fr", "en", "ar"] as const;
+export type TranslatedInterfaceLocale =
+  (typeof translatedInterfaceLocales)[number];
+
 export const localeMetadata = Object.fromEntries(
   localeRows.map(({ code, label, direction }) => [
     code,
     { label, direction: direction === "rtl" ? "rtl" : "ltr" },
   ]),
-) as Record<Locale, { label: string; direction: "ltr" | "rtl" }>;
+) as Record<PublicLocale, { label: string; direction: "ltr" | "rtl" }>;
 
 export function isLocale(value: unknown): value is Locale {
   return (
     typeof value === "string" && supportedLocales.includes(value as Locale)
+  );
+}
+
+export function isPublicLocale(value: unknown): value is PublicLocale {
+  return (
+    typeof value === "string" &&
+    publicSupportedLocales.includes(value as PublicLocale)
   );
 }
 

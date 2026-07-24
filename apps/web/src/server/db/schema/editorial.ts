@@ -1,7 +1,9 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   date,
+  foreignKey,
   integer,
   jsonb,
   primaryKey,
@@ -29,7 +31,9 @@ import {
   translationState,
 } from "./schemas";
 import { services } from "./services";
+import { tags } from "./tags";
 import { serviceCategories } from "./taxonomies";
+import { translationSourceVersions } from "./translation-sources";
 
 /**
  * Articles, fixed information, and basic information share one editorial
@@ -49,6 +53,71 @@ export const editorialEntries = content.table("editorial_entries", {
 });
 
 /**
+ * Locale-specific public routes. Retired rows remain reserved so old links
+ * can redirect to the current route instead of being reused by another entry.
+ */
+export const editorialEntryRoutes = content.table(
+  "editorial_entry_routes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entryId: uuid("entry_id")
+      .notNull()
+      .references(() => editorialEntries.id, { onDelete: "cascade" }),
+    languageCode: varchar("language_code", { length: 35 })
+      .notNull()
+      .references(() => languages.code),
+    slug: varchar("slug", { length: 150 }).notNull(),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("editorial_entry_routes_language_slug_uq").on(
+      t.languageCode,
+      t.slug,
+    ),
+    uniqueIndex("editorial_entry_routes_active_entry_language_uq")
+      .on(t.entryId, t.languageCode)
+      .where(sql`${t.retiredAt} is null`),
+  ],
+);
+
+/** Public/workspace tags selected from the reusable tag catalogue. */
+export const editorialEntryTags = content.table(
+  "editorial_entry_tags",
+  {
+    entryId: uuid("entry_id")
+      .notNull()
+      .references(() => editorialEntries.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "restrict" }),
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.entryId, t.tagId] })],
+);
+
+/** Images/media attached to an article, including one optional cover image. */
+export const editorialEntryAssets = content.table(
+  "editorial_entry_assets",
+  {
+    entryId: uuid("entry_id")
+      .notNull()
+      .references(() => editorialEntries.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "restrict" }),
+    role: varchar("role", { length: 20 }).$type<"cover" | "inline">().notNull(),
+    displayOrder: integer("display_order").notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.entryId, t.assetId] }),
+    uniqueIndex("editorial_entry_assets_cover_uq")
+      .on(t.entryId)
+      .where(sql`${t.role} = 'cover'`),
+  ],
+);
+
+/**
  * Immutable authored revision — no updatedAt by design; edits create the
  * next revision. `unreliableFrom` powers the dated public warning
  * (FR-P1-009/010) without unpublishing.
@@ -62,6 +131,10 @@ export const editorialRevisions = content.table(
       .references(() => editorialEntries.id, { onDelete: "cascade" }),
     revisionNumber: integer("revision_number").notNull(),
     authorId: varchar("author_id", { length: 255 }).references(() => users.id),
+    sourceLanguageCode: varchar("source_language_code", { length: 35 })
+      .notNull()
+      .default("fr")
+      .references(() => languages.code),
     canBecomeOutdated: boolean("can_become_outdated").notNull().default(false),
     unreliableFrom: date("unreliable_from"),
     sourceSummary: text("source_summary"),
@@ -94,6 +167,17 @@ export const editorialRevisionTranslations = content.table(
     plainText: text("plain_text"),
     state: translationState("state").notNull().default("draft"),
     method: translationMethod("method").notNull().default("human"),
+    sourceVersionId: uuid("source_version_id").references(
+      () => translationSourceVersions.id,
+      { onDelete: "restrict" },
+    ),
+    /** SHA-256 of the canonical localized target payload. */
+    contentHash: varchar("content_hash", { length: 64 }),
+    providerCode: varchar("provider_code", { length: 100 }),
+    providerJobReference: varchar("provider_job_reference", { length: 255 }),
+    carriedForwardFromRevisionId: uuid(
+      "carried_forward_from_revision_id",
+    ).references(() => editorialRevisions.id, { onDelete: "restrict" }),
     verifiedById: varchar("verified_by_id", { length: 255 }).references(
       () => users.id,
     ),
@@ -119,15 +203,42 @@ export const editorialPublications = content.table(
     revisionId: uuid("revision_id")
       .notNull()
       .references(() => editorialRevisions.id),
-    publishedById: varchar("published_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    sourceVersionId: uuid("source_version_id").notNull(),
+    /** Hash of the exact localized payload approved for this activation. */
+    translationContentHash: varchar("translation_content_hash", {
+      length: 64,
+    }).notNull(),
+    publishedById: varchar("published_by_id", { length: 255 })
+      .notNull()
+      .references(() => users.id),
     publishedAt: timestamp("published_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    /** Null activates immediately; a future value delays public visibility. */
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    unpublishedById: varchar("unpublished_by_id", { length: 255 }).references(
+      () => users.id,
+    ),
     unpublishedAt: timestamp("unpublished_at", { withTimezone: true }),
   },
   (t) => [
+    foreignKey({
+      name: "editorial_publications_source_scope_fk",
+      columns: [t.sourceVersionId],
+      foreignColumns: [translationSourceVersions.id],
+    }).onDelete("restrict"),
+    check(
+      "editorial_publications_content_hash_check",
+      sql`${t.translationContentHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      "editorial_publications_schedule_check",
+      sql`${t.scheduledFor} is null or ${t.scheduledFor} > ${t.publishedAt}`,
+    ),
+    check(
+      "editorial_publications_unpublish_check",
+      sql`(${t.unpublishedAt} is null and ${t.unpublishedById} is null) or (${t.unpublishedAt} >= ${t.publishedAt} and ${t.unpublishedById} is not null)`,
+    ),
     uniqueIndex("editorial_publications_active_uq")
       .on(t.entryId, t.languageCode)
       .where(sql`${t.unpublishedAt} is null`),

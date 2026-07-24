@@ -1,6 +1,17 @@
 {
-  "home.title": "Calais Info",
-  "home.description": "Outil privé de la tranche 0. Les pages publiques seront ouvertes après la saisie des premiers services et leur vérification auprès des associations qui les proposent.",
+  "home.title": "Trouver une aide pratique à Calais",
+  "home.eyebrow": "Des informations claires au bon moment",
+  "home.description": "Consultez les activités publiées, lisez des informations pratiques vérifiées ou utilisez le guide privé pour trouver la prochaine étape adaptée.",
+  "home.primaryAction": "Trouver une activité",
+  "home.activities": "Activités",
+  "home.activitiesDescription": "Filtrez les services et consultez les lieux publics exacts sur une carte basse consommation.",
+  "home.articles": "Articles",
+  "home.articlesDescription": "Lisez des informations datées avec un responsable clair et un état de vérification.",
+  "home.guide": "Guide",
+  "home.guideDescription": "Répondez à des questions facultatives une par une. Vos réponses ne sont jamais enregistrées.",
+  "home.reliability": "Savoir quand l’information a été vérifiée",
+  "home.reliabilityDescription": "Les contenus publiés indiquent leur responsable, leur date de vérification et leurs incertitudes. Les informations susceptibles de changer doivent être confirmées auprès de l’organisme.",
+  "home.open": "Ouvrir",
   "home.editorAction": "Ouvrir la console d’édition",
   "home.metaDescription": "Des informations multilingues et vérifiées sur les services et les aides pratiques à Calais."
 }

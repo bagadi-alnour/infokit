@@ -2,7 +2,7 @@
   "auth.verify.eyebrow": "Deuxième vérification",
   "auth.verify.title": "Confirmez le code SMS",
   "auth.verify.description": "Envoyez un code à six chiffres au {phone}. Le code expire après 10 minutes.",
-  "auth.verify.signedInAs": "E-mail confirmé : {email}",
+  "auth.verify.signedInAs": "Connecté avec : {email}",
   "auth.verify.send": "Envoyer le code SMS",
   "auth.verify.sending": "Envoi du code…",
   "auth.verify.codeLabel": "Code à six chiffres",

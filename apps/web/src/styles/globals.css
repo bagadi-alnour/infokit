@@ -1,4 +1,10 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@inkpilot/editor/styles.css";
+@import "@xyflow/react/dist/style.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
   --font-sans:
@@ -9,25 +15,170 @@
 /* Semantic utilities backed by the injected @calais/tokens variables
    (see src/components/design-tokens.tsx). Values live in one place. */
 @theme inline {
-  --color-canvas: var(--canvas);
-  --color-surface: var(--surface);
-  --color-subtle: var(--surface-subtle);
-  --color-ink: var(--ink);
-  --color-muted: var(--text-muted);
-  --color-line: var(--border);
-  --color-line-strong: var(--border-strong);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-soft: var(--accent-soft);
-  --color-ok: var(--success);
-  --color-ok-soft: var(--success-soft);
-  --color-warn: var(--warning);
-  --color-warn-soft: var(--warning-soft);
-  --color-danger: var(--danger);
-  --color-danger-soft: var(--danger-soft);
-  --color-neutral: var(--neutral-status);
-  --color-neutral-soft: var(--neutral-status-soft);
-  --radius-control: var(--radius-control);
-  --radius-card: var(--radius-card);
-  --radius-panel: var(--radius-panel);
+  --color-canvas: var(--calais-canvas);
+  --color-surface: var(--calais-surface);
+  --color-subtle: var(--calais-surface-subtle);
+  --color-ink: var(--calais-ink);
+  /* Keep secondary copy separate from shadcn's `muted` surface role. */
+  --color-copy-muted: var(--calais-text-muted);
+  --color-line: var(--calais-border);
+  --color-line-strong: var(--calais-border-strong);
+  --color-brand: var(--calais-accent);
+  --color-brand-hover: var(--calais-accent-hover);
+  --color-brand-soft: var(--calais-accent-soft);
+  --color-ok: var(--calais-success);
+  --color-ok-soft: var(--calais-success-soft);
+  --color-warn: var(--calais-warning);
+  --color-warn-soft: var(--calais-warning-soft);
+  --color-danger: var(--calais-danger);
+  --color-danger-soft: var(--calais-danger-soft);
+  --color-neutral: var(--calais-neutral-status);
+  --color-neutral-soft: var(--calais-neutral-status-soft);
+  --radius-control: var(--calais-radius-control);
+  --radius-card: var(--calais-radius-card);
+  --radius-panel: var(--calais-radius-panel);
+
+  /* shadcn is a web adapter to the same Calais tokens, never a palette. */
+  --color-background: var(--calais-canvas);
+  --color-foreground: var(--calais-ink);
+  --color-card: var(--calais-surface);
+  --color-card-foreground: var(--calais-ink);
+  --color-popover: var(--calais-surface);
+  --color-popover-foreground: var(--calais-ink);
+  --color-primary: var(--calais-accent);
+  --color-primary-foreground: var(--calais-canvas);
+  --color-secondary: var(--calais-surface-subtle);
+  --color-secondary-foreground: var(--calais-ink);
+  --color-muted: var(--calais-surface-subtle);
+  --color-muted-foreground: var(--calais-text-muted);
+  --color-accent: var(--calais-accent-soft);
+  --color-accent-foreground: var(--calais-accent);
+  --color-destructive: var(--calais-danger);
+  --color-border: var(--calais-border);
+  --color-input: var(--calais-border-strong);
+  --color-ring: var(--calais-accent);
+  --color-sidebar: var(--calais-surface-subtle);
+  --color-sidebar-foreground: var(--calais-ink);
+  --color-sidebar-primary: var(--calais-accent);
+  --color-sidebar-primary-foreground: var(--calais-canvas);
+  --color-sidebar-accent: var(--calais-accent-soft);
+  --color-sidebar-accent-foreground: var(--calais-accent);
+  --color-sidebar-border: var(--calais-border);
+  --color-sidebar-ring: var(--calais-accent);
+  --radius-sm: calc(var(--calais-radius-control) * 0.7);
+  --radius-md: calc(var(--calais-radius-control) * 0.85);
+  --radius-lg: var(--calais-radius-control);
+  --radius-xl: var(--calais-radius-card);
+  --radius-2xl: var(--calais-radius-panel);
+}
+
+:root {
+  --background: var(--calais-canvas);
+  --foreground: var(--calais-ink);
+  --card: var(--calais-surface);
+  --card-foreground: var(--calais-ink);
+  --popover: var(--calais-surface);
+  --popover-foreground: var(--calais-ink);
+  --primary: var(--calais-accent);
+  --primary-foreground: var(--calais-canvas);
+  --secondary: var(--calais-surface-subtle);
+  --secondary-foreground: var(--calais-ink);
+  --muted: var(--calais-surface-subtle);
+  --muted-foreground: var(--calais-text-muted);
+  --accent: var(--calais-accent-soft);
+  --accent-foreground: var(--calais-accent);
+  --destructive: var(--calais-danger);
+  --border: var(--calais-border);
+  --input: var(--calais-border-strong);
+  --ring: var(--calais-accent);
+  --sidebar: var(--calais-surface-subtle);
+  --sidebar-foreground: var(--calais-ink);
+  --sidebar-primary: var(--calais-accent);
+  --sidebar-primary-foreground: var(--calais-canvas);
+  --sidebar-accent: var(--calais-accent-soft);
+  --sidebar-accent-foreground: var(--calais-accent);
+  --sidebar-border: var(--calais-border);
+  --sidebar-ring: var(--calais-accent);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* InkPilot is an editing engine; Calais remains responsible for its visual
+   language and deliberately disables media in public activity descriptions. */
+.calais-rich-text-editor {
+  --wf-color-primary: var(--calais-accent);
+  --wf-color-bg: var(--calais-surface);
+  --wf-color-fg: var(--calais-ink);
+  --wf-color-border: var(--calais-border);
+  --wf-color-muted: var(--calais-surface-subtle);
+  --wf-color-muted-fg: var(--calais-text-muted);
+  --wf-color-error: var(--calais-danger);
+  --wf-color-warning: var(--calais-warning);
+  --wf-color-success: var(--calais-success);
+  --wf-radius-sm: calc(var(--calais-radius-control) * 0.7);
+  --wf-radius-md: var(--calais-radius-control);
+}
+
+.calais-rich-text-editor .wf-toolbar {
+  position: static;
+}
+
+.calais-rich-text-editor .wf-toolbar-btn.is-active {
+  color: var(--calais-canvas);
+}
+
+.calais-rich-text-editor .wf-toolbar-btn[hidden] {
+  display: none;
+}
+
+.calais-rich-text-editor .ProseMirror {
+  min-height: 11rem;
+  max-width: none;
+}
+
+/* React Flow supplies graph behavior; the workspace tokens own its visuals. */
+.react-flow {
+  --xy-background-color: var(--calais-surface-subtle);
+  --xy-edge-stroke: var(--calais-border-strong);
+  --xy-edge-stroke-selected: var(--calais-accent);
+  --xy-connectionline-stroke: var(--calais-accent);
+  --xy-minimap-background-color: var(--calais-surface);
+  --xy-minimap-mask-background-color: color-mix(
+    in oklch,
+    var(--calais-surface-subtle) 72%,
+    transparent
+  );
+  --xy-controls-button-background-color: var(--calais-surface);
+  --xy-controls-button-background-color-hover: var(--calais-accent-soft);
+  --xy-controls-button-color: var(--calais-ink);
+  --xy-controls-button-border-color: var(--calais-border);
+}
+
+.react-flow__node {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--calais-accent);
+}
+
+.simulator-handle {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid var(--calais-surface);
+  background: var(--calais-accent);
 }

@@ -15,6 +15,7 @@ A multilingual public-information platform for people seeking help in Calais, an
 5. **Demo data is labeled.** Fixtures are fictional and marked "Demo data — do not publish". Never seed real organisation claims without a verification record.
 6. **Errors early.** `pnpm check:ci` must pass before any commit is proposed. Lint and typecheck findings are fixed, not suppressed; `eslint-disable` needs a comment explaining why.
 7. **Commit per decision**, message says why. After editing anything in `docs/`, run a cross-document consistency check for contradictions (see `docs/SUSTAINABILITY.md` — AI delivery practices).
+8. **Reuse the platform UI layer before inventing a primitive.** Universal/public/mobile UI uses Tamagui from `packages/ui`; authenticated web-workspace controls use the shadcn source in `apps/web/src/components/ui`. Both consume `packages/tokens`. Do not hand-roll a button, input, select, dialog, table, card, badge, tooltip, or similar control when the owning layer has an accessible equivalent. Semantic HTML structure and hidden form fields remain native. See `docs/UI-ARCHITECTURE.md`.
 
 ## Commands
 
@@ -24,4 +25,4 @@ A multilingual public-information platform for people seeking help in Calais, an
 
 ## Current slice
 
-Slice 0 (`docs/PRODUCT.md` §8.1): private instrument — services, places, schedules, statuses/freshness, basic information, directory, share snippet, simulator engine, single-editor console; FR/EN/AR. Defer everything else to its gate; when in doubt, verified content beats new features.
+Slice 0 (`docs/PRODUCT.md` §8.1): private instrument — activities, reusable services, places, schedules, occurrence status/freshness, basic information, directory, share snippet, simulator engine, single-editor console; FR/EN/AR. Defer everything else to its gate; when in doubt, verified content beats new features.

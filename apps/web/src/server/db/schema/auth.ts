@@ -1,10 +1,13 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
+  boolean,
+  check,
   index,
   integer,
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -19,19 +22,36 @@ type AdapterAccountType = "email" | "oauth" | "oidc" | "webauthn";
  * Column shapes match the DrizzleAdapter contract — do not repurpose these
  * for organisation membership; that lives in `core` (docs/DATABASE-SCHEMA.md §4).
  */
-export const users = authSchema.table("users", {
-  id: varchar("id", { length: 255 })
-    .notNull()
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  name: varchar("name", { length: 255 }),
-  email: varchar("email", { length: 255 }).notNull().unique(),
-  emailVerified: timestamp("email_verified", {
-    mode: "date",
-    withTimezone: true,
-  }),
-  image: varchar("image", { length: 255 }),
-});
+export const users = authSchema.table(
+  "users",
+  {
+    id: varchar("id", { length: 255 })
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    name: varchar("name", { length: 255 }),
+    /** One canonical sign-in address per global identity. */
+    email: varchar("email", { length: 255 }).notNull(),
+    emailVerified: timestamp("email_verified", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    /** Versioned scrypt record; never a plaintext or reversible password. */
+    passwordHash: text("password_hash"),
+    passwordUpdatedAt: timestamp("password_updated_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    image: varchar("image", { length: 255 }),
+  },
+  (t) => [
+    uniqueIndex("users_normalized_email_uq").on(sql`lower(btrim(${t.email}))`),
+    check(
+      "users_email_normalized_ck",
+      sql`${t.email} = lower(btrim(${t.email}))`,
+    ),
+  ],
+);
 
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
@@ -157,4 +177,65 @@ export const verificationTokens = authSchema.table(
     }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.identifier, t.token] })],
+);
+
+/**
+ * Single-use password-reset tokens. The emailed secret is random and only its
+ * HMAC is stored, so a database read never yields a usable token. Unlike the
+ * magic link, consuming a reset token does not create a session — it only
+ * authorises setting a new password on the dedicated reset page, so the reset
+ * is not gated by the SMS second factor.
+ */
+export const passwordResetTokens = authSchema.table(
+  "password_reset_tokens",
+  {
+    id: uuid("id").defaultRandom().notNull().primaryKey(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("password_reset_tokens_user_created_idx").on(t.userId, t.createdAt),
+  ],
+);
+
+export const passwordResetTokensRelations = relations(
+  passwordResetTokens,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [passwordResetTokens.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
+/**
+ * Bounded password-attempt ledger for identifier-level throttling. The HMAC
+ * prevents this operational table from becoming another email-address list.
+ */
+export const passwordSignInAttempts = authSchema.table(
+  "password_sign_in_attempts",
+  {
+    id: uuid("id").defaultRandom().notNull().primaryKey(),
+    identifierHash: varchar("identifier_hash", { length: 64 }).notNull(),
+    userId: varchar("user_id", { length: 255 }).references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    succeeded: boolean("succeeded").notNull(),
+    attemptedAt: timestamp("attempted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("password_attempts_identifier_time_idx").on(
+      t.identifierHash,
+      t.attemptedAt,
+    ),
+  ],
 );

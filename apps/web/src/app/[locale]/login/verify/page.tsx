@@ -1,6 +1,6 @@
 import { formatMessage } from "@calais/shared/i18n";
 import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { AuthTextField, Paragraph, YStack } from "@calais/ui";
+import { Paragraph, YStack } from "@calais/ui";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -12,6 +12,12 @@ import {
 import { AuthShell } from "~/components/auth/auth-shell";
 import { AuthStatus } from "~/components/auth/auth-status";
 import { SubmitButton } from "~/components/auth/submit-button";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "~/components/ui/input-otp";
+import { Label } from "~/components/ui/label";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { authPath } from "~/i18n/routing";
 import { localizedAuthMetadata } from "~/seo/site";
@@ -56,6 +62,7 @@ export default async function VerifySecondFactorPage({
   const recipient = editorRecipient(session.user.email);
   if (!recipient) redirect(authPath("error", locale));
   const phone = maskPhone(recipient.phone);
+  const isInvalidCode = query.error === "invalid";
 
   return (
     <AuthShell
@@ -100,25 +107,36 @@ export default async function VerifySecondFactorPage({
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="returnTo" value={returnTo} />
           <YStack gap="$calais5">
-            <AuthTextField
-              id="code"
-              label={messages["auth.verify.codeLabel"]}
-              inputProps={{
-                name: "code",
-                type: "text",
-                autoComplete: "one-time-code",
-                inputMode: "numeric",
-                pattern: "[0-9]{6}",
-                minLength: 6,
-                maxLength: 6,
-                required: true,
-                placeholder: messages["auth.verify.codePlaceholder"],
-                textAlign: "center",
-                fontSize: 20,
-                fontWeight: "600",
-                letterSpacing: 7,
-              }}
-            />
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="code" className="text-base font-semibold">
+                {messages["auth.verify.codeLabel"]}
+              </Label>
+              <InputOTP
+                id="code"
+                name="code"
+                maxLength={6}
+                minLength={6}
+                pattern="^[0-9]+$"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder={messages["auth.verify.codePlaceholder"]}
+                required
+                aria-invalid={isInvalidCode || undefined}
+                containerClassName="w-full justify-center"
+                dir="ltr"
+              >
+                <InputOTPGroup dir="ltr">
+                  {Array.from({ length: 6 }, (_, index) => (
+                    <InputOTPSlot
+                      key={index}
+                      index={index}
+                      aria-invalid={isInvalidCode || undefined}
+                      className="bg-surface size-11 text-lg font-semibold tabular-nums sm:size-12 sm:text-xl"
+                    />
+                  ))}
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
             <SubmitButton
               label={messages["auth.verify.submit"]}
               pendingLabel={messages["auth.verify.submitting"]}

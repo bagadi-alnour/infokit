@@ -1,499 +1,876 @@
-import Link from "next/link";
-import {
-  and,
-  asc,
-  count,
-  eq,
-  gte,
-  isNull,
-  lt,
-  lte,
-  notExists,
-  or,
-} from "drizzle-orm";
-
+import { formatMessage, type Locale } from "@calais/shared/i18n";
 import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import {
+  Ban,
+  CalendarDays,
+  Check,
+  CircleCheckBig,
+  CircleHelp,
+  MapPin,
+  Pencil,
+  TriangleAlert,
+} from "lucide-react";
+import Link from "next/link";
+
+import { RunbookCalendar } from "~/components/admin/runbook-calendar";
+import { RunbookCreateRail } from "~/components/admin/runbook-create-rail";
+import { RunbookInformationRail } from "~/components/admin/runbook-information-rail";
 import { PendingButton } from "~/components/pending-button";
-import { Card, Chip, EmptyState, PageHeader } from "~/components/ui";
+import { Badge } from "~/components/ui/badge";
+import { buttonVariants } from "~/components/ui/button";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
-import { freshnessOf, isSameParisDay, parisToday } from "~/lib/freshness";
+import { freshnessOf, parisToday } from "~/lib/freshness";
 import { db } from "~/server/db";
 import {
+  activities,
+  activityOccurrenceConfirmations,
+  activityServices,
+  activityTranslations,
+  cities,
+  cityTeams,
+  cityTranslations,
   organizations,
-  places,
+  placeTranslations,
   scheduleExceptions,
   scheduleRules,
+  serviceCategories,
+  serviceCategoryTranslations,
   services,
   serviceTranslations,
 } from "~/server/db/schema";
 import {
-  cancelServiceToday,
-  confirmServiceToday,
-  markServiceUncertain,
-  undoCancelServiceToday,
+  cancelActivityToday,
+  confirmActivitiesToday,
+  confirmActivityToday,
+  markActivityUncertain,
+  undoCancelActivityToday,
 } from "./actions";
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-type TodayEntry = {
-  id: string;
-  name: string;
-  org: string;
-  windows: string[];
-  confirmedAt: Date | null;
-  cancelled: boolean;
-  uncertain: boolean;
+const localeTag: Record<Locale, string> = {
+  fr: "fr-FR",
+  en: "en-GB",
+  ar: "ar",
 };
 
-/**
- * Everything scheduled today (Europe/Paris): the proactive freshness loop.
- * Confirming an activity re-stamps verification the same day, so the public
- * "last verified" is never older than the activity it describes.
- */
-async function loadToday(): Promise<TodayEntry[]> {
-  const today = parisToday();
-  const rows = await db
-    .select({
-      id: services.id,
-      name: serviceTranslations.name,
-      org: organizations.displayName,
-      start: scheduleRules.startTime,
-      end: scheduleRules.endTime,
-      lastVerifiedAt: services.lastVerifiedAt,
-      manualStatus: services.manualStatus,
-    })
-    .from(scheduleRules)
-    .innerJoin(services, eq(scheduleRules.serviceId, services.id))
-    .leftJoin(
-      serviceTranslations,
-      and(
-        eq(serviceTranslations.serviceId, services.id),
-        eq(serviceTranslations.languageCode, "fr"),
-      ),
-    )
-    .leftJoin(organizations, eq(services.organizationId, organizations.id))
-    .where(
-      and(
-        eq(scheduleRules.weekday, today.weekday),
-        isNull(services.archivedAt),
-        or(
-          isNull(scheduleRules.validFrom),
-          lte(scheduleRules.validFrom, today.isoDate),
-        ),
-        or(
-          isNull(scheduleRules.validTo),
-          gte(scheduleRules.validTo, today.isoDate),
-        ),
-      ),
-    )
-    .orderBy(asc(scheduleRules.startTime));
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_MONTH = /^\d{4}-\d{2}$/;
 
-  const cancelledToday = new Set(
-    (
-      await db
-        .select({ serviceId: scheduleExceptions.serviceId })
-        .from(scheduleExceptions)
-        .where(
-          and(
-            eq(scheduleExceptions.date, today.isoDate),
-            eq(scheduleExceptions.kind, "cancellation"),
-          ),
-        )
-    ).map((row) => row.serviceId),
+function isoWeekday(isoDate: string) {
+  const day = new Date(`${isoDate}T12:00:00Z`).getUTCDay();
+  return day === 0 ? 7 : day;
+}
+
+function monthDates(month: string) {
+  const [year = 0, monthNumber = 1] = month.split("-").map(Number);
+  const days = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  return Array.from(
+    { length: days },
+    (_, index) =>
+      `${String(year).padStart(4, "0")}-${String(monthNumber).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`,
   );
-
-  const byService = new Map<string, TodayEntry>();
-  for (const row of rows) {
-    const window = `${row.start.slice(0, 5)}–${row.end.slice(0, 5)}`;
-    const existing = byService.get(row.id);
-    if (existing) {
-      existing.windows.push(window);
-      continue;
-    }
-    byService.set(row.id, {
-      id: row.id,
-      name: row.name ?? "(no name)",
-      org: row.org ?? "—",
-      windows: [window],
-      confirmedAt: isSameParisDay(row.lastVerifiedAt)
-        ? row.lastVerifiedAt
-        : null,
-      cancelled: cancelledToday.has(row.id),
-      uncertain: row.manualStatus === "uncertain",
-    });
-  }
-  return [...byService.values()];
 }
 
-type AttentionKind =
-  "never" | "overdue" | "due_soon" | "uncertain" | "noSchedule" | "missingFr";
+function formatDate(isoDate: string, locale: Locale, long = true) {
+  return new Intl.DateTimeFormat(localeTag[locale], {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    ...(long ? {} : { year: undefined }),
+  }).format(new Date(`${isoDate}T12:00:00Z`));
+}
 
-type AttentionItem = {
-  id: string;
+type TranslationRow = {
+  languageCode: string;
   name: string;
-  org: string;
-  kind: AttentionKind;
-  confirmable: boolean;
 };
 
-/** The queue that keeps data honest: stale, uncertain, or unpublishable. */
-async function loadAttention(): Promise<AttentionItem[]> {
-  const weekAhead = new Date(Date.now() + WEEK_MS);
-  const base = {
-    id: services.id,
-    name: serviceTranslations.name,
-    org: organizations.displayName,
-    lastVerifiedAt: services.lastVerifiedAt,
-    reviewDueAt: services.reviewDueAt,
-    manualStatus: services.manualStatus,
-  };
-  const nameJoin = and(
-    eq(serviceTranslations.serviceId, services.id),
-    eq(serviceTranslations.languageCode, "fr"),
+function translatedName(
+  rows: TranslationRow[],
+  locale: Locale,
+  fallback: string,
+) {
+  return (
+    rows.find((row) => row.languageCode === locale)?.name ??
+    rows.find((row) => row.languageCode === "fr")?.name ??
+    rows[0]?.name ??
+    fallback
   );
-
-  const stale = await db
-    .select(base)
-    .from(services)
-    .leftJoin(serviceTranslations, nameJoin)
-    .leftJoin(organizations, eq(services.organizationId, organizations.id))
-    .where(
-      and(
-        isNull(services.archivedAt),
-        or(
-          isNull(services.lastVerifiedAt),
-          lt(services.reviewDueAt, weekAhead),
-          eq(services.manualStatus, "uncertain"),
-        ),
-      ),
-    )
-    .orderBy(asc(services.reviewDueAt))
-    .limit(10);
-
-  const structuralWhere = (missing: "schedule" | "fr") =>
-    and(
-      isNull(services.archivedAt),
-      eq(services.published, true),
-      missing === "schedule"
-        ? notExists(
-            db
-              .select()
-              .from(scheduleRules)
-              .where(eq(scheduleRules.serviceId, services.id)),
-          )
-        : notExists(
-            db
-              .select()
-              .from(serviceTranslations)
-              .where(
-                and(
-                  eq(serviceTranslations.serviceId, services.id),
-                  eq(serviceTranslations.languageCode, "fr"),
-                ),
-              ),
-          ),
-    );
-
-  const [noSchedule, missingFr] = await Promise.all([
-    db
-      .select(base)
-      .from(services)
-      .leftJoin(serviceTranslations, nameJoin)
-      .leftJoin(organizations, eq(services.organizationId, organizations.id))
-      .where(structuralWhere("schedule"))
-      .limit(5),
-    db
-      .select(base)
-      .from(services)
-      .leftJoin(serviceTranslations, nameJoin)
-      .leftJoin(organizations, eq(services.organizationId, organizations.id))
-      .where(structuralWhere("fr"))
-      .limit(5),
-  ]);
-
-  const items = new Map<string, AttentionItem>();
-  const push = (
-    row: (typeof stale)[number],
-    kind: AttentionKind,
-    confirmable: boolean,
-  ) => {
-    if (items.has(row.id)) return;
-    items.set(row.id, {
-      id: row.id,
-      name: row.name ?? "(no name)",
-      org: row.org ?? "—",
-      kind,
-      confirmable,
-    });
-  };
-
-  for (const row of noSchedule) push(row, "noSchedule", false);
-  for (const row of missingFr) push(row, "missingFr", false);
-  for (const row of stale) {
-    if (row.manualStatus === "uncertain") {
-      push(row, "uncertain", true);
-      continue;
-    }
-    const freshness = freshnessOf(row);
-    if (freshness === "never") push(row, "never", true);
-    else if (freshness === "overdue") push(row, "overdue", true);
-    else if (freshness === "due_soon") push(row, "due_soon", true);
-  }
-  return [...items.values()].slice(0, 10);
 }
 
-async function loadStats(weekAhead: Date) {
-  const [orgs] = await db.select({ n: count() }).from(organizations);
-  const [placeRows] = await db.select({ n: count() }).from(places);
-  const [svc] = await db
-    .select({ n: count() })
-    .from(services)
-    .where(isNull(services.archivedAt));
-  const [published] = await db
-    .select({ n: count() })
-    .from(services)
-    .where(and(isNull(services.archivedAt), eq(services.published, true)));
-  const [due] = await db
-    .select({ n: count() })
-    .from(services)
-    .where(
-      and(
-        isNull(services.archivedAt),
-        or(
-          isNull(services.lastVerifiedAt),
-          lt(services.reviewDueAt, weekAhead),
-        ),
-      ),
-    );
-  return {
-    orgs: orgs?.n ?? 0,
-    places: placeRows?.n ?? 0,
-    services: svc?.n ?? 0,
-    published: published?.n ?? 0,
-    due: due?.n ?? 0,
-  };
-}
-
-const attentionTone: Record<AttentionKind, "warn" | "danger"> = {
-  never: "warn",
-  overdue: "danger",
-  due_soon: "warn",
-  uncertain: "warn",
-  noSchedule: "danger",
-  missingFr: "danger",
-};
-
-export default async function DashboardOverview({
+export default async function DashboardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{
+    org?: string;
+    city?: string;
+    date?: string;
+    month?: string;
+  }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const t = await loadPageCatalog(locale, "dashboard-overview");
-  const [todayEntries, attention, stats] = await Promise.all([
-    loadToday(),
-    loadAttention(),
-    loadStats(new Date(Date.now() + WEEK_MS)),
+  const search = await searchParams;
+  const messages = await loadPageCatalog(locale, "dashboard-overview");
+  const today = parisToday();
+  const selectedDate =
+    search.date && ISO_DATE.test(search.date) ? search.date : today.isoDate;
+  const selectedMonth =
+    search.month && ISO_MONTH.test(search.month)
+      ? search.month
+      : selectedDate.slice(0, 7);
+  const selectedWeekday = isoWeekday(selectedDate);
+  const isToday = selectedDate === today.isoDate;
+
+  const [organizationRows, cityRows, teamRows] = await Promise.all([
+    db
+      .select({ id: organizations.id, name: organizations.displayName })
+      .from(organizations)
+      .orderBy(asc(organizations.displayName)),
+    db
+      .select({ id: cities.id, code: cities.code, name: cityTranslations.name })
+      .from(cities)
+      .leftJoin(
+        cityTranslations,
+        and(
+          eq(cityTranslations.cityId, cities.id),
+          eq(cityTranslations.languageCode, locale),
+        ),
+      )
+      .where(eq(cities.active, true))
+      .orderBy(asc(cities.code)),
+    db
+      .select({
+        id: cityTeams.id,
+        name: cityTeams.name,
+        organizationId: cityTeams.organizationId,
+        cityId: cityTeams.cityId,
+      })
+      .from(cityTeams)
+      .where(eq(cityTeams.active, true)),
+  ]);
+  const selectedOrganization =
+    organizationRows.find((row) => row.id === search.org) ??
+    organizationRows[0];
+  const organizationTeam = teamRows.find(
+    (row) => row.organizationId === selectedOrganization?.id,
+  );
+  const selectedCity =
+    cityRows.find((row) => row.id === search.city) ??
+    cityRows.find((row) => row.id === organizationTeam?.cityId) ??
+    cityRows[0];
+  const cityName =
+    selectedCity?.name ?? selectedCity?.code ?? messages["scope.city"];
+
+  const scopedActivities =
+    selectedOrganization && selectedCity
+      ? await db
+          .select({
+            id: activities.id,
+            organizationId: activities.organizationId,
+            cityId: activities.cityId,
+            teamId: activities.teamId,
+            placeId: activities.placeId,
+            published: activities.published,
+            manualStatus: activities.manualStatus,
+            lastVerifiedAt: activities.lastVerifiedAt,
+            reviewDueAt: activities.reviewDueAt,
+          })
+          .from(activities)
+          .where(
+            and(
+              eq(activities.organizationId, selectedOrganization.id),
+              eq(activities.cityId, selectedCity.id),
+              isNull(activities.archivedAt),
+            ),
+          )
+      : [];
+  const activityIds = scopedActivities.map((activity) => activity.id);
+  const placeIds = scopedActivities
+    .map((activity) => activity.placeId)
+    .filter((id): id is string => id !== null);
+  const monthStart = `${selectedMonth}-01`;
+  const datesInMonth = monthDates(selectedMonth);
+  const monthEnd = datesInMonth.at(-1) ?? monthStart;
+
+  const [
+    translationRows,
+    ruleRows,
+    exceptionRows,
+    confirmationRows,
+    assignmentRows,
+    placeNameRows,
+    categoryRows,
+    reusableServiceRows,
+    reusableServiceNames,
+  ] = await Promise.all([
+    activityIds.length
+      ? db
+          .select({
+            activityId: activityTranslations.activityId,
+            languageCode: activityTranslations.languageCode,
+            name: activityTranslations.name,
+          })
+          .from(activityTranslations)
+          .where(inArray(activityTranslations.activityId, activityIds))
+      : [],
+    activityIds.length
+      ? db
+          .select()
+          .from(scheduleRules)
+          .where(inArray(scheduleRules.activityId, activityIds))
+          .orderBy(asc(scheduleRules.startTime))
+      : [],
+    activityIds.length
+      ? db
+          .select()
+          .from(scheduleExceptions)
+          .where(
+            and(
+              inArray(scheduleExceptions.activityId, activityIds),
+              gte(scheduleExceptions.date, monthStart),
+              lte(scheduleExceptions.date, monthEnd),
+            ),
+          )
+      : [],
+    activityIds.length
+      ? db
+          .select()
+          .from(activityOccurrenceConfirmations)
+          .where(
+            and(
+              inArray(activityOccurrenceConfirmations.activityId, activityIds),
+              gte(activityOccurrenceConfirmations.date, monthStart),
+              lte(activityOccurrenceConfirmations.date, monthEnd),
+            ),
+          )
+      : [],
+    activityIds.length
+      ? db
+          .select({
+            activityId: activityServices.activityId,
+            serviceId: services.id,
+            languageCode: serviceTranslations.languageCode,
+            name: serviceTranslations.name,
+          })
+          .from(activityServices)
+          .innerJoin(services, eq(activityServices.serviceId, services.id))
+          .leftJoin(
+            serviceTranslations,
+            eq(serviceTranslations.serviceId, services.id),
+          )
+          .where(
+            and(
+              inArray(activityServices.activityId, activityIds),
+              eq(activityServices.active, true),
+              eq(services.active, true),
+              isNull(services.archivedAt),
+            ),
+          )
+      : [],
+    placeIds.length
+      ? db
+          .select({
+            placeId: placeTranslations.placeId,
+            languageCode: placeTranslations.languageCode,
+            name: placeTranslations.name,
+          })
+          .from(placeTranslations)
+          .where(inArray(placeTranslations.placeId, placeIds))
+      : [],
+    db
+      .select({
+        id: serviceCategories.id,
+        code: serviceCategories.code,
+        icon: serviceCategories.icon,
+        label: serviceCategoryTranslations.label,
+      })
+      .from(serviceCategories)
+      .leftJoin(
+        serviceCategoryTranslations,
+        and(
+          eq(serviceCategoryTranslations.categoryId, serviceCategories.id),
+          eq(serviceCategoryTranslations.languageCode, locale),
+        ),
+      )
+      .where(eq(serviceCategories.enabled, true))
+      .orderBy(asc(serviceCategories.displayOrder)),
+    db
+      .select({
+        id: services.id,
+        organizationId: services.organizationId,
+        categoryId: services.categoryId,
+      })
+      .from(services)
+      .where(
+        and(
+          eq(services.active, true),
+          isNull(services.archivedAt),
+          selectedOrganization
+            ? or(
+                isNull(services.organizationId),
+                eq(services.organizationId, selectedOrganization.id),
+              )
+            : isNull(services.organizationId),
+        ),
+      ),
+    db
+      .select({
+        serviceId: serviceTranslations.serviceId,
+        languageCode: serviceTranslations.languageCode,
+        name: serviceTranslations.name,
+      })
+      .from(serviceTranslations),
   ]);
 
-  const dateLabel = new Intl.DateTimeFormat(locale, {
-    dateStyle: "full",
-    timeZone: "Europe/Paris",
-  }).format(new Date());
-  const timeFormat = new Intl.DateTimeFormat(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Paris",
-  });
-  const servicePath = (id: string) =>
-    localizedPath(`/dashboard/services/${id}`, locale);
-
-  const hiddenFields = (serviceId: string) => (
-    <>
-      <input type="hidden" name="locale" value={locale} />
-      <input type="hidden" name="serviceId" value={serviceId} />
-    </>
+  const translationsByActivity = new Map<string, TranslationRow[]>();
+  for (const row of translationRows) {
+    const current = translationsByActivity.get(row.activityId) ?? [];
+    current.push(row);
+    translationsByActivity.set(row.activityId, current);
+  }
+  const placesById = new Map<string, TranslationRow[]>();
+  for (const row of placeNameRows) {
+    const current = placesById.get(row.placeId) ?? [];
+    current.push(row);
+    placesById.set(row.placeId, current);
+  }
+  const servicesByActivity = new Map<string, Map<string, TranslationRow[]>>();
+  for (const row of assignmentRows) {
+    const assigned =
+      servicesByActivity.get(row.activityId) ??
+      new Map<string, TranslationRow[]>();
+    const names: TranslationRow[] = assigned.get(row.serviceId) ?? [];
+    if (row.name && row.languageCode) {
+      names.push({ languageCode: row.languageCode, name: row.name });
+    }
+    assigned.set(row.serviceId, names);
+    servicesByActivity.set(row.activityId, assigned);
+  }
+  const rulesByActivity = new Map<string, typeof ruleRows>();
+  for (const rule of ruleRows) {
+    const current = rulesByActivity.get(rule.activityId) ?? [];
+    current.push(rule);
+    rulesByActivity.set(rule.activityId, current);
+  }
+  const exceptionKey = (activityId: string, date: string) =>
+    `${activityId}:${date}`;
+  const exceptionsByOccurrence = new Map<string, Set<string>>();
+  for (const exception of exceptionRows) {
+    const key = exceptionKey(exception.activityId, exception.date);
+    const current = exceptionsByOccurrence.get(key) ?? new Set();
+    current.add(exception.kind);
+    exceptionsByOccurrence.set(key, current);
+  }
+  const confirmationByOccurrence = new Map(
+    confirmationRows.map((row) => [
+      exceptionKey(row.activityId, row.date),
+      row,
+    ]),
   );
 
-  const statCards = [
-    {
-      label: t["stats.organizations"],
-      value: stats.orgs,
-      href: "/dashboard/organizations",
-    },
-    {
-      label: t["stats.places"],
-      value: stats.places,
-      href: "/dashboard/places",
-    },
-    {
-      label: t["stats.services"],
-      value: stats.services,
-      href: "/dashboard/services",
-    },
-    {
-      label: t["stats.published"],
-      value: stats.published,
-      href: "/dashboard/services",
-    },
-    {
-      label: t["stats.dueThisWeek"],
-      value: stats.due,
-      href: "/dashboard/services",
-    },
-  ];
+  const activityName = (id: string) =>
+    translatedName(
+      translationsByActivity.get(id) ?? [],
+      locale,
+      messages["activity.untitled"],
+    );
+  const occurrenceFor = (activity: (typeof scopedActivities)[number]) => {
+    const rules = (rulesByActivity.get(activity.id) ?? []).filter(
+      (rule) =>
+        rule.weekday === selectedWeekday &&
+        (!rule.validFrom || rule.validFrom <= selectedDate) &&
+        (!rule.validTo || rule.validTo >= selectedDate),
+    );
+    if (rules.length === 0) return null;
+    const exceptions =
+      exceptionsByOccurrence.get(exceptionKey(activity.id, selectedDate)) ??
+      new Set<string>();
+    const confirmed = confirmationByOccurrence.get(
+      exceptionKey(activity.id, selectedDate),
+    );
+    const assignedServices = [
+      ...(servicesByActivity.get(activity.id)?.entries() ?? []),
+    ].map(([serviceId, names]) => ({
+      id: serviceId,
+      name: translatedName(names, locale, messages["service.untitled"]),
+    }));
+    return {
+      ...activity,
+      name: activityName(activity.id),
+      place: activity.placeId
+        ? translatedName(
+            placesById.get(activity.placeId) ?? [],
+            locale,
+            messages["activity.mobile"],
+          )
+        : messages["activity.mobile"],
+      windows: rules.map(
+        (rule) => `${rule.startTime.slice(0, 5)}–${rule.endTime.slice(0, 5)}`,
+      ),
+      services: assignedServices,
+      cancelled: exceptions.has("closure") || exceptions.has("cancellation"),
+      uncertain: exceptions.has("uncertain"),
+      confirmedAt: confirmed?.confirmedAt ?? null,
+    };
+  };
+  const occurrences = scopedActivities
+    .map(occurrenceFor)
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => (a.windows[0] ?? "").localeCompare(b.windows[0] ?? ""));
+
+  const eventDates: Record<
+    string,
+    ("scheduled" | "confirmed" | "attention" | "cancelled")[]
+  > = {};
+  for (const date of datesInMonth) {
+    const states = new Set<
+      "scheduled" | "confirmed" | "attention" | "cancelled"
+    >();
+    const weekday = isoWeekday(date);
+    for (const activity of scopedActivities) {
+      const scheduled = (rulesByActivity.get(activity.id) ?? []).some(
+        (rule) =>
+          rule.weekday === weekday &&
+          (!rule.validFrom || rule.validFrom <= date) &&
+          (!rule.validTo || rule.validTo >= date),
+      );
+      if (!scheduled) continue;
+      const exceptions =
+        exceptionsByOccurrence.get(exceptionKey(activity.id, date)) ??
+        new Set<string>();
+      if (exceptions.has("closure") || exceptions.has("cancellation")) {
+        states.add("cancelled");
+      } else if (
+        confirmationByOccurrence.has(exceptionKey(activity.id, date))
+      ) {
+        states.add("confirmed");
+      } else if (
+        exceptions.has("uncertain") ||
+        (activity.reviewDueAt && activity.reviewDueAt.getTime() < Date.now())
+      ) {
+        states.add("attention");
+      } else {
+        states.add("scheduled");
+      }
+    }
+    if (states.size > 0) eventDates[date] = [...states];
+  }
+
+  const pending = occurrences.filter(
+    (occurrence) =>
+      !occurrence.cancelled && !occurrence.uncertain && !occurrence.confirmedAt,
+  );
+  const allConfirmed =
+    isToday &&
+    occurrences.length > 0 &&
+    occurrences.every(
+      (occurrence) => occurrence.cancelled || Boolean(occurrence.confirmedAt),
+    );
+  const attention = scopedActivities
+    .map((activity) => {
+      const noSchedule = (rulesByActivity.get(activity.id) ?? []).length === 0;
+      const freshness = freshnessOf(activity);
+      const kind =
+        activity.manualStatus === "uncertain"
+          ? "uncertain"
+          : noSchedule
+            ? "noSchedule"
+            : freshness === "never"
+              ? "never"
+              : freshness === "overdue"
+                ? "overdue"
+                : freshness === "due_soon"
+                  ? "dueSoon"
+                  : null;
+      return kind ? { activity, kind, name: activityName(activity.id) } : null;
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+  const mainAttention = attention[0];
+  const selectedDateLabel = formatDate(selectedDate, locale);
+
+  const reusableNamesById = new Map<string, TranslationRow[]>();
+  for (const row of reusableServiceNames) {
+    const current = reusableNamesById.get(row.serviceId) ?? [];
+    current.push(row);
+    reusableNamesById.set(row.serviceId, current);
+  }
+  const createLabels: Record<string, string> = {};
+  for (const key of Object.keys(messages)) {
+    if (key.startsWith("create.") || key.startsWith("weekday.")) {
+      createLabels[key.replace(/^create\./, "")] =
+        messages[key as keyof typeof messages];
+    }
+  }
 
   return (
-    <>
-      <PageHeader title={t["overview.title"]} sub={dateLabel} />
-      <div className="grid gap-4">
-        <Card title={t["today.title"]}>
-          <p className="text-muted -mt-1 mb-3 text-xs">{t["overview.sub"]}</p>
-          {todayEntries.length === 0 ? (
-            <EmptyState>{t["today.empty"]}</EmptyState>
-          ) : (
-            <ul className="divide-line divide-y">
-              {todayEntries.map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <Link
-                      href={servicePath(entry.id)}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {entry.name}
-                    </Link>
-                    <p className="text-muted text-xs">
-                      {entry.org} ·{" "}
-                      <span className="tabular-nums">
-                        {entry.windows.join(", ")}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {entry.cancelled ? (
-                      <>
-                        <Chip tone="danger">{t["today.cancelled"]}</Chip>
-                        <form action={undoCancelServiceToday}>
-                          {hiddenFields(entry.id)}
-                          <PendingButton variant="secondary">
-                            {t["today.undo"]}
-                          </PendingButton>
-                        </form>
-                      </>
-                    ) : (
-                      <>
-                        {entry.uncertain ? (
-                          <Chip tone="warn">{t["today.uncertain"]}</Chip>
-                        ) : null}
-                        {entry.confirmedAt ? (
-                          <Chip tone="ok">
-                            <span className="tabular-nums">{`${t["today.confirmed"]} · ${timeFormat.format(entry.confirmedAt)}`}</span>
-                          </Chip>
-                        ) : (
-                          <>
-                            <form action={confirmServiceToday}>
-                              {hiddenFields(entry.id)}
-                              <PendingButton>
-                                {t["today.confirm"]}
-                              </PendingButton>
-                            </form>
-                            {!entry.uncertain ? (
-                              <form action={markServiceUncertain}>
-                                {hiddenFields(entry.id)}
-                                <PendingButton variant="ghost">
-                                  {t["today.uncertain"]}
+    <RunbookInformationRail
+      hideLabel={messages["information.hide"]}
+      showLabel={messages["information.show"]}
+      main={
+        <>
+          <div className="border-line flex flex-col gap-5 border-b pb-6 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h1 className="text-3xl font-semibold capitalize tracking-tight md:text-4xl">
+                {selectedDateLabel}
+              </h1>
+              <p className="text-copy-muted mt-3 text-sm md:text-base">
+                {formatMessage(
+                  messages[
+                    isToday ? "runbook.summary" : "runbook.summaryScheduled"
+                  ],
+                  {
+                    count: String(
+                      isToday ? pending.length : occurrences.length,
+                    ),
+                    city: cityName,
+                  },
+                )}
+              </p>
+            </div>
+            <div className="grid shrink-0 justify-items-start gap-2 md:justify-items-end">
+              {isToday && pending.length > 0 ? (
+                <form action={confirmActivitiesToday}>
+                  <input type="hidden" name="locale" value={locale} />
+                  {pending.map((occurrence) => (
+                    <input
+                      key={occurrence.id}
+                      type="hidden"
+                      name="activityId"
+                      value={occurrence.id}
+                    />
+                  ))}
+                  <PendingButton className="h-12 px-5 text-base">
+                    <CircleCheckBig aria-hidden />
+                    {formatMessage(messages["runbook.confirmAll"], {
+                      count: String(pending.length),
+                    })}
+                  </PendingButton>
+                </form>
+              ) : null}
+              <p className="text-copy-muted text-xs">
+                {formatMessage(messages["runbook.scope"], {
+                  city: cityName,
+                  date: selectedDateLabel,
+                })}
+              </p>
+            </div>
+          </div>
+
+          <div className="divide-line divide-y">
+            {occurrences.length === 0 ? (
+              <div className="py-14 text-center">
+                <CalendarDays
+                  className="text-copy-muted mx-auto size-8"
+                  aria-hidden
+                />
+                <h2 className="mt-3 font-semibold">
+                  {messages["runbook.empty"]}
+                </h2>
+                <p className="text-copy-muted mx-auto mt-1 max-w-md text-sm">
+                  {messages["runbook.emptyHint"]}
+                </p>
+              </div>
+            ) : (
+              occurrences.map((occurrence, index) => {
+                const tone = occurrence.cancelled
+                  ? "text-danger"
+                  : occurrence.uncertain
+                    ? "text-warn"
+                    : occurrence.confirmedAt
+                      ? "text-ok"
+                      : "text-brand";
+                return (
+                  <article
+                    key={occurrence.id}
+                    className="grid gap-4 py-7 md:grid-cols-[34px_minmax(0,1fr)]"
+                  >
+                    <div className="relative hidden md:block" aria-hidden>
+                      <CalendarDays
+                        className={`${tone} relative z-10 size-6`}
+                      />
+                      {index < occurrences.length - 1 ? (
+                        <span className="bg-line absolute start-3 top-7 h-[calc(100%+3.5rem)] w-px" />
+                      ) : null}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                            <h2 className="text-lg font-semibold">
+                              {occurrence.name}
+                            </h2>
+                            <span className="text-copy-muted text-sm tabular-nums">
+                              {occurrence.windows.join(", ")}
+                            </span>
+                            {occurrence.cancelled ? (
+                              <Badge className="bg-danger-soft text-danger">
+                                {messages["runbook.cancelled"]}
+                              </Badge>
+                            ) : occurrence.uncertain ? (
+                              <Badge className="bg-warn-soft text-warn">
+                                {messages["runbook.uncertainStatus"]}
+                              </Badge>
+                            ) : occurrence.confirmedAt ? (
+                              <Badge className="bg-ok-soft text-ok">
+                                <Check aria-hidden />
+                                {messages["runbook.confirmed"]}
+                              </Badge>
+                            ) : null}
+                          </div>
+                          <p className="text-copy-muted mt-2 flex items-center gap-1.5 text-sm">
+                            <MapPin className="size-4 shrink-0" aria-hidden />
+                            {occurrence.place}, {cityName}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                          <Link
+                            className={buttonVariants({ variant: "outline" })}
+                            href={`${localizedPath("/dashboard/activities", locale)}?activity=${occurrence.id}&org=${occurrence.organizationId ?? selectedOrganization?.id ?? ""}&city=${occurrence.cityId}`}
+                          >
+                            <Pencil aria-hidden />
+                            {messages["runbook.correct"]}
+                          </Link>
+                          {isToday ? (
+                            occurrence.cancelled ? (
+                              <form action={undoCancelActivityToday}>
+                                <input
+                                  type="hidden"
+                                  name="locale"
+                                  value={locale}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="activityId"
+                                  value={occurrence.id}
+                                />
+                                <PendingButton variant="secondary">
+                                  {messages["runbook.undoCancel"]}
                                 </PendingButton>
                               </form>
-                            ) : null}
-                          </>
+                            ) : (
+                              <form action={cancelActivityToday}>
+                                <input
+                                  type="hidden"
+                                  name="locale"
+                                  value={locale}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="activityId"
+                                  value={occurrence.id}
+                                />
+                                <PendingButton variant="danger">
+                                  <Ban aria-hidden />
+                                  {messages["runbook.cancel"]}
+                                </PendingButton>
+                              </form>
+                            )
+                          ) : null}
+                          {isToday &&
+                          !occurrence.cancelled &&
+                          !occurrence.confirmedAt ? (
+                            <form action={markActivityUncertain}>
+                              <input
+                                type="hidden"
+                                name="locale"
+                                value={locale}
+                              />
+                              <input
+                                type="hidden"
+                                name="activityId"
+                                value={occurrence.id}
+                              />
+                              <PendingButton variant="secondary">
+                                <CircleHelp aria-hidden />
+                                {messages["runbook.uncertain"]}
+                              </PendingButton>
+                            </form>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <p className="text-copy-muted mt-3 text-xs lg:text-end">
+                        {formatMessage(messages["runbook.occurrenceScope"], {
+                          city: cityName,
+                          date: selectedDateLabel,
+                        })}
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {occurrence.services.length > 0 ? (
+                          occurrence.services.map((service) => (
+                            <Badge
+                              key={service.id}
+                              variant="outline"
+                              className="h-8 rounded-md px-3 font-normal"
+                            >
+                              {service.name}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-copy-muted text-xs">
+                            {messages["activity.noServices"]}
+                          </span>
                         )}
-                        <form action={cancelServiceToday}>
-                          {hiddenFields(entry.id)}
-                          <PendingButton variant="ghost">
-                            {t["today.cancel"]}
+                      </div>
+                      {isToday &&
+                      !occurrence.cancelled &&
+                      !occurrence.confirmedAt &&
+                      !occurrence.uncertain ? (
+                        <form action={confirmActivityToday} className="mt-4">
+                          <input type="hidden" name="locale" value={locale} />
+                          <input
+                            type="hidden"
+                            name="activityId"
+                            value={occurrence.id}
+                          />
+                          <PendingButton variant="secondary">
+                            <Check aria-hidden />
+                            {messages["runbook.confirmOne"]}
                           </PendingButton>
                         </form>
-                      </>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
 
-        <Card title={t["attention.title"]}>
-          {attention.length === 0 ? (
-            <EmptyState>{t["attention.empty"]}</EmptyState>
-          ) : (
-            <ul className="divide-line divide-y">
-              {attention.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5"
-                >
-                  <div className="min-w-0">
-                    <Link
-                      href={servicePath(item.id)}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {item.name}
-                    </Link>
-                    <p className="text-muted text-xs">{item.org}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Chip tone={attentionTone[item.kind]}>
-                      {t[`attention.${item.kind}`]}
-                    </Chip>
-                    {item.confirmable ? (
-                      <form action={confirmServiceToday}>
-                        {hiddenFields(item.id)}
-                        <PendingButton variant="secondary">
-                          {t["attention.confirm"]}
-                        </PendingButton>
-                      </form>
-                    ) : null}
-                    <Link
-                      href={servicePath(item.id)}
-                      className="text-accent px-1 text-sm font-semibold"
-                    >
-                      {t["attention.open"]}
-                    </Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          {statCards.map((stat) => (
-            <Link key={stat.label} href={localizedPath(stat.href, locale)}>
-              <Card className="hover:border-line-strong h-full">
-                <p className="text-2xl font-semibold tabular-nums">
-                  {stat.value}
+          {allConfirmed ? (
+            <div className="border-ok/40 bg-ok-soft mt-5 flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center">
+              <CircleCheckBig
+                className="text-ok size-10 shrink-0"
+                aria-hidden
+              />
+              <div>
+                <p className="font-semibold">
+                  {messages["runbook.allConfirmed"]}
                 </p>
-                <p className="text-muted mt-1 text-xs">{stat.label}</p>
-              </Card>
-            </Link>
-          ))}
-        </div>
+                <p className="text-copy-muted mt-1 text-sm">
+                  {messages["runbook.allConfirmedHint"]}
+                </p>
+              </div>
+              <div className="text-copy-muted sm:ms-auto sm:text-end">
+                <p className="text-ok text-sm font-medium">
+                  {messages["runbook.confirmedBy"]}
+                </p>
+                <p className="text-xs">
+                  {organizationTeam?.name ?? messages["scope.team"]}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </>
+      }
+      information={
+        <>
+          <RunbookCalendar
+            selectedDate={selectedDate}
+            month={selectedMonth}
+            eventDates={eventDates}
+            selectedDateLabel={selectedDateLabel}
+            selectedCount={occurrences.length}
+            labels={{
+              activities: messages["calendar.activities"],
+              scheduled: messages["calendar.scheduled"],
+              confirmed: messages["calendar.confirmed"],
+              attention: messages["calendar.attention"],
+              loading: messages["calendar.loading"],
+            }}
+            localeCode={locale}
+          />
 
-        {stats.services === 0 ? (
-          <Card title={t["start.title"]}>
-            <ol className="text-muted list-inside list-decimal space-y-1 text-sm">
-              <li>{t["start.orgs"]}</li>
-              <li>{t["start.places"]}</li>
-              <li>{t["start.services"]}</li>
-              <li>{t["start.source"]}</li>
-            </ol>
-          </Card>
-        ) : null}
-      </div>
-    </>
+          <div className="border-line mt-5 border-t pt-5">
+            <RunbookCreateRail
+              locale={locale}
+              categories={categoryRows.map((category) => ({
+                id: category.id,
+                name: category.label ?? category.code,
+                icon: category.icon,
+              }))}
+              activities={scopedActivities.flatMap((activity) =>
+                activity.organizationId
+                  ? [
+                      {
+                        id: activity.id,
+                        organizationId: activity.organizationId,
+                        cityId: activity.cityId,
+                        name: activityName(activity.id),
+                      },
+                    ]
+                  : [],
+              )}
+              services={reusableServiceRows.map((service) => ({
+                id: service.id,
+                organizationId: service.organizationId,
+                name: translatedName(
+                  reusableNamesById.get(service.id) ?? [],
+                  locale,
+                  messages["service.untitled"],
+                ),
+                category:
+                  categoryRows.find(
+                    (category) => category.id === service.categoryId,
+                  )?.label ?? undefined,
+                icon:
+                  categoryRows.find(
+                    (category) => category.id === service.categoryId,
+                  )?.icon ?? null,
+              }))}
+              selectedDate={selectedDate}
+              labels={createLabels}
+            />
+          </div>
+
+          <section className="border-line mt-5 border-t pt-5">
+            <h2 className="flex items-center gap-2 font-semibold">
+              {messages["attention.title"]}
+              <Badge className="bg-warn-soft text-warn" variant="secondary">
+                {attention.length}
+              </Badge>
+            </h2>
+            {mainAttention ? (
+              <div className="mt-3">
+                <p className="text-warn flex items-start gap-2 text-sm font-semibold">
+                  <TriangleAlert
+                    className="mt-0.5 size-4 shrink-0"
+                    aria-hidden
+                  />
+                  {mainAttention.name}
+                </p>
+                <p className="text-copy-muted mt-1 ps-6 text-xs">
+                  {
+                    {
+                      uncertain: messages["attention.uncertain"],
+                      noSchedule: messages["attention.noSchedule"],
+                      never: messages["attention.never"],
+                      overdue: messages["attention.overdue"],
+                      dueSoon: messages["attention.dueSoon"],
+                    }[mainAttention.kind]
+                  }
+                </p>
+                <Link
+                  className={buttonVariants({
+                    variant: "outline",
+                    className: "mt-3 w-full justify-between",
+                  })}
+                  href={`${localizedPath("/dashboard/activities", locale)}?activity=${mainAttention.activity.id}&org=${mainAttention.activity.organizationId ?? selectedOrganization?.id ?? ""}&city=${mainAttention.activity.cityId}`}
+                >
+                  {messages["attention.review"]}
+                  <Pencil aria-hidden />
+                </Link>
+              </div>
+            ) : (
+              <p className="text-copy-muted mt-2 text-sm">
+                {messages["attention.empty"]}
+              </p>
+            )}
+          </section>
+        </>
+      }
+    />
   );
 }

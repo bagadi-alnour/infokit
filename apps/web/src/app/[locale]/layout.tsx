@@ -1,15 +1,13 @@
 import "~/styles/globals.css";
+import "leaflet/dist/leaflet.css";
 
 import { localeMetadata } from "@calais/shared/i18n";
 import { type Metadata } from "next";
 import { Inter } from "next/font/google";
 
-import {
-  DesignTokenStyles,
-  ThemeInitializationScript,
-} from "~/components/design-tokens";
+import { DesignTokenStyles } from "~/components/design-tokens";
 import { ThemeProvider } from "~/components/theme/theme-provider";
-import { requireRouteLocale } from "~/i18n/route-locale";
+import { requirePublicRouteLocale } from "~/i18n/route-locale";
 import { localeStaticParams } from "~/i18n/routing";
 import { siteConfig } from "~/seo/site";
 
@@ -70,7 +68,7 @@ export default async function RootLayout({
   children: React.ReactNode;
   params: Promise<{ locale: string }>;
 }>) {
-  const locale = requireRouteLocale((await params).locale);
+  const locale = requirePublicRouteLocale((await params).locale);
   return (
     <html
       lang={locale}
@@ -79,7 +77,6 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <ThemeInitializationScript />
         <DesignTokenStyles />
       </head>
       <body className="bg-canvas text-ink font-sans antialiased">

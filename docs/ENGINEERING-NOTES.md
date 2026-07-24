@@ -28,7 +28,7 @@ packages/
 
 EP-next `packages/design-tokens`: typed semantic themes (`light`/`dark` `SemanticTheme` objects, `designRadii`, border widths) consumed by **both** platforms.
 
-For Calais Info: `packages/tokens` is the single encoding of `DESIGN.md` §2. `packages/ui` maps those tokens into one Tamagui configuration and holds universal components used by Next.js now and Expo when the mobile app is scaffolded; platform session, routing, and navigation adapters stay app-specific. The existing web CSS-variable bridge remains for legacy dashboard surfaces during migration. Hard rule from kawa's AGENTS.md, adopted verbatim: **no color decisions in JSX/component CSS — token package only, consumed semantically.**
+For Calais Info: `packages/tokens` is the single encoding of `DESIGN.md` §2. `packages/ui` maps those tokens into one Tamagui configuration and holds universal components used by Next.js now and Expo when the mobile app is scaffolded; platform session, routing, and navigation adapters stay app-specific. The authenticated web workspace uses shadcn open-code primitives kept inside `apps/web`, because its tables, planners, review queues, imports, audit views, document queues, and inventory ledgers are deliberately web-native. Both layers adapt the same semantic tokens; shadcn never introduces a second palette. See `UI-ARCHITECTURE.md` for the import boundary and reuse rules. Hard rule from kawa's AGENTS.md, adopted verbatim: **no color decisions in JSX/component CSS — token package only, consumed semantically.**
 
 ## 3. i18n pipeline — adopt, with one Calais-specific split
 
@@ -38,7 +38,7 @@ EP-next mechanism (`scripts/generate-shared-i18n-resources.mjs`):
 - A generator compiles them into a typed TS module consumed by web **and** mobile — one source of truth, two runtimes.
 - The generator **fails the build if a registered locale is missing its catalog**; `check:i18n` and `check-locale-branches` validate drift; `scaffold-locale` bootstraps a new language.
 
-Calais Info split to respect: this pipeline is for **UI strings only**. Public _content_ translations (services, articles) live in the database with per-language review states and fallback rules (`DATABASE-SCHEMA.md` §2) — never in code catalogs. The registry maps to `core.languages`; the fail-on-missing-catalog behavior implements §17's "a language is an operational commitment."
+Calais Info split to respect: this pipeline is for **UI strings only**. Public _content_ translations (activities, reusable services, articles) live in the database with immutable source-version links, per-language quality states, separate locale publication, and fallback rules (`DATABASE-SCHEMA.md` §2). Code catalogs never hold public content. The registry maps to `core.languages`; the fail-on-missing-catalog behavior implements §17's "a language is an operational commitment."
 
 Cautionary tale from the same repo: `fix-missing-translations.mjs`, `fix-tour-search-translations.mjs` — one-off repair scripts accumulating means catalog debt crept in. Prevention: the check scripts run in CI from day one, and RTL (Arabic) is in the catalog from the first commit, not retrofitted.
 
@@ -50,7 +50,7 @@ kawa `drizzle/README.md` workflow:
 - **Custom SQL migrations for DB-level enforcement** — kawa's `0001_invoice_immutability_triggers.sql` enforces French e-invoicing immutability _in the database_. Calais Info has the identical need three times over: append-only inventory ledger, immutable publication revisions, audit events. Triggers, not application promises.
 - `db:migrate:verify` runs the full migration chain against a **disposable database** in CI/pre-release.
 - **Never `db:push` against persistent environments**; guarded one-time baseline/rebase via explicit env flags (`ALLOW_MIGRATION_BASELINE=true`) with automatic backup of prior journal rows.
-- `drizzle/seed/` folder for seed data — Calais Info's taxonomy catalogs (categories, specialities, audiences, cities, languages) are seeds.
+- `drizzle/seed/` folder for seed data — Calais Info's taxonomy catalogs (categories, specialities, audiences, cities, languages) are seeds. Slice 0 may also seed a curated, idempotent set of real organisation identity/profile drafts from official public sources when every record is unpublished, source-dated, and paired with pending verification; it must not seed public service claims. A platform editor may later create an unpublished provisional activity linked to one of those known organisation rows through the audited authoring/import workflow, but that is application data with creator/provider acceptance state—not catalogue seed data.
 
 ## 5. Testing and quality gates — adopt
 
