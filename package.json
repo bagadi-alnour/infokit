@@ -13,6 +13,7 @@
     "db:studio": "pnpm --filter @infokit/web db:studio",
     "dev": "turbo run dev",
     "dev:frontend": "pnpm --filter @infokit/web dev",
+    "dev:mobile": "pnpm --filter @infokit/mobile dev",
     "dev:web": "pnpm --filter @infokit/web dev",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx,json,md,css}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx,json,md,css}\" --cache",

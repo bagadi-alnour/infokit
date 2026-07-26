@@ -1,7 +1,9 @@
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: [".cache"] },
+  // .expo holds Metro/expo-router generated files, including the typed-route
+  // declarations: lint the app, not its build output.
+  { ignores: [".cache", ".expo"] },
   {
     files: ["**/*.ts", "**/*.tsx"],
     extends: [
