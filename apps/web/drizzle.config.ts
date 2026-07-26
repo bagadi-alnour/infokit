@@ -9,5 +9,15 @@ export default {
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: { url },
-  schemaFilter: ["public", "auth", "core", "content", "simulator", "audit"],
+  schemaFilter: [
+    "public",
+    "auth",
+    "core",
+    "content",
+    // The shared coordination agenda (docs/DATABASE-SCHEMA.md §13).
+    "operations",
+    "simulator",
+    "notifications",
+    "audit",
+  ],
 } satisfies Config;

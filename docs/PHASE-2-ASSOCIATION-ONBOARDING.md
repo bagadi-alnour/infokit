@@ -4,7 +4,7 @@
 
 ## Objective
 
-Bring verified associations fully into Calais Info so each organisation can maintain its public profile, services, schedules, articles, simulator content, contacts, and downloads without accessing another organisation's private workspace. Associations that received limited article-publishing access in Phase 1 are upgraded rather than re-created.
+Bring verified associations fully into InfoKit so each organisation can maintain its public profile, services, schedules, articles, simulator content, contacts, and downloads without accessing another organisation's private workspace. Associations that received limited article-publishing access in Phase 1 are upgraded rather than re-created.
 
 Phase 2 changes the content model from platform-managed publishing to shared, accountable publishing.
 

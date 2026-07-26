@@ -1,9 +1,10 @@
 {
-  "name": "@calais/validation",
+  "name": "@infokit/validation",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
+    "./account": "./src/account.ts",
     "./address": "./src/address.ts",
     "./auth": "./src/auth.ts"
   },
@@ -18,7 +19,7 @@
     ]
   },
   "dependencies": {
-    "@calais/shared": "workspace:*",
+    "@infokit/shared": "workspace:*",
     "zod": "^3.24.2"
   },
   "devDependencies": {

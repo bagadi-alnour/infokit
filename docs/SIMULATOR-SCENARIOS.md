@@ -1,4 +1,4 @@
-# Simulator Scenarios — Calais Info
+# Simulator Scenarios — InfoKit
 
 ## Overview
 
@@ -385,7 +385,7 @@ These scenarios document realistic user journeys through the information simulat
 **Context:**
 
 - Friday 13:00
-- Exploring Calais Info for first time
+- Exploring InfoKit for first time
 - Wants general overview of available services
 - May come back later or share with friends
 
@@ -453,7 +453,7 @@ These scenarios document realistic user journeys through the information simulat
 
 #### Download
 
-- PDF: Calais Info welcome guide in Arabic → Basic services, key contacts, how the platform works
+- PDF: InfoKit welcome guide in Arabic → Basic services, key contacts, how the platform works
 
 ---
 

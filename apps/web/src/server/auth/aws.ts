@@ -1,18 +1,18 @@
 import { SendEmailCommand, SESv2Client } from "@aws-sdk/client-sesv2";
 import { PublishCommand, SNSClient } from "@aws-sdk/client-sns";
-import { fromIni } from "@aws-sdk/credential-providers";
 import {
   formatMessage,
   localeMetadata,
   type Locale,
-} from "@calais/shared/i18n";
-import { loadCatalog } from "@calais/shared/i18n/catalogs";
+} from "@infokit/shared/i18n";
+import { loadCatalog } from "@infokit/shared/i18n/catalogs";
 
 import { env } from "~/env";
 import type { EditorialLanguage } from "~/lib/editorial-languages";
+import { awsCredentials } from "~/server/aws-credentials";
 import { editorRecipient } from "./editors";
 
-const credentials = fromIni({ profile: env.AWS_PROFILE });
+const credentials = awsCredentials();
 const ses = new SESv2Client({ region: env.AWS_REGION, credentials });
 const sns = new SNSClient({ region: env.AWS_REGION, credentials });
 
@@ -123,9 +123,13 @@ export async function sendPasswordResetEmail({
 }
 
 /**
- * Team invitation for a person who may not have an account yet. Sent only on
- * an admin-initiated action inside the workspace — never from a public form —
- * so it does not go through the sign-in anti-enumeration gate.
+ * Invitation for a person who may not have an account yet. Sent only on an
+ * admin-initiated action inside the workspace — never from a public form — so
+ * it does not go through the sign-in anti-enumeration gate.
+ *
+ * Without a team the invitation is an organisation one: the representative is
+ * invited to the organisation itself, not to one of its city teams, and the
+ * body says so instead of naming a team the person has never heard of.
  */
 export async function sendInvitationEmail({
   email,
@@ -140,13 +144,13 @@ export async function sendInvitationEmail({
   url: string;
   locale: Locale;
   organizationName: string;
-  teamName: string;
+  teamName?: string;
   inviterName: string;
   expiresAt: Date;
 }) {
   if (env.AUTH_DEV_LOG_DELIVERY) {
     console.warn(
-      `\n[auth:dev] Invitation for ${email} to ${organizationName} / ${teamName} (by ${inviterName}):\n${url}\n`,
+      `\n[auth:dev] Invitation for ${email} to ${organizationName}${teamName ? ` / ${teamName}` : ""} (by ${inviterName}):\n${url}\n`,
     );
     return;
   }
@@ -160,19 +164,25 @@ export async function sendInvitationEmail({
   const { direction } = localeMetadata[locale];
   const values = {
     organization: organizationName,
-    team: teamName,
+    team: teamName ?? organizationName,
     inviter: inviterName,
   };
   const heading = formatMessage(messages["invite.heading"], values);
-  const body = formatMessage(messages["invite.body"], values);
+  const body = formatMessage(
+    teamName ? messages["invite.body"] : messages["invite.organizationBody"],
+    values,
+  );
   const expires = formatMessage(messages["invite.expires"], {
     date: new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(
       expiresAt,
     ),
   });
+  const action = teamName
+    ? messages["invite.action"]
+    : messages["invite.organizationAction"];
   const safeUrl = escapeHtml(url);
   const text = `${heading}\n\n${body}\n${url}\n\n${expires}\n${messages["invite.ignore"]}`;
-  const html = `<section lang="${locale}" dir="${direction}"><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(body)}</p><p><a href="${safeUrl}">${escapeHtml(messages["invite.action"])}</a></p><p>${escapeHtml(expires)}</p><p>${escapeHtml(messages["invite.ignore"])}</p></section>`;
+  const html = `<section lang="${locale}" dir="${direction}"><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(body)}</p><p><a href="${safeUrl}">${escapeHtml(action)}</a></p><p>${escapeHtml(expires)}</p><p>${escapeHtml(messages["invite.ignore"])}</p></section>`;
 
   await ses.send(
     new SendEmailCommand({

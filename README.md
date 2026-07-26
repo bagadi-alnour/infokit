@@ -1,29 +1,37 @@
-# Create T3 App
+# InfoKit
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+A multilingual public-information platform for people seeking practical help, and a coordination tool for the associations serving them. City-agnostic by design — **Calais is the first city to launch**, not the product's identity.
 
-## What's next? How do I make an app with this?
+Domain: [infokit.org](https://infokit.org)
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+## Workspace
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+| Path                  | Package               | What it is                                              |
+| --------------------- | --------------------- | ------------------------------------------------------- |
+| `apps/web`            | `@infokit/web`        | Next.js App Router — public pages + editor console      |
+| `apps/mobile`         | `@infokit/mobile`     | Expo app — reads public content, shows admin calendars  |
+| `packages/shared`     | `@infokit/shared`     | i18n catalogs, locales, public read models              |
+| `packages/tokens`     | `@infokit/tokens`     | Semantic design tokens (single source for web + native) |
+| `packages/ui`         | `@infokit/ui`         | React Native Reusables + NativeWind components          |
+| `packages/validation` | `@infokit/validation` | Shared schemas                                          |
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+## Getting started
 
-## Learn More
+```bash
+pnpm install
+cp apps/web/.env.example apps/web/.env
+apps/web/start-database.sh   # local Postgres on port 5433
+pnpm db:push                 # push-mode while tables are empty
+pnpm dev:web
+```
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+## Commands
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+- `pnpm dev:web` — Next.js dev server
+- `pnpm check:ci` — format check + lint + typecheck; the health question
+- `pnpm db:push` / `pnpm db:generate --name <slug>` / `pnpm db:studio`
+- `pnpm test:unit` — web unit tests
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+## Docs
 
-## How do I deploy this?
-
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+`AGENTS.md` holds the standing rules for every session in this repo. `docs/PRODUCT.md` is the canonical product requirements document; `docs/ENGINEERING-NOTES.md` is the engineering blueprint; `docs/DESIGN.md` and `docs/DESIGN-BRIEF.md` are the design contract; `docs/UI-ARCHITECTURE.md` explains which UI layer owns which surface.

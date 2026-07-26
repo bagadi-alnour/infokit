@@ -15,7 +15,12 @@ export const env = createEnv({
     /** Comma-separated `email=E.164 phone` pairs; also acts as the allowlist. */
     EDITOR_MFA_RECIPIENTS: z.string().default(""),
     AUTH_EMAIL_FROM: z.string().default(""),
-    AWS_PROFILE: z.string().default("ep"),
+    /** Optional. Unset means the standard AWS credential chain. */
+    AWS_PROFILE: z.string().min(1).optional(),
+    /** Explicit keys win over AWS_PROFILE; both must be set to take effect. */
+    AWS_ACCESS_KEY_ID: z.string().min(16).optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    AWS_SESSION_TOKEN: z.string().min(1).optional(),
     AWS_REGION: z.string().default("eu-west-3"),
     /** Private object storage for public-content source assets. */
     AWS_S3_ASSET_BUCKET: z.string().min(3).optional(),
@@ -69,6 +74,9 @@ export const env = createEnv({
     EDITOR_MFA_RECIPIENTS: process.env.EDITOR_MFA_RECIPIENTS,
     AUTH_EMAIL_FROM: process.env.AUTH_EMAIL_FROM,
     AWS_PROFILE: process.env.AWS_PROFILE,
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+    AWS_SESSION_TOKEN: process.env.AWS_SESSION_TOKEN,
     AWS_REGION: process.env.AWS_REGION,
     AWS_S3_ASSET_BUCKET: process.env.AWS_S3_ASSET_BUCKET,
     AWS_S3_ENDPOINT: process.env.AWS_S3_ENDPOINT,

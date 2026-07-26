@@ -1,4 +1,4 @@
-# Calais Info — Awareness and Distribution Plan
+# InfoKit — Awareness and Distribution Plan
 
 > `PRODUCT.md` is the canonical product requirements document. This document plans how anyone in Calais ever learns the product exists. Building the platform creates zero awareness; distribution is scheduled work with owners and measures, not a hope.
 

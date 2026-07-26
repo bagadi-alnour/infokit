@@ -2,7 +2,7 @@
 
 ## Overview
 
-Calais Info is designed as a **generic, globally-deployable platform** for public information and community coordination. The domain should reflect this scalability and mission, not tie to a specific location.
+InfoKit is designed as a **generic, globally-deployable platform** for public information and community coordination. The domain should reflect this scalability and mission, not tie to a specific location.
 
 ---
 
@@ -69,6 +69,8 @@ When evaluating domains, prioritize:
 
 ## Decision Record
 
-| Domain | Status | Decision Date | Notes                             |
-| ------ | ------ | ------------- | --------------------------------- |
-|        | `TBD`  |               | Populate after stakeholder review |
+| Domain          | Status        | Decision Date | Notes                                                                                                       |
+| --------------- | ------------- | ------------- | ----------------------------------------------------------------------------------------------------------- |
+| **infokit.org** | ✅ Registered | 2026-07-26    | Chosen name and brand wordmark: **InfoKit**. Codebase, packages (`@infokit/*`), and tokens renamed to match |
+| infonest.org    | Not pursued   |               | Runner-up                                                                                                   |
+| kharaghley.info | Not pursued   |               | Runner-up                                                                                                   |

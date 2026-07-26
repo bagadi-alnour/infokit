@@ -1,4 +1,4 @@
-# Calais Info — Operations and Sustainability
+# InfoKit — Operations and Sustainability
 
 > `PRODUCT.md` is the canonical product requirements document. This document answers the questions the PRD defers: who operates the platform, what it costs, who is legally responsible at each stage, and what happens if the operator stops.
 

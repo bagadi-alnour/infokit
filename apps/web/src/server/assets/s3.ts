@@ -4,10 +4,10 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { fromIni } from "@aws-sdk/credential-providers";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { env } from "~/env";
+import { awsCredentials } from "~/server/aws-credentials";
 
 function configuredEndpoint(): string | undefined {
   const endpoint = env.AWS_S3_ENDPOINT;
@@ -25,10 +25,7 @@ const s3 = new S3Client({
   region: env.AWS_REGION,
   endpoint: configuredEndpoint(),
   forcePathStyle: env.AWS_S3_FORCE_PATH_STYLE,
-  credentials:
-    env.NODE_ENV === "development"
-      ? fromIni({ profile: env.AWS_PROFILE })
-      : undefined,
+  credentials: awsCredentials(),
 });
 
 export async function createAssetUploadUrl(input: {
@@ -53,7 +50,14 @@ export async function createAssetUploadUrl(input: {
 }
 
 /** Short-lived direct URL for displaying a private workspace asset. */
-export async function createAssetReadUrl(storageKey: string): Promise<string> {
+export async function createAssetReadUrl(
+  storageKey: string,
+  /**
+   * Ask storage to send the file as a download under this name. A flyer saved
+   * as an opaque storage key is a file nobody can find again later.
+   */
+  downloadFileName?: string,
+): Promise<string> {
   if (!env.AWS_S3_ASSET_BUCKET) {
     throw new Error("AWS_S3_ASSET_BUCKET is not configured");
   }
@@ -62,9 +66,25 @@ export async function createAssetReadUrl(storageKey: string): Promise<string> {
     new GetObjectCommand({
       Bucket: env.AWS_S3_ASSET_BUCKET,
       Key: storageKey,
+      ResponseContentDisposition: downloadFileName
+        ? `attachment; filename="${asciiFileName(downloadFileName)}"; filename*=UTF-8''${encodeURIComponent(downloadFileName)}`
+        : undefined,
     }),
     { expiresIn: 10 * 60 },
   );
+}
+
+/**
+ * A quoted-string-safe fallback name for clients that ignore `filename*`.
+ * Accents and non-Latin scripts survive in the `filename*` form beside it.
+ */
+function asciiFileName(name: string): string {
+  const ascii = name
+    // Header values are single-line: control characters go too, not just accents.
+    .replace(/[\u0000-\u001f\u007f-\uffff"\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return ascii === "" ? "download" : ascii;
 }
 
 /** Confirm that a browser upload reached object storage intact. */

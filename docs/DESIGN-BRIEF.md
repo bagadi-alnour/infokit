@@ -1,4 +1,4 @@
-# Calais Info — Product Design Brief
+# InfoKit — Product Design Brief
 
 > `PRODUCT.md` is the canonical product requirements document. This brief elaborates design behavior and cannot expand or override product scope.
 

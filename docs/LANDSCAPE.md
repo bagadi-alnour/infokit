@@ -1,6 +1,6 @@
-# Calais Info — Landscape and Positioning
+# InfoKit — Landscape and Positioning
 
-> `PRODUCT.md` is the canonical product requirements document. This document maps who already provides information to exiled people in and around Calais, what gap remains, and how Calais Info relates to each actor. Success is measured by people getting current information — not by this platform beating another.
+> `PRODUCT.md` is the canonical product requirements document. This document maps who already provides information to exiled people in and around Calais, what gap remains, and how InfoKit relates to each actor. Success is measured by people getting current information — not by this platform beating another.
 
 **Status:** Living document — key facts web-verified 17 July 2026; items marked _verify_ are Phase 0 tasks
 **Doctrine:** partner-first. Interoperate before duplicating; duplicate only what is demonstrably missing.
@@ -20,7 +20,7 @@
 
 ## 2. Gap analysis
 
-| Capability                                    | Watizat              | Soliguide | Channel Info/RIB   | InfoMigrants | Groups/WoM             | **Calais Info target**              |
+| Capability                                    | Watizat              | Soliguide | Channel Info/RIB   | InfoMigrants | Groups/WoM             | **InfoKit target**                  |
 | --------------------------------------------- | -------------------- | --------- | ------------------ | ------------ | ---------------------- | ----------------------------------- |
 | Calais-specific service detail                | (no current edition) | _verify_  | ✔ field            | ✖            | ✔                      | ✔                                   |
 | Day-level freshness with visible verification | ✖ monthly print      | partial   | conversation-level | ✖            | no provenance          | ✔ **core differentiator**           |
@@ -36,8 +36,8 @@ The open slot is a **verified current-state layer for Calais**: is it open now, 
 Check soliguide.fr coverage of Calais and contact Solinum. Three outcomes:
 
 1. **Soliguide covers Calais well** → do not build a duplicate directory. Reposition: Calais-freshness layer and association workspaces (Phases 2–4), contributing public data to Soliguide through their API.
-2. **Soliguide covers Calais thinly or not at all** → Calais Info fills the gap; design the schema export so records can later be contributed to or synced with Soliguide rather than fragmenting the national picture.
-3. **Partnership** → Calais Info becomes the Calais maintenance loop for data that also lives in Soliguide.
+2. **Soliguide covers Calais thinly or not at all** → InfoKit fills the gap; design the schema export so records can later be contributed to or synced with Soliguide rather than fragmenting the national picture.
+3. **Partnership** → InfoKit becomes the Calais maintenance loop for data that also lives in Soliguide.
 
 In all three outcomes: interoperability beats duplication, and the conversation with Solinum happens **before** public launch.
 
@@ -47,7 +47,7 @@ If no association will own its data (R1 fires), the fallback positions are, in o
 
 ## 5. Naming check
 
-"Calais Info" is generic and adjacent to municipal/local-news naming (_verify collisions: mairie communications, local media such as Nord Littoral_). For the audience, the name must signal independence from authorities (R8). Decide the public name before Wave 2 distribution; the working title can stand until then.
+"InfoKit" is generic and adjacent to municipal/local-news naming (_verify collisions: mairie communications, local media such as Nord Littoral_). For the audience, the name must signal independence from authorities (R8). Decide the public name before Wave 2 distribution; the working title can stand until then.
 
 The project's stated ambition is global with Calais as the first territory. That argues for an umbrella brand with per-territory names ("X — Calais") rather than an identity locked to one city — but do not spend naming energy on hypothetical territories before the Calais pilot proves the model (see `PRODUCT.md` §2 and §23).
 

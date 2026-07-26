@@ -8,10 +8,9 @@ import "./src/env.js";
 const config = {
   // Workspace packages ship raw TypeScript; Next compiles them in place.
   transpilePackages: [
-    "@calais/shared",
-    "@calais/tokens",
-    "@calais/ui",
-    "@calais/validation",
+    "@infokit/shared",
+    "@infokit/tokens",
+    "@infokit/validation",
   ],
   async headers() {
     return [

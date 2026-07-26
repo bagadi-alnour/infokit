@@ -1,14 +1,14 @@
-# Calais Info — Open Design Runbook
+# InfoKit — Open Design Runbook
 
 > `PRODUCT.md` is the canonical product requirements document. This runbook may elaborate design execution but cannot expand or override product scope.
 
-This file is the starting point for generating the Calais Info design with [nexu-io/open-design](https://github.com/nexu-io/open-design).
+This file is the starting point for generating the InfoKit design with [nexu-io/open-design](https://github.com/nexu-io/open-design).
 
 Open Design's current workflow is `brief → direction → design system → artifact → handoff`. It ships with an Airtable design-system package, and its prototypes are real single-page HTML/CSS artifacts. This project provides the inputs needed to begin that loop:
 
 - `PRODUCT.md` — product scope and requirements.
 - `DESIGN-BRIEF.md` — audiences, journeys, screen inventory, states, and acceptance criteria.
-- `DESIGN.md` — the nine-section visual contract adapting Airtable to Calais Info.
+- `DESIGN.md` — the nine-section visual contract adapting Airtable to InfoKit.
 - `PHASE-1-PUBLIC-INFORMATION.md` — the current design scope.
 - `PHASE-2-ASSOCIATION-ONBOARDING.md` — the later association-workspace scope.
 - `PHASE-3-TEAM-MANAGEMENT.md` — the later team-management scope.
@@ -21,7 +21,7 @@ On macOS, `/usr/bin/od` is already Apple's octal-dump utility. If the bare `od` 
 
 In Open Design:
 
-1. Create or open a project for **Calais Info**.
+1. Create or open a project for **InfoKit**.
 2. Choose **Prototype** as the artifact type.
 3. Choose the bundled **airtable** design system.
 4. Add this repository as project context. For the first design pass, attach the four core files plus `PHASE-1-PUBLIC-INFORMATION.md`.
@@ -34,13 +34,13 @@ The built-in Airtable package contains `DESIGN.md`, `tokens.css`, component fixt
 Paste this once at the start of the design project:
 
 ```text
-You are designing Calais Info, a multilingual public-information and association-coordination web app for Calais.
+You are designing InfoKit, a multilingual public-information and association-coordination web app for Calais.
 
 Read PRODUCT.md, DESIGN-BRIEF.md, DESIGN.md, and PHASE-1-PUBLIC-INFORMATION.md before generating anything. Treat PRODUCT.md as product scope, PHASE-1-PUBLIC-INFORMATION.md as the current release contract, DESIGN-BRIEF.md as the UX contract, and DESIGN.md as the visual and accessibility contract.
 
 The product has four sequential phases: (1) public information, (2) full association onboarding and publishing, (3) team management with restricted participation-document signing, and (4) inventory management. Design Phase 1 only unless explicitly asked for a later phase. Phase 1 includes searchable map/service discovery, audience labels, provider logos/names, articles with accessible media and AI-translation provenance, the anonymous information simulator, fixed/basic information, and the association directory. It also includes invitation-only article publishing and approval-filtered joint-publication projections. There is no public organisation signup.
 
-Use Open Design's bundled airtable design system as the base. Reuse its tokens and component patterns, then apply the Calais-specific overrides in DESIGN.md. Do not copy Airtable branding or proprietary assets.
+Use Open Design's bundled airtable design system as the base. Reuse its tokens and component patterns, then apply the InfoKit-specific overrides in DESIGN.md. Do not copy Airtable branding or proprietary assets.
 
 The public experience is mobile-first, calm, low-bandwidth, anonymous, and less dense than Airtable. The Phase 1 publishing console is restricted to article publishing and proxy-publishing attribution. Never place full organisation administration, team management, assistance, or beneficiary-record features in a Phase 1 artifact.
 
@@ -70,7 +70,7 @@ After each artifact, critique it against the checklist in section 6 before conti
 ### Prompt A — P-01 public service finder
 
 ```text
-Create artifact P-01, the Calais Info public service finder.
+Create artifact P-01, the InfoKit public service finder.
 
 Build an interactive responsive prototype with a polished 390px mobile state and a 1440px desktop state. Use the bundled airtable design system and the local DESIGN.md overrides.
 
@@ -156,7 +156,7 @@ Keep this intentionally smaller than the Phase 2 workspace: no organisation sett
 ### Prompt H — component and state sheet
 
 ```text
-Create a compact Calais Info component and state sheet based on the approved artifacts.
+Create a compact InfoKit component and state sheet based on the approved artifacts.
 
 Include buttons, inputs, segmented controls, chips, banners, service cards, freshness warnings, language selector, information-simulator step, association card, speciality icons with text labels, basic-information tile, article card, fixed-information link, contact card, download row, invitation state, ownership/approval panel, publishing bar, and audit event.
 
@@ -172,7 +172,7 @@ Critique this artifact against DESIGN.md and DESIGN-BRIEF.md before editing it.
 
 Check hierarchy under stress, mobile reachability, low-bandwidth fallback, status and freshness clarity, text expansion, Arabic RTL, keyboard focus, contrast, one-primary-action discipline, fictional-data labeling, privacy boundaries, and all required states.
 
-List the five highest-impact issues, then revise the artifact to fix them. Do not broaden scope or invent policy. Preserve approved component patterns from earlier Calais Info artifacts.
+List the five highest-impact issues, then revise the artifact to fix them. Do not broaden scope or invent policy. Preserve approved component patterns from earlier InfoKit artifacts.
 ```
 
 ## 6. Approval Checklist
@@ -180,7 +180,7 @@ List the five highest-impact issues, then revise the artifact to fix them. Do no
 Approve an artifact only when:
 
 - Its screen ID and primary user goal are clear.
-- It uses the Airtable base tokens and local Calais overrides consistently.
+- It uses the Airtable base tokens and local InfoKit overrides consistently.
 - Public pages feel calm and readable, not like a spreadsheet.
 - The main task works at 320px and keyboard-only.
 - Important status uses text, icon, and color.

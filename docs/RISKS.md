@@ -1,4 +1,4 @@
-# Calais Info — Risk Register
+# InfoKit — Risk Register
 
 > `PRODUCT.md` is the canonical product requirements document. This register records the risks that specification cannot fix and the responses the project commits to. It is reviewed at every slice/phase gate and whenever an early-warning signal fires.
 
