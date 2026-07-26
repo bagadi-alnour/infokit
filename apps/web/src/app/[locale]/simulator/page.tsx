@@ -1,10 +1,8 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import {
-  PublicSimulatorCollection,
-  type PublicSimulatorSummary,
-} from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
+import type { PublicSimulatorSummary } from "@infokit/shared/public-content";
 import type { Metadata } from "next";
 
+import { PublicSimulatorCollection } from "~/components/public/simulator-collection";
 import {
   PublicPageHeader,
   PublicSiteShell,

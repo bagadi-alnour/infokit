@@ -1,7 +1,7 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { PublicHomeExperience } from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import type { Metadata } from "next";
 
+import { PublicHomeExperience } from "~/components/public/home-experience";
 import { PublicSiteShell } from "~/components/public/public-site-shell";
 import { WebsiteJsonLd } from "~/components/seo/website-json-ld";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
@@ -80,6 +80,12 @@ export default async function HomePage({ params }: HomePageProps) {
           reliability: messages["home.reliability"],
           reliabilityDescription: messages["home.reliabilityDescription"],
           published: messages["home.open"],
+          sectionsLabel: publicMessages["public.nav.label"],
+          statusOpen: publicMessages["activities.status.open"],
+          statusClosed: publicMessages["activities.status.closed"],
+          statusUncertain: publicMessages["activities.status.uncertain"],
+          statusCancelled: publicMessages["activities.status.cancelled"],
+          lastVerified: publicMessages["activities.lastVerified"],
         }}
         links={{
           activities: localizedPath("/activities", locale),

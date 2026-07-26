@@ -6,10 +6,10 @@ import {
   authPath,
   type AuthRoute,
 } from "~/i18n/routing";
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 
 export const siteConfig = {
-  name: "Calais Info",
+  name: "InfoKit",
   description:
     "Multilingual, verified information about services and practical help in Calais.",
   url: new URL(env.SITE_URL),

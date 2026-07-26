@@ -46,7 +46,7 @@
   "activities.opensOn": "{weekday} በ{time} ይከፈታል",
   "activities.location.use": "የአሁኑን አካባቢዬን ተጠቀም",
   "activities.location.locating": "አካባቢዎን በማግኘት ላይ…",
-  "activities.location.privacy": "አካባቢዎ በዚህ ገጽ ላይ ካርታውን ለማስቀመጥ ብቻ ይጠቅማል። አይቀመጥም፣ ወደ Calais Info አይላክም፣ በትንታኔ ውስጥ አይካተትም።",
+  "activities.location.privacy": "አካባቢዎ በዚህ ገጽ ላይ ካርታውን ለማስቀመጥ ብቻ ይጠቅማል። አይቀመጥም፣ ወደ InfoKit አይላክም፣ በትንታኔ ውስጥ አይካተትም።",
   "activities.location.found": "አካባቢዎ በካርታ ላይ ታይቷል።",
   "activities.location.denied": "የአካባቢ ፍቃድ አልተሰጠም። ሙሉ የእንቅስቃሴ ዝርዝሩ አሁንም ይገኛል።",
   "activities.location.unavailable": "አካባቢ በዚህ መሣሪያ ላይ አይገኝም። ሙሉ የእንቅስቃሴ ዝርዝሩ አሁንም ይገኛል።",

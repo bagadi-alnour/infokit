@@ -1,35 +1,63 @@
-import { dark, light, radii, type SemanticTheme } from "@calais/tokens";
+import {
+  dark,
+  elevation,
+  light,
+  radii,
+  type SemanticTheme,
+} from "@infokit/tokens";
 
 /**
- * Injects docs/DESIGN.md tokens (via @calais/tokens — the single encoding)
- * as CSS variables; globals.css maps them to Tailwind utilities with
- * `@theme inline`. Components never hardcode colors (AGENTS.md rule 2).
+ * Injects the design-system tokens (docs/DESIGN-SYSTEM.md, encoded once in
+ * @infokit/tokens) as CSS variables; globals.css maps them to Tailwind
+ * utilities with `@theme inline`. Components never hardcode colours.
  */
 function themeVars(theme: SemanticTheme): string {
   return (Object.entries(theme) as [string, string][])
     .map(
       ([key, value]) =>
-        `--calais-${key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}:${value};`,
+        `--infokit-${key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}:${value};`,
     )
     .join("");
 }
 
+/**
+ * Elevation is a ring plus a soft shadow (docs/DESIGN-SYSTEM.md §4). The ring
+ * comes from the border role, so dropping shadows on low-end devices still
+ * leaves every card outlined.
+ */
+function shadowVars(theme: SemanticTheme, shadowInk: string): string {
+  const ring = `0 0 0 1px ${theme.border}`;
+  const step = (level: keyof typeof elevation) => {
+    const { blur, y, alpha } = elevation[level];
+    return `${ring},0 ${String(y)}px ${String(blur)}px rgb(${shadowInk} / ${String(alpha)})`;
+  };
+  return [
+    `--infokit-shadow-sm:${step("sm")};`,
+    `--infokit-shadow-md:${step("md")};`,
+    `--infokit-shadow-lg:${step("lg")};`,
+  ].join("");
+}
+
+const shapeVars = [
+  `--infokit-radius-chip:${String(radii.chip)}px;`,
+  `--infokit-radius-control:${String(radii.control)}px;`,
+  `--infokit-radius-card:${String(radii.card)}px;`,
+  `--infokit-radius-panel:${String(radii.panel)}px;`,
+].join("");
+
+const lightVars = `color-scheme:light;${themeVars(light)}${shadowVars(light, "16 35 31")}${shapeVars}`;
+const darkVars = `color-scheme:dark;${themeVars(dark)}${shadowVars(dark, "0 0 0")}${shapeVars}`;
+
 const css = [
-  `:root,:root[data-theme="light"]{color-scheme:light;${themeVars(light)}`,
-  `--calais-radius-control:${String(radii.control)}px;`,
-  `--calais-radius-card:${String(radii.card)}px;`,
-  `--calais-radius-panel:${String(radii.panel)}px;}`,
-  `:root[data-theme="dark"]{color-scheme:dark;${themeVars(dark)}}`,
-  `@media (prefers-color-scheme: dark){:root:not([data-theme]),:root[data-theme="system"]{color-scheme:dark;${themeVars(dark)}}}`,
+  `:root,:root[data-theme="light"]{${lightVars}}`,
+  `:root[data-theme="dark"]{${darkVars}}`,
+  `@media (prefers-color-scheme: dark){:root:not([data-theme]),:root[data-theme="system"]{${darkVars}}}`,
 ].join("");
 
 export function DesignTokenStyles() {
   return (
     <style
-      id="calais-design-tokens"
-      // Tamagui moves its generated client stylesheet into the document head.
-      // The token CSS is static; suppress only the resulting style-node ordering mismatch.
-      suppressHydrationWarning
+      id="infokit-design-tokens"
       dangerouslySetInnerHTML={{ __html: css }}
     />
   );

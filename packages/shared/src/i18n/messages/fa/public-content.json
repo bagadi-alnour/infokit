@@ -46,7 +46,7 @@
   "activities.opensOn": "{weekday} ساعت {time} باز می‌شود",
   "activities.location.use": "استفاده از موقعیت فعلی من",
   "activities.location.locating": "در حال یافتن موقعیت شما…",
-  "activities.location.privacy": "موقعیت شما فقط در همین صفحه برای تنظیم نقشه استفاده می‌شود. ذخیره نمی‌شود، به Calais Info ارسال نمی‌شود و در تحلیل‌ها نمی‌آید.",
+  "activities.location.privacy": "موقعیت شما فقط در همین صفحه برای تنظیم نقشه استفاده می‌شود. ذخیره نمی‌شود، به InfoKit ارسال نمی‌شود و در تحلیل‌ها نمی‌آید.",
   "activities.location.found": "موقعیت شما روی نقشه نمایش داده شد.",
   "activities.location.denied": "اجازهٔ دسترسی به موقعیت داده نشد. فهرست کامل فعالیت‌ها همچنان در دسترس است.",
   "activities.location.unavailable": "موقعیت روی این دستگاه در دسترس نیست. فهرست کامل فعالیت‌ها همچنان در دسترس است.",

@@ -6,99 +6,127 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-@theme {
-  --font-sans:
-    var(--font-inter), ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+/* Type families (docs/DESIGN-SYSTEM.md §4). Arabic script leads its own stack
+   so ar/ckb/fa/prs/ps never fall back to a Latin face for shaped text. */
+:root {
+  --infokit-font-body:
+    var(--font-public-sans), var(--font-noto-arabic), ui-sans-serif, system-ui,
+    sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  --infokit-font-heading:
+    var(--font-work-sans), var(--font-noto-arabic), ui-sans-serif, system-ui,
+    sans-serif;
 }
 
-/* Semantic utilities backed by the injected @calais/tokens variables
+:root:is([lang="ar"], [lang="ckb"], [lang="fa"], [lang="prs"], [lang="ps"]) {
+  --infokit-font-body:
+    var(--font-noto-arabic), var(--font-public-sans), ui-sans-serif, system-ui,
+    sans-serif;
+  --infokit-font-heading:
+    var(--font-noto-arabic), var(--font-work-sans), ui-sans-serif, system-ui,
+    sans-serif;
+}
+
+/* Semantic utilities backed by the injected @infokit/tokens variables
    (see src/components/design-tokens.tsx). Values live in one place. */
 @theme inline {
-  --color-canvas: var(--calais-canvas);
-  --color-surface: var(--calais-surface);
-  --color-subtle: var(--calais-surface-subtle);
-  --color-ink: var(--calais-ink);
-  /* Keep secondary copy separate from shadcn's `muted` surface role. */
-  --color-copy-muted: var(--calais-text-muted);
-  --color-line: var(--calais-border);
-  --color-line-strong: var(--calais-border-strong);
-  --color-brand: var(--calais-accent);
-  --color-brand-hover: var(--calais-accent-hover);
-  --color-brand-soft: var(--calais-accent-soft);
-  --color-ok: var(--calais-success);
-  --color-ok-soft: var(--calais-success-soft);
-  --color-warn: var(--calais-warning);
-  --color-warn-soft: var(--calais-warning-soft);
-  --color-danger: var(--calais-danger);
-  --color-danger-soft: var(--calais-danger-soft);
-  --color-neutral: var(--calais-neutral-status);
-  --color-neutral-soft: var(--calais-neutral-status-soft);
-  --radius-control: var(--calais-radius-control);
-  --radius-card: var(--calais-radius-card);
-  --radius-panel: var(--calais-radius-panel);
+  --font-sans: var(--infokit-font-body);
+  --font-display: var(--infokit-font-heading);
 
-  /* shadcn is a web adapter to the same Calais tokens, never a palette. */
-  --color-background: var(--calais-canvas);
-  --color-foreground: var(--calais-ink);
-  --color-card: var(--calais-surface);
-  --color-card-foreground: var(--calais-ink);
-  --color-popover: var(--calais-surface);
-  --color-popover-foreground: var(--calais-ink);
-  --color-primary: var(--calais-accent);
-  --color-primary-foreground: var(--calais-canvas);
-  --color-secondary: var(--calais-surface-subtle);
-  --color-secondary-foreground: var(--calais-ink);
-  --color-muted: var(--calais-surface-subtle);
-  --color-muted-foreground: var(--calais-text-muted);
-  --color-accent: var(--calais-accent-soft);
-  --color-accent-foreground: var(--calais-accent);
-  --color-destructive: var(--calais-danger);
-  --color-border: var(--calais-border);
-  --color-input: var(--calais-border-strong);
-  --color-ring: var(--calais-accent);
-  --color-sidebar: var(--calais-surface-subtle);
-  --color-sidebar-foreground: var(--calais-ink);
-  --color-sidebar-primary: var(--calais-accent);
-  --color-sidebar-primary-foreground: var(--calais-canvas);
-  --color-sidebar-accent: var(--calais-accent-soft);
-  --color-sidebar-accent-foreground: var(--calais-accent);
-  --color-sidebar-border: var(--calais-border);
-  --color-sidebar-ring: var(--calais-accent);
-  --radius-sm: calc(var(--calais-radius-control) * 0.7);
-  --radius-md: calc(var(--calais-radius-control) * 0.85);
-  --radius-lg: var(--calais-radius-control);
-  --radius-xl: var(--calais-radius-card);
-  --radius-2xl: var(--calais-radius-panel);
+  --color-canvas: var(--infokit-canvas);
+  --color-surface: var(--infokit-surface);
+  --color-subtle: var(--infokit-surface-subtle);
+  --color-ink: var(--infokit-ink);
+  /* Keep secondary copy separate from shadcn's `muted` surface role. */
+  --color-copy-muted: var(--infokit-text-muted);
+  --color-line: var(--infokit-border);
+  --color-line-strong: var(--infokit-border-strong);
+  --color-brand: var(--infokit-accent);
+  --color-brand-hover: var(--infokit-accent-hover);
+  /* Accent text on canvas/surface — the only accent allowed for copy. */
+  --color-brand-deep: var(--infokit-accent-deep);
+  --color-brand-ink: var(--infokit-accent-contrast);
+  --color-brand-soft: var(--infokit-accent-soft);
+  --color-brand-soft-ink: var(--infokit-accent-soft-ink);
+  --color-ok: var(--infokit-success);
+  --color-ok-soft: var(--infokit-success-soft);
+  --color-warn: var(--infokit-warning);
+  --color-warn-soft: var(--infokit-warning-soft);
+  --color-danger: var(--infokit-danger);
+  --color-danger-soft: var(--infokit-danger-soft);
+  --color-neutral: var(--infokit-neutral-status);
+  --color-neutral-soft: var(--infokit-neutral-status-soft);
+
+  --radius-chip: var(--infokit-radius-chip);
+  --radius-control: var(--infokit-radius-control);
+  --radius-card: var(--infokit-radius-card);
+  --radius-panel: var(--infokit-radius-panel);
+
+  /* Ring-first elevation: `shadow-ring` survives when shadows are dropped. */
+  --shadow-ring: var(--infokit-shadow-sm);
+  --shadow-lift: var(--infokit-shadow-md);
+  --shadow-float: var(--infokit-shadow-lg);
+
+  /* shadcn is a web adapter to the same InfoKit tokens, never a palette. */
+  --color-background: var(--infokit-canvas);
+  --color-foreground: var(--infokit-ink);
+  --color-card: var(--infokit-surface);
+  --color-card-foreground: var(--infokit-ink);
+  --color-popover: var(--infokit-surface);
+  --color-popover-foreground: var(--infokit-ink);
+  --color-primary: var(--infokit-accent);
+  --color-primary-foreground: var(--infokit-accent-contrast);
+  --color-secondary: var(--infokit-surface-subtle);
+  --color-secondary-foreground: var(--infokit-ink);
+  --color-muted: var(--infokit-surface-subtle);
+  --color-muted-foreground: var(--infokit-text-muted);
+  --color-accent: var(--infokit-accent-soft);
+  --color-accent-foreground: var(--infokit-accent-soft-ink);
+  --color-destructive: var(--infokit-danger);
+  --color-border: var(--infokit-border);
+  --color-input: var(--infokit-border-strong);
+  --color-ring: var(--infokit-accent);
+  --color-sidebar: var(--infokit-surface-subtle);
+  --color-sidebar-foreground: var(--infokit-ink);
+  --color-sidebar-primary: var(--infokit-accent);
+  --color-sidebar-primary-foreground: var(--infokit-accent-contrast);
+  --color-sidebar-accent: var(--infokit-accent-soft);
+  --color-sidebar-accent-foreground: var(--infokit-accent-soft-ink);
+  --color-sidebar-border: var(--infokit-border);
+  --color-sidebar-ring: var(--infokit-accent);
+  --radius-sm: var(--infokit-radius-chip);
+  --radius-md: var(--infokit-radius-control);
+  --radius-lg: var(--infokit-radius-control);
+  --radius-xl: var(--infokit-radius-card);
+  --radius-2xl: var(--infokit-radius-panel);
 }
 
 :root {
-  --background: var(--calais-canvas);
-  --foreground: var(--calais-ink);
-  --card: var(--calais-surface);
-  --card-foreground: var(--calais-ink);
-  --popover: var(--calais-surface);
-  --popover-foreground: var(--calais-ink);
-  --primary: var(--calais-accent);
-  --primary-foreground: var(--calais-canvas);
-  --secondary: var(--calais-surface-subtle);
-  --secondary-foreground: var(--calais-ink);
-  --muted: var(--calais-surface-subtle);
-  --muted-foreground: var(--calais-text-muted);
-  --accent: var(--calais-accent-soft);
-  --accent-foreground: var(--calais-accent);
-  --destructive: var(--calais-danger);
-  --border: var(--calais-border);
-  --input: var(--calais-border-strong);
-  --ring: var(--calais-accent);
-  --sidebar: var(--calais-surface-subtle);
-  --sidebar-foreground: var(--calais-ink);
-  --sidebar-primary: var(--calais-accent);
-  --sidebar-primary-foreground: var(--calais-canvas);
-  --sidebar-accent: var(--calais-accent-soft);
-  --sidebar-accent-foreground: var(--calais-accent);
-  --sidebar-border: var(--calais-border);
-  --sidebar-ring: var(--calais-accent);
+  --background: var(--infokit-canvas);
+  --foreground: var(--infokit-ink);
+  --card: var(--infokit-surface);
+  --card-foreground: var(--infokit-ink);
+  --popover: var(--infokit-surface);
+  --popover-foreground: var(--infokit-ink);
+  --primary: var(--infokit-accent);
+  --primary-foreground: var(--infokit-accent-contrast);
+  --secondary: var(--infokit-surface-subtle);
+  --secondary-foreground: var(--infokit-ink);
+  --muted: var(--infokit-surface-subtle);
+  --muted-foreground: var(--infokit-text-muted);
+  --accent: var(--infokit-accent-soft);
+  --accent-foreground: var(--infokit-accent-soft-ink);
+  --destructive: var(--infokit-danger);
+  --border: var(--infokit-border);
+  --input: var(--infokit-border-strong);
+  --ring: var(--infokit-accent);
+  --sidebar: var(--infokit-surface-subtle);
+  --sidebar-foreground: var(--infokit-ink);
+  --sidebar-primary: var(--infokit-accent);
+  --sidebar-primary-foreground: var(--infokit-accent-contrast);
+  --sidebar-accent: var(--infokit-accent-soft);
+  --sidebar-accent-foreground: var(--infokit-accent-soft-ink);
+  --sidebar-border: var(--infokit-border);
+  --sidebar-ring: var(--infokit-accent);
 }
 
 @layer base {
@@ -107,6 +135,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Rule 2: body copy never below 16px. */
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-text-size-adjust: 100%;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {
@@ -115,70 +147,228 @@
   html {
     @apply font-sans;
   }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+    text-wrap: balance;
+  }
+  /* Rule 5: focus is always visible, never removed for mouse users. */
+  :focus-visible {
+    @apply outline-brand outline-2 outline-offset-2;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
 }
 
-/* InkPilot is an editing engine; Calais remains responsible for its visual
+/* Public typography helpers -------------------------------------------------
+   Used by the reading surfaces (articles, simulator results, activity
+   descriptions) so authored HTML follows the same rules as the components. */
+@utility text-eyebrow {
+  font-family: var(--infokit-font-heading);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--infokit-accent-deep);
+}
+
+.infokit-prose {
+  color: var(--infokit-ink);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  max-width: 72ch;
+}
+
+.infokit-prose > * + * {
+  margin-top: 1.1em;
+}
+
+.infokit-prose h2,
+.infokit-prose h3 {
+  font-family: var(--infokit-font-heading);
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 2em;
+}
+
+.infokit-prose h2 {
+  font-size: 1.5rem;
+}
+
+.infokit-prose h3 {
+  font-size: 1.25rem;
+}
+
+.infokit-prose a {
+  /* Rule 4: paragraph links use the deep accent, underlined. */
+  color: var(--infokit-accent-deep);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.infokit-prose ul,
+.infokit-prose ol {
+  padding-inline-start: 1.4em;
+}
+
+.infokit-prose ul {
+  list-style: disc;
+}
+
+.infokit-prose ol {
+  list-style: decimal;
+}
+
+.infokit-prose li + li {
+  margin-top: 0.4em;
+}
+
+.infokit-prose blockquote {
+  border-inline-start: 4px solid var(--infokit-accent);
+  background: var(--infokit-surface-subtle);
+  border-radius: var(--infokit-radius-control);
+  padding: 0.9em 1.1em;
+  color: var(--infokit-ink);
+}
+
+.infokit-prose strong {
+  font-weight: 700;
+}
+
+.infokit-prose code {
+  background: var(--infokit-surface-subtle);
+  border-radius: var(--infokit-radius-chip);
+  padding: 0.1em 0.35em;
+  font-size: 0.95em;
+}
+
+.infokit-prose img {
+  border-radius: var(--infokit-radius-card);
+  border: 1px solid var(--infokit-border);
+}
+
+.infokit-prose table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.infokit-prose th,
+.infokit-prose td {
+  border: 1px solid var(--infokit-border);
+  padding: 0.5em 0.7em;
+  text-align: start;
+}
+
+.infokit-prose th {
+  background: var(--infokit-surface-subtle);
+}
+
+/* Leaflet renders its own chrome; the tokens own its colours. */
+.leaflet-container {
+  font-family: var(--infokit-font-body);
+  background: var(--infokit-surface-subtle);
+}
+
+.leaflet-container a.leaflet-popup-close-button,
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--infokit-surface);
+  color: var(--infokit-ink);
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: var(--infokit-radius-control);
+  box-shadow: var(--infokit-shadow-md);
+}
+
+.leaflet-bar a,
+.leaflet-control-attribution {
+  background: var(--infokit-surface);
+  color: var(--infokit-ink);
+  border-color: var(--infokit-border);
+}
+
+.leaflet-control-attribution a {
+  color: var(--infokit-accent-deep);
+}
+
+/* InkPilot is an editing engine; InfoKit remains responsible for its visual
    language and deliberately disables media in public activity descriptions. */
-.calais-rich-text-editor {
-  --wf-color-primary: var(--calais-accent);
-  --wf-color-bg: var(--calais-surface);
-  --wf-color-fg: var(--calais-ink);
-  --wf-color-border: var(--calais-border);
-  --wf-color-muted: var(--calais-surface-subtle);
-  --wf-color-muted-fg: var(--calais-text-muted);
-  --wf-color-error: var(--calais-danger);
-  --wf-color-warning: var(--calais-warning);
-  --wf-color-success: var(--calais-success);
-  --wf-radius-sm: calc(var(--calais-radius-control) * 0.7);
-  --wf-radius-md: var(--calais-radius-control);
+.infokit-rich-text-editor {
+  --wf-color-primary: var(--infokit-accent);
+  --wf-color-bg: var(--infokit-surface);
+  --wf-color-fg: var(--infokit-ink);
+  --wf-color-border: var(--infokit-border);
+  --wf-color-muted: var(--infokit-surface-subtle);
+  --wf-color-muted-fg: var(--infokit-text-muted);
+  --wf-color-error: var(--infokit-danger);
+  --wf-color-warning: var(--infokit-warning);
+  --wf-color-success: var(--infokit-success);
+  --wf-radius-sm: var(--infokit-radius-chip);
+  --wf-radius-md: var(--infokit-radius-control);
 }
 
-.calais-rich-text-editor .wf-toolbar {
+.infokit-rich-text-editor .wf-toolbar {
   position: static;
 }
 
-.calais-rich-text-editor .wf-toolbar-btn.is-active {
-  color: var(--calais-canvas);
+.infokit-rich-text-editor .wf-toolbar-btn.is-active {
+  color: var(--infokit-accent-contrast);
 }
 
-.calais-rich-text-editor .wf-toolbar-btn[hidden] {
+.infokit-rich-text-editor .wf-toolbar-btn[hidden] {
   display: none;
 }
 
-.calais-rich-text-editor .ProseMirror {
+.infokit-rich-text-editor .ProseMirror {
   min-height: 11rem;
   max-width: none;
 }
 
+/* In the translation workspace the text *is* the work — a source pane and a
+   target pane are read against each other — so its editors get noticeably more
+   room than an ordinary description field. */
+[data-translation-workspace] .infokit-rich-text-editor .ProseMirror {
+  min-height: 20rem;
+}
+
 /* React Flow supplies graph behavior; the workspace tokens own its visuals. */
 .react-flow {
-  --xy-background-color: var(--calais-surface-subtle);
-  --xy-edge-stroke: var(--calais-border-strong);
-  --xy-edge-stroke-selected: var(--calais-accent);
-  --xy-connectionline-stroke: var(--calais-accent);
-  --xy-minimap-background-color: var(--calais-surface);
+  --xy-background-color: var(--infokit-surface-subtle);
+  --xy-edge-stroke: var(--infokit-border-strong);
+  --xy-edge-stroke-selected: var(--infokit-accent);
+  --xy-connectionline-stroke: var(--infokit-accent);
+  --xy-minimap-background-color: var(--infokit-surface);
   --xy-minimap-mask-background-color: color-mix(
     in oklch,
-    var(--calais-surface-subtle) 72%,
+    var(--infokit-surface-subtle) 72%,
     transparent
   );
-  --xy-controls-button-background-color: var(--calais-surface);
-  --xy-controls-button-background-color-hover: var(--calais-accent-soft);
-  --xy-controls-button-color: var(--calais-ink);
-  --xy-controls-button-border-color: var(--calais-border);
+  --xy-controls-button-background-color: var(--infokit-surface);
+  --xy-controls-button-background-color-hover: var(--infokit-accent-soft);
+  --xy-controls-button-color: var(--infokit-ink);
+  --xy-controls-button-border-color: var(--infokit-border);
 }
 
 .react-flow__node {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--infokit-font-body);
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: var(--calais-accent);
+  stroke: var(--infokit-accent);
 }
 
 .simulator-handle {
   width: 0.75rem;
   height: 0.75rem;
-  border: 2px solid var(--calais-surface);
-  background: var(--calais-accent);
+  border: 2px solid var(--infokit-surface);
+  background: var(--infokit-accent);
 }

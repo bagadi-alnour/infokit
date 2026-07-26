@@ -1,5 +1,5 @@
-import type { PublicLocale } from "@calais/shared/i18n";
-import type { PublicSimulatorDocument } from "@calais/ui";
+import type { PublicLocale } from "@infokit/shared/i18n";
+import type { PublicSimulatorDocument } from "@infokit/shared/public-simulator";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "~/server/db";

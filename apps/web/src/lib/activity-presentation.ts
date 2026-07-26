@@ -2,7 +2,7 @@ import {
   formatMessage,
   localeMetadata,
   type PublicLocale,
-} from "@calais/shared/i18n";
+} from "@infokit/shared/i18n";
 
 import type { NextOpening } from "~/lib/activity-current-status";
 import { localizedPath } from "~/i18n/routing";

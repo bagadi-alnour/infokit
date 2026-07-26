@@ -1,8 +1,8 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { type PublicActivitySummary } from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
+import type { PublicActivityDetail } from "@infokit/shared/public-content";
 import { notFound } from "next/navigation";
 
-import { PublicActivityCardDetail } from "~/components/public/activity-map";
+import { PublicActivityDetailView } from "~/components/public/activity-card";
 import {
   PublicPageHeader,
   PublicSiteShell,
@@ -49,11 +49,7 @@ export default async function ActivityDetailPage({
     dateStyle: "medium",
     timeZone: "Europe/Paris",
   });
-  const summary: PublicActivitySummary & {
-    description: string;
-    instructions: string;
-    audienceLabel: string;
-  } = {
+  const summary: PublicActivityDetail = {
     id: activity.id,
     slug: activity.slug,
     href: localizedPath(`/activities/${activity.slug}`, locale),
@@ -118,7 +114,7 @@ export default async function ActivityDetailPage({
         title={summary.name}
         description={summary.shortDescription}
       />
-      <PublicActivityCardDetail
+      <PublicActivityDetailView
         activity={summary}
         labels={{
           search: messages["activities.search"],

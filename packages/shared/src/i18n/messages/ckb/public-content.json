@@ -46,7 +46,7 @@
   "activities.opensOn": "{weekday} کاتژمێر {time} دەکرێتەوە",
   "activities.location.use": "شوێنی ئێستای من بەکاربهێنە",
   "activities.location.locating": "لە دۆزینەوەی شوێنتدایە…",
-  "activities.location.privacy": "شوێنی تۆ تەنها لەم پەڕەیەدا بۆ ڕێکخستنی نەخشە بەکاردێت. پاشەکەوت ناکرێت، بۆ Calais Info نانێردرێت و لە شیکارییەکاندا نایەت.",
+  "activities.location.privacy": "شوێنی تۆ تەنها لەم پەڕەیەدا بۆ ڕێکخستنی نەخشە بەکاردێت. پاشەکەوت ناکرێت، بۆ InfoKit نانێردرێت و لە شیکارییەکاندا نایەت.",
   "activities.location.found": "شوێنی تۆ لەسەر نەخشە پیشان درا.",
   "activities.location.denied": "مۆڵەتی شوێن نەدرا. لیستی تەواوی چالاکییەکان هێشتا بەردەستە.",
   "activities.location.unavailable": "شوێن لەسەر ئەم ئامێرە بەردەست نییە. لیستی تەواوی چالاکییەکان هێشتا بەردەستە.",

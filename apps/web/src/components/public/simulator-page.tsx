@@ -1,14 +1,12 @@
-import type { PublicLocale } from "@calais/shared/i18n";
-import type { PageCatalog } from "@calais/shared/i18n/catalogs";
-import {
-  PublicSimulatorExperience,
-  type PublicSimulatorDocument,
-  type PublicSimulatorLabels,
-} from "@calais/ui";
-import Link from "next/link";
+import type { PublicLocale } from "@infokit/shared/i18n";
+import type { PageCatalog } from "@infokit/shared/i18n/catalogs";
+import type {
+  PublicSimulatorDocument,
+  PublicSimulatorLabels,
+} from "@infokit/shared/public-simulator";
 
-import { PublicPreferences } from "~/components/public/public-preferences";
-import { localizedPath } from "~/i18n/routing";
+import { PublicSiteShell } from "~/components/public/public-site-shell";
+import { SimulatorExperience } from "~/components/public/simulator-experience";
 
 function formatDate(
   value: string | null,
@@ -21,6 +19,11 @@ function formatDate(
   );
 }
 
+/**
+ * Server wrapper: resolves labels and dates, then hands the walk to the client
+ * component. The published route and the editor preview share this shell so a
+ * preview cannot look friendlier than what readers get.
+ */
 export function SimulatorPage({
   locale,
   document,
@@ -58,53 +61,29 @@ export function SimulatorPage({
   const route = preview
     ? `/simulator/preview/${document.flowId}`
     : `/simulator/${document.slug}`;
-  const navigation = [
-    ["/", navigationMessages["public.nav.home"]],
-    ["/simulator", navigationMessages["public.nav.guide"]],
-    ["/activities", navigationMessages["public.nav.activities"]],
-    ["/articles", navigationMessages["public.nav.articles"]],
-  ] as const;
 
   return (
-    <PublicSimulatorExperience
-      document={document}
-      labels={labels}
-      lastReviewedLabel={formatDate(
-        document.lastReviewedAt,
-        locale,
-        messages["simulator.notAvailable"],
-      )}
-      reviewDueLabel={formatDate(
-        document.reviewDueAt,
-        locale,
-        messages["simulator.notAvailable"],
-      )}
-      preview={preview}
-      headerActions={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <nav
-            aria-label={navigationMessages["public.nav.label"]}
-            className="order-2 flex max-w-full gap-1 overflow-x-auto lg:order-none"
-          >
-            {navigation.map(([path, label]) => (
-              <Link
-                key={path}
-                href={localizedPath(path, locale)}
-                aria-current={path === "/simulator" ? "page" : undefined}
-                className="text-copy-muted hover:bg-brand-soft hover:text-brand focus-visible:ring-brand rounded-control aria-[current=page]:bg-brand-soft aria-[current=page]:text-brand min-h-11 shrink-0 px-3 py-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2"
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
-          <PublicPreferences
-            locale={locale}
-            currentPath={route}
-            languageLabel={navigationMessages["public.languages"]}
-            themeLabel={navigationMessages["public.theme"]}
-          />
-        </div>
-      }
-    />
+    <PublicSiteShell
+      locale={locale}
+      currentPath={route}
+      messages={navigationMessages}
+      width="reading"
+    >
+      <SimulatorExperience
+        document={document}
+        labels={labels}
+        lastReviewedLabel={formatDate(
+          document.lastReviewedAt,
+          locale,
+          messages["simulator.notAvailable"],
+        )}
+        reviewDueLabel={formatDate(
+          document.reviewDueAt,
+          locale,
+          messages["simulator.notAvailable"],
+        )}
+        preview={preview}
+      />
+    </PublicSiteShell>
   );
 }

@@ -38,8 +38,8 @@ const TextGradient = React.forwardRef<HTMLSpanElement, TextGradientProps>(
       children,
       className,
       spread = 22,
-      highlightColor = "var(--calais-ink)",
-      baseColor = "var(--calais-text-muted)",
+      highlightColor = "var(--infokit-ink)",
+      baseColor = "var(--infokit-text-muted)",
       duration = 2,
       style,
       ...props

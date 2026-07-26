@@ -46,7 +46,7 @@
   "activities.opensOn": "{weekday} wuxuu furmaa {time}",
   "activities.location.use": "Isticmaal goobtayda hadda",
   "activities.location.locating": "Raadinaya goobtaada…",
-  "activities.location.privacy": "Goobtaada waxaa loo isticmaalaa boggan oo kaliya si loo dhigo khariidadda. Lama keydiyo, looma diro Calais Info, lagumana daro falanqaynta.",
+  "activities.location.privacy": "Goobtaada waxaa loo isticmaalaa boggan oo kaliya si loo dhigo khariidadda. Lama keydiyo, looma diro InfoKit, lagumana daro falanqaynta.",
   "activities.location.found": "Goobtaada waxaa lagu tusay khariidadda.",
   "activities.location.denied": "Ogolaanshaha goobta lama bixin. Liiska buuxa ee waxqabadyada weli wuu diyaar yahay.",
   "activities.location.unavailable": "Goobta laguma heli karo qalabkan. Liiska buuxa ee waxqabadyada weli wuu diyaar yahay.",

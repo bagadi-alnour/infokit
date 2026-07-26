@@ -1,6 +1,5 @@
 "use client";
 
-import { CalaisUIProvider, type CalaisColorTheme } from "@calais/ui";
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes";
 import {
   useCallback,
@@ -12,11 +11,15 @@ import {
   useState,
 } from "react";
 
-export const themeStorageKey = "calais-info-theme";
-export type ThemePreference = "system" | CalaisColorTheme;
+export const themeStorageKey = "infokit-theme";
+export type ColorScheme = "light" | "dark";
+export type ThemePreference = "system" | ColorScheme;
 
 interface ThemePreferenceContextValue {
+  /** What the reader chose, including "system". */
   preference: ThemePreference;
+  /** What is actually painted right now. */
+  resolved: ColorScheme;
   setPreference: (preference: ThemePreference) => void;
 }
 
@@ -29,7 +32,7 @@ function isThemePreference(
   return value === "system" || value === "light" || value === "dark";
 }
 
-function CalaisThemeBridge({ children }: { children: ReactNode }) {
+function ThemePreferenceBridge({ children }: { children: ReactNode }) {
   const { resolvedTheme, setTheme, theme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -46,17 +49,17 @@ function CalaisThemeBridge({ children }: { children: ReactNode }) {
     },
     [setTheme],
   );
+  const resolved: ColorScheme =
+    mounted && resolvedTheme === "dark" ? "dark" : "light";
 
   const value = useMemo(
-    () => ({ preference, setPreference }),
-    [preference, setPreference],
+    () => ({ preference, resolved, setPreference }),
+    [preference, resolved, setPreference],
   );
-  const calaisTheme: CalaisColorTheme =
-    mounted && resolvedTheme === "dark" ? "dark" : "light";
 
   return (
     <ThemePreferenceContext.Provider value={value}>
-      <CalaisUIProvider theme={calaisTheme}>{children}</CalaisUIProvider>
+      {children}
     </ThemePreferenceContext.Provider>
   );
 }
@@ -69,7 +72,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       enableSystem
       storageKey={themeStorageKey}
     >
-      <CalaisThemeBridge>{children}</CalaisThemeBridge>
+      <ThemePreferenceBridge>{children}</ThemePreferenceBridge>
     </NextThemesProvider>
   );
 }

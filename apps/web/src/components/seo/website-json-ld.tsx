@@ -1,4 +1,4 @@
-import type { PublicLocale } from "@calais/shared/i18n";
+import type { PublicLocale } from "@infokit/shared/i18n";
 
 import { siteConfig } from "~/seo/site";
 

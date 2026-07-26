@@ -1,11 +1,11 @@
-# Calais Info — Airtable-Inspired Design System
+# InfoKit — Airtable-Inspired Design System
 
 > `PRODUCT.md` is the canonical product requirements document. This file defines the supporting visual and interaction system.
 
 > Category: Civic & Nonprofit
 > A calm, multilingual service-information product built with the structured clarity of Open Design's bundled Airtable system.
 
-This is the visual contract for Calais Info. Use Open Design's bundled `airtable` design system as the source system, then apply the product-specific rules below. Where the two differ, this file takes precedence.
+This is the visual contract for InfoKit. Use Open Design's bundled `airtable` design system as the source system, then apply the product-specific rules below. Where the two differ, this file takes precedence.
 
 The public service and the organisation workspace share tokens and components, but not density. Public pages must remain calm, mobile-first, and understandable under stress. Authenticated workspace pages may use denser tables, toolbars, and split views.
 
@@ -13,7 +13,7 @@ The public service and the organisation workspace share tokens and components, b
 
 ### Brand promise
 
-Calais Info helps a person answer two questions quickly: **Where can I get help?** and **Can I rely on this information today?** It also helps associations publish and maintain that information without exposing their internal data.
+InfoKit helps a person answer two questions quickly: **Where can I get help?** and **Can I rely on this information today?** It also helps associations publish and maintain that information without exposing their internal data.
 
 ### Personality
 
@@ -33,7 +33,7 @@ Calais Info helps a person answer two questions quickly: **Where can I get help?
 
 ### Logo guidance
 
-Until a logo is designed, use the text wordmark **Calais Info** with a simple four-cell mark suggesting places, languages, and coordinated services. Do not imitate Airtable's logo or use its proprietary assets.
+Until a logo is designed, use the text wordmark **InfoKit** with a simple four-cell mark suggesting places, languages, and coordinated services. Do not imitate Airtable's logo or use its proprietary assets.
 
 ## 2. Color Palette & Roles
 
@@ -228,7 +228,7 @@ Reuse components before inventing new controls. Components should expose default
 
 ### Workspace components
 
-Implementation boundary: universal/public/mobile components use the Tamagui layer in `packages/ui`; authenticated web-workspace primitives use the shadcn layer in `apps/web`. Both consume `packages/tokens`. See `UI-ARCHITECTURE.md`. Reuse the appropriate layer before creating a raw control.
+Implementation boundary: public web pages use the Tailwind primitives in `apps/web/src/components/public`; authenticated web-workspace primitives use the shadcn layer in `apps/web/src/components/ui`; the Expo app uses the React Native Reusables + NativeWind layer in `packages/ui`. All three consume `packages/tokens` under the same utility names. See `UI-ARCHITECTURE.md`. Reuse the appropriate layer before creating a raw control.
 
 - **Record table:** sticky header, sort/filter controls, visible row selection, status cells, and explicit bulk-action mode.
 - **Record inspector:** summary first, edit fields second, audit metadata last.

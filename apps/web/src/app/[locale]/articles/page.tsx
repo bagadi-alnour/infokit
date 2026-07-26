@@ -1,7 +1,8 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { PublicArticleCollection, type PublicArticleSummary } from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
+import type { PublicArticleSummary } from "@infokit/shared/public-content";
 import type { Metadata } from "next";
 
+import { PublicArticleCollection } from "~/components/public/article-collection";
 import {
   PublicPageHeader,
   PublicSiteShell,

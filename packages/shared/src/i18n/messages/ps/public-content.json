@@ -46,7 +46,7 @@
   "activities.opensOn": "د {weekday} په ورځ د {time} بجو خلاصیږي",
   "activities.location.use": "زما اوسنی موقعیت وکاروئ",
   "activities.location.locating": "ستاسو موقعیت لټول کیږي…",
-  "activities.location.privacy": "ستاسو موقعیت یوازې پدې پاڼه کې د نقشې د تنظیم لپاره کارول کیږي. نه ساتل کیږي، Calais Info ته نه لیږل کیږي او په شننو کې نه راځي.",
+  "activities.location.privacy": "ستاسو موقعیت یوازې پدې پاڼه کې د نقشې د تنظیم لپاره کارول کیږي. نه ساتل کیږي، InfoKit ته نه لیږل کیږي او په شننو کې نه راځي.",
   "activities.location.found": "ستاسو موقعیت په نقشه کې وښودل شو.",
   "activities.location.denied": "د موقعیت اجازه ورنکړل شوه. د فعالیتونو بشپړ لیست لاهم شته.",
   "activities.location.unavailable": "پدې وسیله موقعیت شتون نلري. د فعالیتونو بشپړ لیست لاهم شته.",

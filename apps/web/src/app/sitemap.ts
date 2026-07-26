@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { supportedLocales } from "@calais/shared/i18n";
+import { supportedLocales } from "@infokit/shared/i18n";
 
 import { languageAlternates, localizedPath } from "~/i18n/routing";
 import { absoluteUrl } from "~/seo/site";

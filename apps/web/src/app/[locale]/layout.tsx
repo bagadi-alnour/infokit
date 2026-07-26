@@ -1,12 +1,13 @@
 import "~/styles/globals.css";
 import "leaflet/dist/leaflet.css";
 
-import { localeMetadata } from "@calais/shared/i18n";
+import { localeMetadata } from "@infokit/shared/i18n";
 import { type Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Noto_Sans_Arabic, Public_Sans, Work_Sans } from "next/font/google";
 
 import { DesignTokenStyles } from "~/components/design-tokens";
 import { ThemeProvider } from "~/components/theme/theme-provider";
+import { DirectionProvider } from "~/components/ui/direction";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
 import { localeStaticParams } from "~/i18n/routing";
 import { siteConfig } from "~/seo/site";
@@ -53,10 +54,34 @@ export const metadata: Metadata = {
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
+/** docs/DESIGN-SYSTEM.md §4: Work Sans headings, Public Sans body, Noto Sans
+ *  Arabic for the Arabic-script locales — loaded for every locale so a reader
+ *  switching language never waits for a second font. */
+const headingFont = Work_Sans({
+  subsets: ["latin", "latin-ext"],
+  weight: ["600", "700"],
+  display: "swap",
+  variable: "--font-work-sans",
 });
+
+const bodyFont = Public_Sans({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-public-sans",
+});
+
+const arabicFont = Noto_Sans_Arabic({
+  subsets: ["arabic"],
+  weight: ["400", "500", "700"],
+  display: "swap",
+  variable: "--font-noto-arabic",
+});
+
+const fontVariables = [
+  headingFont.variable,
+  bodyFont.variable,
+  arabicFont.variable,
+].join(" ");
 
 export const dynamicParams = false;
 export const generateStaticParams = localeStaticParams;
@@ -73,14 +98,19 @@ export default async function RootLayout({
     <html
       lang={locale}
       dir={localeMetadata[locale].direction}
-      className={inter.variable}
+      className={fontVariables}
       suppressHydrationWarning
     >
       <head>
         <DesignTokenStyles />
       </head>
       <body className="bg-canvas text-ink font-sans antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        {/* Popups (dropdowns, menus) anchor to the logical start of their
+         * trigger; without this the library assumes left-to-right and an
+         * Arabic menu would hang off the wrong edge. */}
+        <DirectionProvider direction={localeMetadata[locale].direction}>
+          <ThemeProvider>{children}</ThemeProvider>
+        </DirectionProvider>
       </body>
     </html>
   );

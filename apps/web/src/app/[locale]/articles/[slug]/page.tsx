@@ -1,8 +1,8 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { PublicArticleDetailView } from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { PublicArticleDetailView } from "~/components/public/article-detail";
 import { PublicSiteShell } from "~/components/public/public-site-shell";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
 import { loadPublishedArticle } from "~/server/content/public-content";
@@ -37,8 +37,10 @@ export default async function ArticleDetailPage({
       locale={locale}
       currentPath={`/articles/${slug}`}
       messages={messages}
+      width="reading"
     >
       <PublicArticleDetailView
+        eyebrow={messages["articles.eyebrow"]}
         article={{
           title: article.title,
           summary: article.summary,

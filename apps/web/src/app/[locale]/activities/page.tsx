@@ -1,8 +1,8 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { type PublicActivitySummary } from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
+import type { PublicActivitySummary } from "@infokit/shared/public-content";
 import type { Metadata } from "next";
 
-import { PublicActivitiesWebExplorer } from "~/components/public/activity-map";
+import { PublicActivitiesExplorer } from "~/components/public/activities-explorer";
 import {
   PublicPageHeader,
   PublicSiteShell,
@@ -115,7 +115,7 @@ export default async function ActivitiesPage({
         title={messages["activities.title"]}
         description={messages["activities.description"]}
       />
-      <PublicActivitiesWebExplorer
+      <PublicActivitiesExplorer
         activities={summaries}
         labels={{
           search: messages["activities.search"],
@@ -147,8 +147,10 @@ export default async function ActivitiesPage({
           statusClosed: messages["activities.status.closed"],
           statusCancelled: messages["activities.status.cancelled"],
           statusUncertain: messages["activities.status.uncertain"],
+          audience: messages["activities.audience"],
+          instructions: messages["activities.instructions"],
         }}
-        locationLabels={{
+        mapLabels={{
           useLocation: messages["activities.location.use"],
           locating: messages["activities.location.locating"],
           locationPrivacy: messages["activities.location.privacy"],
@@ -158,6 +160,9 @@ export default async function ActivitiesPage({
           locationError: messages["activities.location.error"],
           yourLocation: messages["activities.location.you"],
           mapAttribution: messages["activities.map.attribution"],
+          mapTitle: messages["activities.mapTitle"],
+          mapHint: messages["activities.mapHint"],
+          noMap: messages["activities.noMap"],
         }}
       />
     </PublicSiteShell>

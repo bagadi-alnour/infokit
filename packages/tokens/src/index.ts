@@ -1,76 +1,126 @@
 /**
- * Calais Info design tokens — the single encoding of docs/DESIGN.md §2–§4.
- * Consumed by web (CSS-variable injection) and mobile (theme runtime).
- * Rule (AGENTS.md): no color decisions in components — semantic tokens only.
+ * InfoKit design tokens — the single encoding of docs/DESIGN-SYSTEM.md.
+ * Consumed by web (CSS-variable injection in apps/web) and by mobile
+ * (NativeWind theme in apps/mobile).
+ *
+ * Rule (AGENTS.md): no colour decisions in components — semantic roles only.
+ * Every value below is an opaque hex so the same token works in CSS and in
+ * React Native, where `color-mix()` does not exist.
  */
 
 export interface SemanticTheme {
+  /** Page background. */
   canvas: string;
+  /** Raised card / sheet background. */
   surface: string;
+  /** Recessed band inside a surface (table headers, inset blocks). */
   surfaceSubtle: string;
+  /** Primary copy. */
   ink: string;
+  /** Secondary copy — labels, metadata, hints. Never for body text. */
   textMuted: string;
+  /** Hairline divider and default card ring. */
   border: string;
+  /** Emphasised border — inputs, hovered cards. */
   borderStrong: string;
+  /** Brand accent: primary buttons, active states, icons. */
   accent: string;
+  /** Hover/pressed accent. */
   accentHover: string;
+  /**
+   * High-contrast accent for text on canvas/surface — inline links in
+   * paragraphs and accent text that must clear 4.5:1.
+   */
+  accentDeep: string;
+  /** Foreground for filled accent surfaces (solid buttons). */
+  accentContrast: string;
+  /** Accent wash: soft chips, selected rows, callouts. */
   accentSoft: string;
+  /** Copy on `accentSoft`. */
+  accentSoftInk: string;
+  /** Status: open / verified / yes. */
   success: string;
   successSoft: string;
+  /** Status: caution / expiring / unverified. */
   warning: string;
   warningSoft: string;
+  /** Status: cancelled / error / no. */
   danger: string;
   dangerSoft: string;
+  /** Status: closed / inactive / unknown. */
   neutralStatus: string;
   neutralStatusSoft: string;
 }
 
+/** Light set — “Clinique”, the adopted system (docs/DESIGN-SYSTEM.md §3). */
 export const light: SemanticTheme = {
-  canvas: "#F4F8FA",
-  surface: "#FFFFFF",
-  surfaceSubtle: "#EAF1F4",
-  ink: "#142A35",
-  textMuted: "#536B76",
-  border: "#D2DFE4",
-  borderStrong: "#9FB5BE",
-  accent: "#245F8F",
-  accentHover: "#1B4B72",
-  accentSoft: "#DFEDF7",
-  success: "#267254",
-  successSoft: "#E3F2EB",
-  warning: "#8A5B12",
-  warningSoft: "#F9ECCE",
-  danger: "#A53E49",
-  dangerSoft: "#F8E5E7",
-  neutralStatus: "#586D77",
-  neutralStatusSoft: "#E7EEF1",
+  canvas: "#EFF5F3",
+  surface: "#FBFEFD",
+  surfaceSubtle: "#E4EFEC",
+  ink: "#10231F",
+  textMuted: "#5B6F6B",
+  border: "#D3E2DE",
+  borderStrong: "#BFD5D0",
+  accent: "#0F766E",
+  accentHover: "#0F6A63",
+  accentDeep: "#0B544E",
+  accentContrast: "#F0FBF9",
+  accentSoft: "#D3ECE8",
+  accentSoftInk: "#0B544E",
+  success: "#0F7A3D",
+  successSoft: "#D2E5DB",
+  warning: "#8A5A06",
+  warningSoft: "#E9E3D2",
+  danger: "#A3282C",
+  dangerSoft: "#EFDAD9",
+  neutralStatus: "#5B6F6B",
+  neutralStatusSoft: "#DEE6E3",
 };
 
-/** Dark set derived in the prototype; same hierarchy, AA contrast kept. */
+/** Dark set — same roles, same hierarchy, AA contrast kept. */
 export const dark: SemanticTheme = {
-  canvas: "#0E1B22",
-  surface: "#14262F",
-  surfaceSubtle: "#1B303A",
-  ink: "#E8F0F3",
-  textMuted: "#A6B8C0",
-  border: "#29434E",
-  borderStrong: "#46626E",
-  accent: "#7DB6E0",
-  accentHover: "#9BC9E9",
-  accentSoft: "#173A54",
-  success: "#67C59A",
-  successSoft: "#17382B",
-  warning: "#E4B765",
-  warningSoft: "#3B2D14",
-  danger: "#EE919A",
-  dangerSoft: "#421E24",
-  neutralStatus: "#A6B8C0",
-  neutralStatusSoft: "#233740",
+  canvas: "#0D1A18",
+  surface: "#142523",
+  surfaceSubtle: "#1B302D",
+  ink: "#E6F2EF",
+  textMuted: "#9FB3AF",
+  border: "#22403C",
+  borderStrong: "#2F5651",
+  accent: "#4FD1C5",
+  accentHover: "#64D6CB",
+  accentDeep: "#A7E8E1",
+  accentContrast: "#0D1A18",
+  accentSoft: "#10403C",
+  accentSoftInk: "#C9F2EE",
+  success: "#59C98A",
+  successSoft: "#173127",
+  warning: "#DDB96A",
+  warningSoft: "#2C2A1E",
+  danger: "#EF8F8A",
+  dangerSoft: "#2F2523",
+  neutralStatus: "#9FB3AF",
+  neutralStatusSoft: "#1D2B29",
 };
 
 /**
- * Service-category accents (docs/DESIGN.md §2). Color is never the only
- * identifier: every category also has a unique icon and a text label.
+ * The four status roles the product needs (docs/DESIGN-SYSTEM.md §6).
+ * Colour is never the only signal: each role also carries an icon and a word.
+ */
+export type StatusRole = "open" | "closed" | "cancelled" | "uncertain";
+
+export const statusRoleTokens: Record<
+  StatusRole,
+  { fg: keyof SemanticTheme; bg: keyof SemanticTheme }
+> = {
+  open: { fg: "success", bg: "successSoft" },
+  closed: { fg: "neutralStatus", bg: "neutralStatusSoft" },
+  cancelled: { fg: "danger", bg: "dangerSoft" },
+  uncertain: { fg: "warning", bg: "warningSoft" },
+};
+
+/**
+ * Service categories. Chips are neutral: the icon and the word identify the
+ * service, not a per-category hue (docs/DESIGN-SYSTEM.md §5).
  */
 export type ServiceCategoryCode =
   | "food"
@@ -85,39 +135,52 @@ export type ServiceCategoryCode =
   | "activities"
   | "info";
 
-export const categoryAccents: Record<
-  ServiceCategoryCode,
-  { light: string; dark: string }
-> = {
-  food: { light: "#D97706", dark: "#F0A045" },
-  water: { light: "#1677A8", dark: "#4FA8D8" },
-  clothing: { light: "#7C5CC4", dark: "#A78BE0" },
-  showers: { light: "#167C80", dark: "#4FB0B4" },
-  material: { light: "#6E7B3D", dark: "#A9B86A" },
-  charging: { light: "#B25E09", dark: "#E09A4F" },
-  health: { light: "#C13F5A", dark: "#E77B93" },
-  legal: { light: "#4867B1", dark: "#7E9BE0" },
-  shelter: { light: "#3E7A4E", dark: "#6FB183" },
-  activities: { light: "#AD4A8E", dark: "#D689BF" },
-  info: { light: "#52606D", dark: "#94A3B4" },
-};
-
-/**
- * Radii (docs/DESIGN.md §4). One rounded family across the product: controls,
- * cards, and feature panels all use the 24px panel radius so buttons and cards
- * match the filter-panel corner the design settled on.
- */
+/** Radii (docs/DESIGN-SYSTEM.md §4): 8 chips, 12 controls, 20 cards/panels. */
 export const radii = {
-  control: 24,
-  card: 24,
-  panel: 24,
+  chip: 8,
+  control: 12,
+  card: 20,
+  panel: 20,
+  pill: 999,
 } as const;
 
-/** 8px base grid with 4px compact step (docs/DESIGN.md §4). */
+/** 4px base grid (docs/DESIGN-SYSTEM.md §4). */
 export const spacing = [4, 8, 12, 16, 24, 32, 48, 64] as const;
 
-/** Minimum touch targets (docs/DESIGN.md §4). */
+/**
+ * Two densities (docs/DESIGN-SYSTEM.md §4). The public site is always
+ * comfortable; the editor workspace may compact its own chrome.
+ */
+export const density = {
+  comfortable: 1,
+  compact: 0.7,
+} as const;
+
+/** Minimum touch targets in px (docs/DESIGN-SYSTEM.md §4). */
 export const touchTarget = {
-  public: 44,
+  public: 48,
   workspace: 36,
+} as const;
+
+/**
+ * Type families (docs/DESIGN-SYSTEM.md §4). Headings get the geometric face,
+ * body the highly legible one; Arabic script has its own family in both roles.
+ */
+export const fontFamilies = {
+  heading: "Work Sans",
+  body: "Public Sans",
+  arabic: "Noto Sans Arabic",
+} as const;
+
+/** Body copy never goes below 16px — the site is read on borrowed phones. */
+export const minBodyFontSize = 16;
+
+/**
+ * Elevation is a ring plus a soft shadow, so cards stay legible when shadows
+ * are dropped on low-end devices. Ring colours come from `border`/`borderStrong`.
+ */
+export const elevation = {
+  sm: { blur: 2, y: 1, alpha: 0.04 },
+  md: { blur: 12, y: 4, alpha: 0.06 },
+  lg: { blur: 32, y: 12, alpha: 0.1 },
 } as const;
