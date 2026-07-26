@@ -1,0 +1,105 @@
+import { isPublicLocale, type PublicLocale } from "@infokit/shared/i18n";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { eventToIcs, icsFileName } from "~/lib/ics";
+import { auth } from "~/server/auth";
+import {
+  coordinationViewer,
+  findCoordinationEvent,
+  findPublicCoordinationEvent,
+  type CoordinationEventRecord,
+} from "~/server/content/coordination-events";
+import {
+  eventWhereLabel,
+  listCityViews,
+  FALLBACK_TIME_ZONE,
+} from "~/server/content/event-presentation";
+
+/**
+ * One event as a calendar file, so "when" is not something the reader has to
+ * copy by hand — a missed date is a missed meal or a missed appointment.
+ *
+ * The visibility tiers are enforced here exactly as the agenda enforces them:
+ * the public read model answers first, and only if it does not is the caller's
+ * own session consulted. An id from the `organization` tier therefore returns
+ * 404 to everyone outside that organisation, download link or not.
+ */
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const parsed = z
+    .string()
+    .uuid()
+    .safeParse((await params).id);
+  if (!parsed.success) return notFound();
+  const eventId = parsed.data;
+
+  const requested = new URL(request.url).searchParams.get("locale");
+  const locale: PublicLocale = isPublicLocale(requested) ? requested : "fr";
+
+  let found: CoordinationEventRecord | null = await findPublicCoordinationEvent(
+    {
+      eventId,
+      locale,
+    },
+  );
+  if (!found) {
+    const session = await auth();
+    if (!session?.user) return notFound();
+    const viewer = await coordinationViewer(session.user.id);
+    found = await findCoordinationEvent({ eventId, viewer, locale });
+  }
+  if (!found) return notFound();
+  const event = found;
+
+  const cities = await listCityViews(locale);
+  const city = cities.find((candidate) => candidate.id === event.cityId);
+  const origin = new URL(request.url).origin;
+  const body = eventToIcs({
+    uid: `${event.id}@infokit`,
+    title: event.title,
+    description:
+      event.status === "cancelled" ? cancelledText(event) : event.description,
+    location:
+      [eventWhereLabel(event), city?.name].filter(Boolean).join(", ") || null,
+    hostName: event.hostName,
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    allDay: event.allDay,
+    timeZone: city?.timezone ?? FALLBACK_TIME_ZONE,
+    cancelled: event.status === "cancelled",
+    // Only a public event has a page a calendar entry may link to.
+    url:
+      event.visibility === "public"
+        ? `${origin}/${locale}/events/${event.id}`
+        : null,
+    stamp: new Date(),
+  });
+
+  return new NextResponse(body, {
+    headers: {
+      "Content-Type": "text/calendar; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${icsFileName(event.title)}"`,
+      // An agenda changes; a cached file would keep saying the old hour.
+      "Cache-Control": "private, no-store",
+    },
+  });
+}
+
+/** A cancellation belongs in the calendar entry, not only in our own list. */
+function cancelledText(event: CoordinationEventRecord) {
+  return (
+    [event.cancellationReason, event.description]
+      .filter(Boolean)
+      .join("\n\n") || null
+  );
+}
+
+function notFound() {
+  return new NextResponse(null, {
+    status: 404,
+    headers: { "Cache-Control": "no-store" },
+  });
+}

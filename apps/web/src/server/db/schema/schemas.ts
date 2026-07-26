@@ -1,15 +1,25 @@
-import { pgEnum, pgSchema, timestamp } from "drizzle-orm/pg-core";
+import { pgEnum, pgSchema, timestamp, varchar } from "drizzle-orm/pg-core";
 
 /**
  * PostgreSQL schemas as domain boundaries (docs/DATABASE-SCHEMA.md §1).
- * Slice 0 uses auth / core / content; later slices add simulator,
- * operations, documents, inventory, notifications, audit — additively.
+ * Slice 0 uses auth / core / content; later slices add operations,
+ * documents, inventory — additively. `notifications` opens with the
+ * per-user preference table only: what a person agreed to be told is
+ * account data, so it lands before the outbox and the delivery ledger.
  */
 export const authSchema = pgSchema("auth");
 export const core = pgSchema("core");
 export const content = pgSchema("content");
 export const simulator = pgSchema("simulator");
+export const notifications = pgSchema("notifications");
 export const audit = pgSchema("audit");
+/**
+ * Opens with the shared coordination agenda only (DATABASE-SCHEMA.md §13):
+ * an event is a coordination artefact, not published content, even when its
+ * host chooses to show it publicly. Internal planning, shifts and missions
+ * land here later — additively.
+ */
+export const operations = pgSchema("operations");
 
 /* ------------------------------------------------------------------ */
 /* Shared lifecycle column basics — spread these instead of redefining */
@@ -42,6 +52,25 @@ export const archival = {
  */
 export const softDeletion = {
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+};
+
+/**
+ * Who to reach inside the network when a record is wrong — a name, and a phone
+ * number or an email address for it. Every content root carries these three
+ * columns so that any editor, in any organisation, can ask the people who own
+ * the information instead of guessing or publishing a correction blind.
+ *
+ * These are workspace-only, in the sense `content.contacts` already gives that
+ * word: no public read model selects them, and nothing here is meant to reach a
+ * visitor. That is why they are plain columns rather than another contact row —
+ * a `contacts` record can be linked to a public surface by mistake, a column no
+ * public query mentions cannot.
+ */
+export const stewardContact = {
+  /** The person or role to ask for — never a member's private identity. */
+  stewardName: varchar("steward_name", { length: 120 }),
+  stewardPhone: varchar("steward_phone", { length: 40 }),
+  stewardEmail: varchar("steward_email", { length: 255 }),
 };
 
 /**
@@ -152,6 +181,86 @@ export const contactVisibility = pgEnum("contact_visibility", [
   "workspace",
 ]);
 
+/* ------------------------------------------------------------------ */
+/* Coordination agenda (docs/DATABASE-SCHEMA.md §13)                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Who may read one coordination event. The first two values are the agenda
+ * described in PRODUCT.md §23 (`organization` = the host's own members,
+ * `inter_organization` = authenticated members of every verified
+ * organisation, never public). `public` is a deliberate third tier the host
+ * opts into per event, and the only one any public surface may read; it is
+ * off by default and every read model filters on it explicitly.
+ */
+export const coordinationEventVisibility = pgEnum(
+  "coordination_event_visibility",
+  ["organization", "inter_organization", "public"],
+);
+/** A cancelled event stays visible with its reason — it never disappears. */
+export const coordinationEventStatus = pgEnum("coordination_event_status", [
+  "scheduled",
+  "cancelled",
+]);
+
+/* ------------------------------------------------------------------ */
+/* Account settings (docs/DATABASE-SCHEMA.md §4) — one person's own    */
+/* choices about the console, never organisation policy.               */
+/* ------------------------------------------------------------------ */
+
+/** "system" follows the device; it is the default, not a third colour. */
+export const themePreference = pgEnum("theme_preference", [
+  "system",
+  "light",
+  "dark",
+]);
+/** docs/DESIGN.md allows a denser workspace; the person decides. */
+export const workspaceDensity = pgEnum("workspace_density", [
+  "comfortable",
+  "compact",
+]);
+/** Which sign-in the console offers first; every method stays available. */
+export const signInMethod = pgEnum("sign_in_method", [
+  "magic_link",
+  "password",
+  /** Reserved for `auth.authenticators` (WebAuthn) — not yet offered. */
+  "passkey",
+]);
+/** The second factor a person is enrolled in. Slice 0 delivers SMS only. */
+export const secondFactorMethod = pgEnum("second_factor_method", [
+  "sms",
+  "totp",
+  "email",
+]);
+export const digestFrequency = pgEnum("digest_frequency", [
+  "off",
+  "daily",
+  "weekly",
+]);
+export const clockFormat = pgEnum("clock_format", ["h12", "h24"]);
+/** Where "open the console" lands, so a runbook-first editor stays there. */
+export const consoleLandingSection = pgEnum("console_landing_section", [
+  "runbook",
+  "activities",
+  "articles",
+  "simulator",
+]);
+/**
+ * What the platform may tell someone about (docs/DATABASE-SCHEMA.md §16).
+ * `security_alert` exists so the audit trail can name it — it is never
+ * switched off; see `notificationPreferences`.
+ */
+export const notificationKind = pgEnum("notification_kind", [
+  "activity_review_due",
+  "activity_status_changed",
+  "publication_state",
+  "translation_assignment",
+  "membership_invitation",
+  "coordination_event",
+  "security_alert",
+  "product_update",
+]);
+
 /* Phase 0/1 access control (docs/DATABASE-SCHEMA.md §4–§5) */
 export const memberStatus = pgEnum("member_status", [
   "invited",
@@ -219,7 +328,17 @@ export const translationAssignmentState = pgEnum(
 /** The public content types a translator link may target. */
 export const translationAssignmentEntity = pgEnum(
   "translation_assignment_entity",
-  ["editorial_entry", "activity", "public_event", "simulator_flow"],
+  [
+    "editorial_entry",
+    "activity",
+    "public_event",
+    "simulator_flow",
+    /** The organisation's own narrative: purpose, goals, values. */
+    "organization_profile",
+    /** Directory records: every published string needs a source language too. */
+    "place",
+    "service",
+  ],
 );
 
 /* Assets and media (docs/DATABASE-SCHEMA.md §9) */

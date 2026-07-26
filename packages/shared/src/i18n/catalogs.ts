@@ -22,9 +22,11 @@ type OverlayLoaders = Partial<{
 export interface CatalogMap {
   "auth-delivery": typeof import("./messages/en/auth-delivery.json");
   common: typeof import("./messages/en/common.json");
+  "dashboard-account": typeof import("./messages/en/dashboard-account.json");
   "dashboard-articles": typeof import("./messages/en/dashboard-articles.json");
   "dashboard-catalogue": typeof import("./messages/en/dashboard-catalogue.json");
   "dashboard-console": typeof import("./messages/en/dashboard-console.json");
+  "dashboard-events": typeof import("./messages/en/dashboard-events.json");
   "dashboard-layout": typeof import("./messages/en/dashboard-layout.json");
   "dashboard-overview": typeof import("./messages/en/dashboard-overview.json");
   "dashboard-places": typeof import("./messages/en/dashboard-places.json");
@@ -54,12 +56,16 @@ const catalogLoaders = {
     "auth-delivery": async () =>
       (await import("./messages/fr/auth-delivery.json")).default,
     common: async () => (await import("./messages/fr/common.json")).default,
+    "dashboard-account": async () =>
+      (await import("./messages/fr/dashboard-account.json")).default,
     "dashboard-articles": async () =>
       (await import("./messages/fr/dashboard-articles.json")).default,
     "dashboard-catalogue": async () =>
       (await import("./messages/fr/dashboard-catalogue.json")).default,
     "dashboard-console": async () =>
       (await import("./messages/fr/dashboard-console.json")).default,
+    "dashboard-events": async () =>
+      (await import("./messages/fr/dashboard-events.json")).default,
     "dashboard-layout": async () =>
       (await import("./messages/fr/dashboard-layout.json")).default,
     "dashboard-overview": async () =>
@@ -85,12 +91,16 @@ const catalogLoaders = {
     "auth-delivery": async () =>
       (await import("./messages/en/auth-delivery.json")).default,
     common: async () => (await import("./messages/en/common.json")).default,
+    "dashboard-account": async () =>
+      (await import("./messages/en/dashboard-account.json")).default,
     "dashboard-articles": async () =>
       (await import("./messages/en/dashboard-articles.json")).default,
     "dashboard-catalogue": async () =>
       (await import("./messages/en/dashboard-catalogue.json")).default,
     "dashboard-console": async () =>
       (await import("./messages/en/dashboard-console.json")).default,
+    "dashboard-events": async () =>
+      (await import("./messages/en/dashboard-events.json")).default,
     "dashboard-layout": async () =>
       (await import("./messages/en/dashboard-layout.json")).default,
     "dashboard-overview": async () =>
@@ -116,12 +126,16 @@ const catalogLoaders = {
     "auth-delivery": async () =>
       (await import("./messages/ar/auth-delivery.json")).default,
     common: async () => (await import("./messages/ar/common.json")).default,
+    "dashboard-account": async () =>
+      (await import("./messages/ar/dashboard-account.json")).default,
     "dashboard-articles": async () =>
       (await import("./messages/ar/dashboard-articles.json")).default,
     "dashboard-catalogue": async () =>
       (await import("./messages/ar/dashboard-catalogue.json")).default,
     "dashboard-console": async () =>
       (await import("./messages/ar/dashboard-console.json")).default,
+    "dashboard-events": async () =>
+      (await import("./messages/ar/dashboard-events.json")).default,
     "dashboard-layout": async () =>
       (await import("./messages/ar/dashboard-layout.json")).default,
     "dashboard-overview": async () =>

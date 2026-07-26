@@ -1,4 +1,4 @@
-# Calais Info — PostgreSQL and Drizzle Schema Proposal
+# InfoKit — PostgreSQL and Drizzle Schema Proposal
 
 > This is a derived technical proposal. `PRODUCT.md` is authoritative for product scope, requirements, and data boundaries.
 
@@ -28,11 +28,11 @@ Use PostgreSQL schemas as domain boundaries while keeping one Drizzle project:
 
 | PostgreSQL schema | Responsibility                                                                                | Public access                                 |
 | ----------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `auth`            | Login identities, linked providers, sessions, verification, recovery                          | No                                            |
+| `auth`            | Login identities, linked providers, sessions, verification, recovery, account settings        | No                                            |
 | `core`            | Organisations, membership, invitations, roles, languages, terms                               | No                                            |
 | `content`         | Public profiles, activities, reusable services, places, events, editorial information, files  | Published records only through the public API |
 | `simulator`       | Versioned anonymous information-decision graphs                                               | Published versions only                       |
-| `operations`      | Members, teams, availability, absences, planning, assignments                                 | No                                            |
+| `operations`      | Members, teams, availability, absences, planning, assignments, coordination agenda            | Only coordination events on the `public` tier |
 | `documents`       | Restricted templates, files, signers, signature evidence                                      | No                                            |
 | `inventory`       | Locations, item catalogue, movements, reservations, kits, transfers, alerts, restricted costs | No                                            |
 | `notifications`   | Preferences, in-app notifications, delivery attempts, outbox                                  | No                                            |
@@ -83,6 +83,14 @@ flowchart LR
 - Use `archived_at` for recoverable content removal.
 - Never hard-delete published revision history, completed signatures, or required audit evidence from ordinary application code.
 - Cascade only disposable join rows. Use `restrict` for published content, signed documents, and audit-referenced records.
+
+### Workspace-only steward contact
+
+Every content root — activities, editorial entries, catalogue services, places, public organisation profiles, simulator flows, and coordination events — carries `steward_name`, `steward_phone`, `steward_email`: who to ask inside the network when the record turns out to be wrong.
+
+- These are plain columns on the record, not `content.contacts` rows. A contact row can be linked to a public surface by mistake; a column that no public query mentions cannot.
+- No public read model selects them, and no public snapshot carries them. They are readable by signed-in editors of the owning organisation, and by other verified organisations wherever the record itself already crosses the workspace boundary.
+- Audit metadata records that a steward contact was set or cleared, never the phone number or the address.
 
 ### Translations
 
@@ -206,6 +214,28 @@ One account has one sign-in email. Organisation-specific contact addresses may r
 
 Security events such as login failure, recovery, session revocation, MFA changes, and account disablement also create `audit.events` rows. IP addresses and user-agent retention require an explicit policy.
 
+### `auth.user_settings`
+
+One row per account holding what the person chose for themselves: interface, time, sign-in, and how they want to be told things. It is separate from `auth.users` so a preference write never touches a credential column, and so preferences may change often without rewriting the identity row.
+
+| Column                                           | Type                   | Notes                                                                           |
+| ------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------- |
+| `user_id`                                        | `text PK FK`           | Account; cascade on delete                                                      |
+| `preferred_language_code`                        | `text FK nullable`     | Interface language; null follows the request (URL, cookie, `Accept-Language`)   |
+| `theme`                                          | `enum`                 | `system` (default) / `light` / `dark`                                           |
+| `density`                                        | `enum`                 | `comfortable` / `compact` workspace density                                     |
+| `reduced_motion`, `high_contrast`                | `boolean`              | Additional to the OS media queries, never a replacement                         |
+| `sidebar_collapsed`, `landing_section`           | `boolean`, `enum`      | Console shape the person left behind                                            |
+| `time_zone`, `clock_format`, `week_starts_on`    | `text`, `enum`, `int`  | IANA zone, 12/24-hour, ISO weekday 1–7; stored instants stay UTC                |
+| `preferred_sign_in_method`                       | `enum`                 | `magic_link` / `password` / `passkey`; which method the login page offers first |
+| `two_factor_enabled`, `two_factor_method`        | `boolean`, `enum`      | Enrolment state; on by default and not disableable by platform administrators   |
+| `two_factor_updated_at`                          | `timestamptz nullable` | When enrolment last changed; the reason lives in `audit.events`                 |
+| `digest`, `quiet_hours_start`, `quiet_hours_end` | `enum`, `time`, `time` | Digest cadence and the window in which non-urgent delivery waits                |
+| `default_organization_id`, `default_city_id`     | `uuid FK nullable`     | Scope the console opens with; set null on delete                                |
+| `created_at`, `updated_at`                       | `timestamptz`          | Standard timestamps                                                             |
+
+A missing row means every default, so a new account needs no backfill and a read never depends on a prior write. Nothing here is a security control on its own: RBAC decides what a person may do, these columns decide what they are shown. The table never stores a phone number or a second-factor secret — the SMS recipient stays deployment configuration, and disabling `two_factor_enabled` is re-checked server-side against the account's platform role on every gated read.
+
 Slice 0 has a fixed invited-editor allowlist. Its email-to-phone mapping is deployment configuration rather than account data: there is no public enrolment or phone-number editing. Password and magic-link authentication both create the same revocable database session and require a session-bound, single-use SMS challenge before any private read or mutation. An authenticated, SMS-verified user may set or replace the password; the magic-link path remains the recovery route until a dedicated reset flow ships.
 
 ## 5. Organisations, Invitations, and Authorization
@@ -273,6 +303,13 @@ For example, an article publisher template grants both `content.article.write`
 and `content.article.publish`, while a translation reviewer may hold only
 `content.article.review`. Likewise, `content.activity.manage` does not imply
 `content.activity.verify`.
+
+`platform_operator` grants `organization.profile.manage` alongside
+`organization.verify`, `taxonomy.manage`, and `audit.read`: the platform
+maintains a directory record until the organisation claims it. The grant is not
+revoked on claim — `core.organizations.claimed_at` is what turns platform write
+access into read-only (PRODUCT.md §11.3, the claim rule), while an
+organisation's own members keep writing through their membership roles.
 
 `platform_superadmin` grants only `support.superadmin` and `audit.read`. A
 global assignment in `core.user_platform_roles` authorizes role testing. A
@@ -679,16 +716,20 @@ Calendar import parses into staging rows first. Commit uses the file hash, organ
 
 ### Inter-organisation coordination agenda
 
-Introduced with Phase 2 workspaces: a narrow, deliberate cross-tenant surface (never public) for events such as a daily inter-association briefing.
+Introduced with Phase 2 workspaces: a narrow, deliberate cross-tenant surface for events such as a daily inter-association briefing. Reach widens in three steps — `organisation`, `inter_organisation`, `public` — and only the last one leaves the workspace, on the host's explicit decision.
 
-| Table                                         | Purpose                                                                    | Important columns                                                                                                                                                   |
-| --------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `operations.coordination_events`              | Organisation- or platform-hosted coordination event/meeting                | host organisation nullable (null = platform), city, visibility (`organisation`/`inter_organisation`), title, description, safe location/contact, status, created by |
-| `operations.coordination_event_series`        | Recurrence for repeating events                                            | event, timezone, local start, duration, RRULE or controlled recurrence fields, effective dates                                                                      |
-| `operations.coordination_event_occurrences`   | Materialized occurrences with change/cancellation state and visible reason | event, starts/ends at, state, reason, unique event/start                                                                                                            |
-| `operations.coordination_event_participation` | Organisation-level participation state                                     | event or occurrence, organisation, state (`attending`/`interested`/`declined`), actor member, updated at                                                            |
+| Table                                         | Purpose                                                                    | Important columns                                                                                                                                                                                                                    |
+| --------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `operations.coordination_events`              | Organisation- or platform-hosted coordination event/meeting                | host organisation nullable (null = platform), city, visibility (`organisation`/`inter_organisation`/`public`), all-day flag, starts/ends at, place or safe location label, contact, status, source language, archived at, created by |
+| `operations.coordination_event_translations`  | Per-language title, description, cancellation reason                       | event, language code, title, description, cancellation reason, unique event/language                                                                                                                                                 |
+| `operations.coordination_event_series`        | Recurrence for repeating events                                            | event, timezone, local start, duration, RRULE or controlled recurrence fields, effective dates                                                                                                                                       |
+| `operations.coordination_event_occurrences`   | Materialized occurrences with change/cancellation state and visible reason | event, starts/ends at, state, reason, unique event/start                                                                                                                                                                             |
+| `operations.coordination_event_participation` | Organisation-level participation state                                     | event or occurrence, organisation, state (`attending`/`interested`/`declined`), actor member, updated at                                                                                                                             |
+| `operations.coordination_event_assets`        | The event's cover image and downloadable flyers                            | event, asset, role (`cover`/`flyer`), file language nullable, display order, active flag, unique event/asset/role                                                                                                                    |
 
-RLS: `organisation` rows follow the standard tenant policy; `inter_organisation` rows are readable by any active member of a verified organisation through a dedicated policy or view — the same explicit-exception pattern as transfers and joint publication. Writing always requires the host organisation's coordination permission. Coordination events are excluded from every public read model.
+Event media are ordinary `content.assets` (§9), so rights confirmation and the malware scan gate them exactly as they gate article media. Nothing about publication is stored on the join row: whether a reader may fetch a file is answered by the event's `visibility`, so a flyer on an `organisation`-tier event is workspace-only without anyone having to say so. Delivery goes through an application route that re-resolves the tier for the caller on every request and then redirects to a short-lived signed URL; a flyer is sent as an attachment under its translated title rather than its opaque storage key. Flyer titles live in `content.asset_translations` rather than `content.downloads`, because that table requires an owning organisation and an event may be hosted by the platform itself.
+
+RLS: `organisation` rows follow the standard tenant policy; `inter_organisation` rows are readable by any active member of a verified organisation through a dedicated policy or view — the same explicit-exception pattern as transfers and joint publication. Writing always requires the host organisation's coordination permission. The public read model selects `visibility = 'public'` and `archived_at IS NULL` and nothing else, so the two private tiers cannot reach a public surface even if a caller forgets a condition.
 
 Recommended weekly-board indexes:
 
@@ -778,13 +819,13 @@ Anonymous distributions use a `distribution` movement header linked to an option
 
 ## 16. Notifications and Reliable Background Work
 
-| Table                             | Purpose                                          | Important columns                                                                                    |
-| --------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `notifications.preferences`       | Per-user/org/channel preferences                 | user, organisation nullable, notification kind, email/SMS/push/in-app enabled                        |
-| `notifications.endpoints`         | Verified email, phone, or push endpoint          | user, channel, encrypted address/token, verified/disabled times                                      |
-| `notifications.notifications`     | Safe in-app notification                         | recipient, organisation, kind, safe title/body key, entity reference, read time                      |
-| `notifications.delivery_attempts` | Delivery lifecycle                               | notification, endpoint/channel, provider ID, status, attempt count, error code, sent/delivered times |
-| `notifications.outbox`            | Transactional jobs emitted with database changes | event type, aggregate ID, payload, available time, processed time, attempt count                     |
+| Table                             | Purpose                                          | Important columns                                                                                                                                                                                                                                                                   |
+| --------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `notifications.preferences`       | Per-user/org/channel preferences                 | user, organisation nullable, notification kind, email/SMS/push/in-app enabled; a row is an override, absence means the kind's product default, so a new kind ships without editing anyone's settings. Account-security messages are stored like any other kind but always delivered |
+| `notifications.endpoints`         | Verified email, phone, or push endpoint          | user, channel, encrypted address/token, verified/disabled times                                                                                                                                                                                                                     |
+| `notifications.notifications`     | Safe in-app notification                         | recipient, organisation, kind, safe title/body key, entity reference, read time                                                                                                                                                                                                     |
+| `notifications.delivery_attempts` | Delivery lifecycle                               | notification, endpoint/channel, provider ID, status, attempt count, error code, sent/delivered times                                                                                                                                                                                |
+| `notifications.outbox`            | Transactional jobs emitted with database changes | event type, aggregate ID, payload, available time, processed time, attempt count                                                                                                                                                                                                    |
 
 Use an outbox worker for invitation emails, approval request notes/reminders, approval-projection regeneration, review reminders, schedule changes, cancellations, inventory alerts/transfers, and signing-provider synchronization. Approval/note emails contain an opaque expiring link and safe context, not the unpublished content or note body. Never send an external notification before the database transaction creating its state has committed.
 
@@ -929,6 +970,7 @@ Use PostgreSQL `CHECK` constraints for start/end ordering, non-negative capacity
 src/db/
   schema/
     auth.ts
+    account-settings.ts
     core.ts
     authorization.ts
     languages.ts
@@ -968,7 +1010,7 @@ Define physical foreign keys in the table files. Define Drizzle query relations 
 2. `core.languages`, `auth.users`, and authentication support tables.
 3. Organisations, verification, members, engagement types/periods, invitations, legal acceptance, roles, and permissions.
 4. Taxonomies, audiences, search concepts/aliases, reusable services, tags, typed tag assignments, public profiles, speciality change history, contacts, places, city teams, activities, activity-service assignments, creator/provider joins, verification evidence, attached assets, and activity claim/custody history.
-5. Activity schedule rules, exceptions, organisation-scoped date confirmations, public events, and occurrence generation.
+5. Activity schedule rules, exceptions, organisation-scoped date confirmations, public events, and occurrence generation. `auth.user_settings` and `notifications.preferences` may land here too — both reference languages, organisations, and cities, so they follow those tables rather than the authentication step.
 6. Editorial entries, custodianships/transfers, revisions, immutable translation source versions, translation provenance/assignments, per-locale publication pointers, sources, immutable approval bundles/party fragments/messages/projections, files, and public read models.
 7. Simulator flows, immutable graph versions, translations, source/result links, and validation.
 8. Teams, skills, languages, driving permits, training, availability, absences, calendar events/imports, typed requirements, checks, and assignments.
