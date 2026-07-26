@@ -12,24 +12,37 @@ import { editorialLanguageCodes } from "~/lib/editorial-languages";
 import { recordAudit } from "~/server/audit";
 import { auth } from "~/server/auth";
 import { sendTranslationAssignmentEmail } from "~/server/auth/aws";
+import { assertOrganizationWritable } from "~/server/auth/org-access";
 import { protectedPermissionAction } from "~/server/auth/require";
-import { localizedContentHash } from "~/server/content/editorial";
 import { db } from "~/server/db";
 import {
-  editorialRevisionTranslations,
+  organizationProfileTranslations,
   translationAssignmentEvents,
   translationAssignments,
   translationSourceVersions,
 } from "~/server/db/schema";
 
+/**
+ * Translator collaboration for the organisation narrative (purpose, goals,
+ * values). Same lifecycle as articles, activities, and simulator flows: the
+ * request pins an immutable source version, the translator works behind an
+ * expiring link, and only an accepted review reaches the public profile table.
+ */
+
 const languages = z.enum(editorialLanguageCodes);
 
 function optionalFormValue(value: FormDataEntryValue | null) {
-  return typeof value === "string" && value.trim() ? value : undefined;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function refresh(locale: Locale, organizationId: string) {
+  revalidatePath(
+    localizedPath(`/dashboard/organizations/${organizationId}`, locale),
+  );
 }
 
 const requestSchema = z.object({
-  entryId: z.string().uuid(),
+  organizationId: z.string().uuid(),
   targetLanguageCode: languages,
   translatorEmail: z.string().trim().email().max(255),
   translatorName: z.string().trim().max(200).optional(),
@@ -40,17 +53,11 @@ const requestSchema = z.object({
     .refine((value) => [24, 72, 168].includes(value)),
 });
 
-function refresh(locale: Locale, entryId: string) {
-  revalidatePath(
-    `${localizedPath("/dashboard/articles", locale)}?article=${entryId}`,
-  );
-}
-
-export const requestArticleTranslation = protectedPermissionAction(
+export const requestOrganizationTranslation = protectedPermissionAction(
   "content.translation.request",
   async (formData, locale) => {
     const parsed = requestSchema.parse({
-      entryId: formData.get("entryId"),
+      organizationId: formData.get("organizationId"),
       targetLanguageCode: formData.get("targetLanguageCode"),
       translatorEmail: formData.get("translatorEmail"),
       translatorName: optionalFormValue(formData.get("translatorName")),
@@ -59,7 +66,7 @@ export const requestArticleTranslation = protectedPermissionAction(
     });
     const session = await auth();
     if (!session?.user.id) throw new Error("A signed-in sender is required");
-
+    await assertOrganizationWritable(session.user.id, parsed.organizationId);
     const rawToken = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(rawToken).digest("hex");
     const expiresAt = new Date(
@@ -72,8 +79,8 @@ export const requestArticleTranslation = protectedPermissionAction(
         .set({ expiredAt: new Date(), updatedAt: new Date() })
         .where(
           and(
-            eq(translationAssignments.entityKind, "editorial_entry"),
-            eq(translationAssignments.entityId, parsed.entryId),
+            eq(translationAssignments.entityKind, "organization_profile"),
+            eq(translationAssignments.entityId, parsed.organizationId),
             eq(
               translationAssignments.targetLanguageCode,
               parsed.targetLanguageCode,
@@ -88,24 +95,25 @@ export const requestArticleTranslation = protectedPermissionAction(
         .from(translationSourceVersions)
         .where(
           and(
-            eq(translationSourceVersions.entityKind, "editorial_entry"),
-            eq(translationSourceVersions.entityId, parsed.entryId),
+            eq(translationSourceVersions.entityKind, "organization_profile"),
+            eq(translationSourceVersions.entityId, parsed.organizationId),
           ),
         )
         .orderBy(desc(translationSourceVersions.version))
         .limit(1);
-      if (!sourceVersion) throw new Error("Article has no translation source");
+      if (!sourceVersion) {
+        throw new Error("The organisation has no narrative to translate yet");
+      }
       if (sourceVersion.sourceLanguageCode === parsed.targetLanguageCode) {
         throw new Error("The source language cannot be assigned as a target");
       }
-
       const [liveAssignment] = await tx
         .select({ id: translationAssignments.id })
         .from(translationAssignments)
         .where(
           and(
-            eq(translationAssignments.entityKind, "editorial_entry"),
-            eq(translationAssignments.entityId, parsed.entryId),
+            eq(translationAssignments.entityKind, "organization_profile"),
+            eq(translationAssignments.entityId, parsed.organizationId),
             eq(
               translationAssignments.targetLanguageCode,
               parsed.targetLanguageCode,
@@ -119,13 +127,12 @@ export const requestArticleTranslation = protectedPermissionAction(
       if (liveAssignment) {
         throw new Error("This language already has an active assignment");
       }
-
       const [created] = await tx
         .insert(translationAssignments)
         .values({
-          organizationId: sourceVersion.organizationId,
-          entityKind: "editorial_entry",
-          entityId: parsed.entryId,
+          organizationId: parsed.organizationId,
+          entityKind: "organization_profile",
+          entityId: parsed.organizationId,
           sourceVersionId: sourceVersion.id,
           targetLanguageCode: parsed.targetLanguageCode,
           translatorEmail: parsed.translatorEmail.toLowerCase(),
@@ -159,6 +166,7 @@ export const requestArticleTranslation = protectedPermissionAction(
         expiresAt,
       });
     } catch (error) {
+      // A link nobody received must not sit in the queue as an active job.
       await db
         .update(translationAssignments)
         .set({ revokedAt: new Date(), updatedAt: new Date() })
@@ -169,40 +177,42 @@ export const requestArticleTranslation = protectedPermissionAction(
       action: "translation.assignment.requested",
       subjectType: "translation_assignment",
       subjectId: assignment.id,
+      organizationId: parsed.organizationId,
       metadata: {
-        entityId: parsed.entryId,
+        entityKind: "organization_profile",
+        entityId: parsed.organizationId,
         targetLanguageCode: parsed.targetLanguageCode,
       },
     });
-    refresh(locale, parsed.entryId);
+    refresh(locale, parsed.organizationId);
   },
 );
 
+type SubmittedNarrative = {
+  purpose?: unknown;
+  goals?: unknown;
+  values?: unknown;
+};
+
 const reviewSchema = z.object({
   assignmentId: z.string().uuid(),
-  entryId: z.string().uuid(),
+  organizationId: z.string().uuid(),
   decision: z.enum(["accept", "reject"]),
   reviewNote: z.string().trim().max(2000).optional(),
 });
 
-type SubmittedTranslation = {
-  title?: unknown;
-  summary?: unknown;
-  bodyHtml?: unknown;
-  plainText?: unknown;
-};
-
-export const reviewArticleTranslation = protectedPermissionAction(
+export const reviewOrganizationTranslation = protectedPermissionAction(
   "content.translation.review",
   async (formData, locale) => {
     const parsed = reviewSchema.parse({
       assignmentId: formData.get("assignmentId"),
-      entryId: formData.get("entryId"),
+      organizationId: formData.get("organizationId"),
       decision: formData.get("decision"),
       reviewNote: optionalFormValue(formData.get("reviewNote")),
     });
     const session = await auth();
     if (!session?.user.id) throw new Error("A signed-in reviewer is required");
+    await assertOrganizationWritable(session.user.id, parsed.organizationId);
 
     await db.transaction(async (tx) => {
       const [assignment] = await tx
@@ -211,25 +221,30 @@ export const reviewArticleTranslation = protectedPermissionAction(
         .where(
           and(
             eq(translationAssignments.id, parsed.assignmentId),
-            eq(translationAssignments.entityId, parsed.entryId),
-            eq(translationAssignments.entityKind, "editorial_entry"),
+            eq(translationAssignments.entityId, parsed.organizationId),
+            eq(translationAssignments.entityKind, "organization_profile"),
           ),
         )
         .limit(1);
       if (assignment?.state !== "submitted") {
         throw new Error("This assignment is not awaiting review");
       }
-      const submitted =
-        assignment.submittedContentJson as SubmittedTranslation | null;
-      const title =
-        typeof submitted?.title === "string" ? submitted.title.trim() : "";
-      const summary =
-        typeof submitted?.summary === "string" ? submitted.summary.trim() : "";
-      const bodyHtml =
-        typeof submitted?.bodyHtml === "string" ? submitted.bodyHtml : "";
-      const plainText =
-        typeof submitted?.plainText === "string" ? submitted.plainText : "";
-      if (!title) throw new Error("The submitted translation has no title");
+      const [latestSource] = await tx
+        .select({ id: translationSourceVersions.id })
+        .from(translationSourceVersions)
+        .where(
+          and(
+            eq(translationSourceVersions.entityKind, "organization_profile"),
+            eq(translationSourceVersions.entityId, parsed.organizationId),
+          ),
+        )
+        .orderBy(desc(translationSourceVersions.version))
+        .limit(1);
+      if (latestSource?.id !== assignment.sourceVersionId) {
+        throw new Error(
+          "The narrative changed after this translation was requested",
+        );
+      }
 
       const decidedAt = new Date();
       const nextState = parsed.decision === "accept" ? "accepted" : "rejected";
@@ -261,67 +276,54 @@ export const reviewArticleTranslation = protectedPermissionAction(
       ]);
 
       if (parsed.decision === "accept") {
-        const [source] = await tx
-          .select({ revisionId: translationSourceVersions.sourceRevisionId })
-          .from(translationSourceVersions)
-          .where(eq(translationSourceVersions.id, assignment.sourceVersionId))
-          .limit(1);
-        if (!source?.revisionId)
-          throw new Error("Assignment source is invalid");
-        const content = {
-          title,
-          summary: summary || null,
-          bodyHtml: bodyHtml || null,
-          plainText: plainText || null,
-        };
+        const submitted =
+          assignment.submittedContentJson as SubmittedNarrative | null;
+        const purpose =
+          typeof submitted?.purpose === "string"
+            ? submitted.purpose.trim()
+            : "";
+        if (!purpose) {
+          throw new Error("The submitted translation has no purpose text");
+        }
+        const goals =
+          typeof submitted?.goals === "string"
+            ? submitted.goals.trim() || null
+            : null;
+        const values =
+          typeof submitted?.values === "string"
+            ? submitted.values.trim() || null
+            : null;
         await tx
-          .insert(editorialRevisionTranslations)
+          .insert(organizationProfileTranslations)
           .values({
-            revisionId: source.revisionId,
+            organizationId: parsed.organizationId,
             languageCode: assignment.targetLanguageCode,
-            title,
-            summary: summary || null,
-            bodyJson: bodyHtml ? { html: bodyHtml } : null,
-            plainText: plainText || null,
+            purpose,
+            goals,
+            values,
             state: "verified",
             method: "human",
-            sourceVersionId: assignment.sourceVersionId,
-            contentHash: localizedContentHash(
-              assignment.targetLanguageCode,
-              content,
-            ),
-            verifiedById: session.user.id,
-            verifiedAt: decidedAt,
           })
           .onConflictDoUpdate({
             target: [
-              editorialRevisionTranslations.revisionId,
-              editorialRevisionTranslations.languageCode,
+              organizationProfileTranslations.organizationId,
+              organizationProfileTranslations.languageCode,
             ],
-            set: {
-              title,
-              summary: summary || null,
-              bodyJson: bodyHtml ? { html: bodyHtml } : null,
-              plainText: plainText || null,
-              state: "verified",
-              method: "human",
-              sourceVersionId: assignment.sourceVersionId,
-              contentHash: localizedContentHash(
-                assignment.targetLanguageCode,
-                content,
-              ),
-              verifiedById: session.user.id,
-              verifiedAt: decidedAt,
-            },
+            set: { purpose, goals, values, state: "verified", method: "human" },
           });
       }
     });
+
     await recordAudit({
       action: `translation.assignment.${parsed.decision === "accept" ? "accepted" : "rejected"}`,
       subjectType: "translation_assignment",
       subjectId: parsed.assignmentId,
-      metadata: { entityId: parsed.entryId },
+      organizationId: parsed.organizationId,
+      metadata: {
+        entityKind: "organization_profile",
+        entityId: parsed.organizationId,
+      },
     });
-    refresh(locale, parsed.entryId);
+    refresh(locale, parsed.organizationId);
   },
 );

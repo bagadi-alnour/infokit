@@ -1,4 +1,4 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { Languages, LockKeyhole } from "lucide-react";
 
@@ -28,7 +28,15 @@ type SourcePayload = {
   sourceLanguage?: unknown;
   translations?: Record<
     string,
-    { title?: unknown; summary?: unknown; plainText?: unknown }
+    {
+      title?: unknown;
+      summary?: unknown;
+      plainText?: unknown;
+      /** Organisation narrative fields. */
+      purpose?: unknown;
+      goals?: unknown;
+      values?: unknown;
+    }
   >;
 };
 
@@ -36,7 +44,14 @@ type TargetPayload = {
   title?: unknown;
   summary?: unknown;
   plainText?: unknown;
+  purpose?: unknown;
+  goals?: unknown;
+  values?: unknown;
 };
+
+function asText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
 
 export default async function TranslationAssignmentPage({
   params,
@@ -44,11 +59,18 @@ export default async function TranslationAssignmentPage({
   params: Promise<{ locale: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const [labels, simulatorLabels] = await Promise.all([
+  const [labels, simulatorLabels, consoleLabels] = await Promise.all([
     loadPageCatalog(locale, "dashboard-articles"),
     loadPageCatalog(locale, "dashboard-simulator"),
+    loadPageCatalog(locale, "dashboard-console"),
   ]);
-  const text: Record<string, string> = { ...labels, ...simulatorLabels };
+  // Article keys win: the console catalog only fills in the organisation
+  // narrative field names this page borrows.
+  const text: Record<string, string> = {
+    ...consoleLabels,
+    ...labels,
+    ...simulatorLabels,
+  };
   const assignmentId = await readTranslationAssignmentSession();
   const [assignment] = assignmentId
     ? await db
@@ -102,6 +124,13 @@ export default async function TranslationAssignmentPage({
   const target = assignment.targetContent as TargetPayload | null;
   const editable =
     assignment.state === "requested" || assignment.state === "draft";
+  /** The organisation narrative has its own three fields, not title/summary/body. */
+  const isOrganization = assignment.entityKind === "organization_profile";
+  const targetDir = isRtlEditorialLanguage(
+    assignment.targetLanguage as EditorialLanguage,
+  )
+    ? "rtl"
+    : "ltr";
 
   if (assignment.entityKind === "simulator_flow") {
     return (
@@ -165,17 +194,42 @@ export default async function TranslationAssignmentPage({
                 : "ltr"
             }
           >
-            <div>
-              <p className="text-copy-muted text-xs font-medium uppercase tracking-wide">
-                {labels["field.title"]}
-              </p>
-              <p className="mt-1.5 text-xl font-semibold">
-                {typeof sourceTranslation?.title === "string"
-                  ? sourceTranslation.title
-                  : labels.untitled}
-              </p>
-            </div>
-            {typeof sourceTranslation?.summary === "string" ? (
+            {isOrganization ? (
+              <>
+                {(
+                  [
+                    ["field.purpose", sourceTranslation?.purpose],
+                    ["field.goals", sourceTranslation?.goals],
+                    ["field.values", sourceTranslation?.values],
+                  ] as const
+                ).map(([labelKey, value]) =>
+                  asText(value) ? (
+                    <div key={labelKey}>
+                      <p className="text-copy-muted text-xs font-medium uppercase tracking-wide">
+                        {text[labelKey]}
+                      </p>
+                      <p className="mt-1.5 whitespace-pre-wrap leading-relaxed">
+                        {asText(value)}
+                      </p>
+                    </div>
+                  ) : null,
+                )}
+              </>
+            ) : null}
+            {isOrganization ? null : (
+              <div>
+                <p className="text-copy-muted text-xs font-medium uppercase tracking-wide">
+                  {labels["field.title"]}
+                </p>
+                <p className="mt-1.5 text-xl font-semibold">
+                  {typeof sourceTranslation?.title === "string"
+                    ? sourceTranslation.title
+                    : labels.untitled}
+                </p>
+              </div>
+            )}
+            {!isOrganization &&
+            typeof sourceTranslation?.summary === "string" ? (
               <div>
                 <p className="text-copy-muted text-xs font-medium uppercase tracking-wide">
                   {labels["field.summary"]}
@@ -185,7 +239,8 @@ export default async function TranslationAssignmentPage({
                 </p>
               </div>
             ) : null}
-            {typeof sourceTranslation?.plainText === "string" ? (
+            {!isOrganization &&
+            typeof sourceTranslation?.plainText === "string" ? (
               <div>
                 <p className="text-copy-muted text-xs font-medium uppercase tracking-wide">
                   {labels["field.body"]}
@@ -213,7 +268,68 @@ export default async function TranslationAssignmentPage({
                 </p>
               </div>
             ) : null}
-            {editable ? (
+            {editable && isOrganization ? (
+              <form action={saveExternalTranslation} className="grid gap-4">
+                <input type="hidden" name="locale" value={locale} />
+                <input
+                  type="hidden"
+                  name="entityKind"
+                  value="organization_profile"
+                />
+                <Field>
+                  <FieldLabel htmlFor="translation-purpose">
+                    {text["field.purpose"]}
+                  </FieldLabel>
+                  <Textarea
+                    id="translation-purpose"
+                    name="purpose"
+                    defaultValue={asText(target?.purpose)}
+                    dir={targetDir}
+                    rows={4}
+                    maxLength={4000}
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="translation-goals">
+                    {text["field.goals"]}
+                  </FieldLabel>
+                  <Textarea
+                    id="translation-goals"
+                    name="goals"
+                    defaultValue={asText(target?.goals)}
+                    dir={targetDir}
+                    rows={5}
+                    maxLength={4000}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="translation-values">
+                    {text["field.values"]}
+                  </FieldLabel>
+                  <Textarea
+                    id="translation-values"
+                    name="values"
+                    defaultValue={asText(target?.values)}
+                    dir={targetDir}
+                    rows={5}
+                    maxLength={4000}
+                  />
+                </Field>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <PendingButton
+                    variant="secondary"
+                    name="intent"
+                    value="draft"
+                  >
+                    {labels["translator.saveDraft"]}
+                  </PendingButton>
+                  <PendingButton name="intent" value="submit">
+                    {labels["translator.submit"]}
+                  </PendingButton>
+                </div>
+              </form>
+            ) : editable ? (
               <form action={saveExternalTranslation} className="grid gap-4">
                 <input type="hidden" name="locale" value={locale} />
                 <Field>

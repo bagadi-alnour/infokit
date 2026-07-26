@@ -1,6 +1,6 @@
 "use client";
 
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import { CalendarClock, CheckCircle2, Globe, MailPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -30,10 +30,7 @@ import {
 } from "~/components/ui/dialog";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import { Textarea } from "~/components/ui/textarea";
 import type { EditorialLanguage } from "~/lib/editorial-languages";
 
@@ -360,7 +357,12 @@ function TranslationRequestDialog({
   };
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
+      {/* The translation workspace's rail reaches this trigger by id, so the
+       * emailing form lives in exactly one place. */}
+      <DialogTrigger
+        id={`request-translation-${language}`}
+        render={<Button variant="outline" size="sm" />}
+      >
         <MailPlus aria-hidden />
         {labels["translation.request"]}
       </DialogTrigger>
@@ -412,21 +414,15 @@ function TranslationRequestDialog({
             <FieldLabel htmlFor={`translator-expiry-${language}`}>
               {labels["translation.expiry"]}
             </FieldLabel>
-            <NativeSelect
+            <SelectField
               id={`translator-expiry-${language}`}
               name="lifetimeHours"
               defaultValue="72"
             >
-              <NativeSelectOption value="24">
-                {labels["translation.expiry.24"]}
-              </NativeSelectOption>
-              <NativeSelectOption value="72">
-                {labels["translation.expiry.72"]}
-              </NativeSelectOption>
-              <NativeSelectOption value="168">
-                {labels["translation.expiry.168"]}
-              </NativeSelectOption>
-            </NativeSelect>
+              <option value="24">{labels["translation.expiry.24"]}</option>
+              <option value="72">{labels["translation.expiry.72"]}</option>
+              <option value="168">{labels["translation.expiry.168"]}</option>
+            </SelectField>
           </Field>
           <Field>
             <FieldLabel htmlFor={`translator-instructions-${language}`}>

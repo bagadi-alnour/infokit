@@ -5,9 +5,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import {
-  requestSimulatorTranslation,
-  reviewSimulatorTranslation,
-} from "~/app/[locale]/dashboard/simulator/translation-actions";
+  requestOrganizationTranslation,
+  reviewOrganizationTranslation,
+} from "~/app/[locale]/dashboard/organizations/translation-actions";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import { PendingButton } from "~/components/pending-button";
 import { Badge } from "~/components/ui/badge";
@@ -16,9 +16,9 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogDescription,
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
@@ -30,10 +30,10 @@ import type { EditorialLanguage } from "~/lib/editorial-languages";
 
 type Labels = Record<string, string>;
 
-export interface SimulatorLanguageStatus {
+export interface OrganizationLanguageStatus {
   code: EditorialLanguage;
+  /** Whether a narrative already exists in this language. */
   authored: boolean;
-  state: string;
   assignment: {
     id: string;
     state: string;
@@ -43,19 +43,27 @@ export interface SimulatorLanguageStatus {
   } | null;
 }
 
-export function SimulatorTranslationPanel({
+/**
+ * One row per editorial language: what the profile says today, and what is
+ * outstanding. The source language carries no request button — everything else
+ * is a target, exactly as on an article or an activity.
+ */
+export function OrganizationTranslationPanel({
   locale,
-  flowId,
+  organizationId,
   sourceLanguage,
   languages,
   labels,
+  /** No source version sealed yet: nothing can be requested. */
+  hasSource,
   disabled = false,
 }: {
   locale: EditorialLanguage;
-  flowId: string;
-  sourceLanguage: EditorialLanguage;
-  languages: SimulatorLanguageStatus[];
+  organizationId: string;
+  sourceLanguage: string;
+  languages: OrganizationLanguageStatus[];
   labels: Labels;
+  hasSource: boolean;
   disabled?: boolean;
 }) {
   return (
@@ -66,6 +74,7 @@ export function SimulatorTranslationPanel({
         const canRequest =
           !disabled &&
           !isSource &&
+          hasSource &&
           (!assignment ||
             ["expired", "rejected", "published"].includes(assignment.state));
         return (
@@ -75,7 +84,7 @@ export function SimulatorTranslationPanel({
           >
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-semibold">
-                {labels[`language.${language.code}`]}
+                {labels[`language.${language.code}`] ?? language.code}
               </span>
               {isSource ? (
                 <Badge variant="outline" className="text-brand">
@@ -108,10 +117,15 @@ export function SimulatorTranslationPanel({
                 · {assignment.expiresAt}
               </p>
             ) : null}
+            {isSource && !hasSource ? (
+              <p className="text-copy-muted text-xs">
+                {labels["translation.needsSource"]}
+              </p>
+            ) : null}
             {canRequest ? (
               <RequestDialog
                 locale={locale}
-                flowId={flowId}
+                organizationId={organizationId}
                 language={language.code}
                 labels={labels}
               />
@@ -119,7 +133,7 @@ export function SimulatorTranslationPanel({
             {!disabled && assignment?.state === "submitted" ? (
               <ReviewDialog
                 locale={locale}
-                flowId={flowId}
+                organizationId={organizationId}
                 assignmentId={assignment.id}
                 language={language.code}
                 labels={labels}
@@ -134,12 +148,12 @@ export function SimulatorTranslationPanel({
 
 function RequestDialog({
   locale,
-  flowId,
+  organizationId,
   language,
   labels,
 }: {
   locale: EditorialLanguage;
-  flowId: string;
+  organizationId: string;
   language: EditorialLanguage;
   labels: Labels;
 }) {
@@ -147,7 +161,7 @@ function RequestDialog({
   const showActionError = useActionErrorToast();
   const submit = async (formData: FormData) => {
     try {
-      await requestSimulatorTranslation(formData);
+      await requestOrganizationTranslation(formData);
       toast.success(labels["translation.requested"]);
       setOpen(false);
     } catch (error) {
@@ -165,7 +179,7 @@ function RequestDialog({
       <DialogContent className="sm:max-w-lg">
         <form action={submit}>
           <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="flowId" value={flowId} />
+          <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="targetLanguageCode" value={language} />
           <DialogHeader>
             <DialogTitle>
@@ -180,43 +194,43 @@ function RequestDialog({
           </DialogHeader>
           <div className="grid gap-4 py-5">
             <Field>
-              <FieldLabel htmlFor={`translator-email-${language}`}>
+              <FieldLabel htmlFor={`org-translator-email-${language}`}>
                 {labels["translation.email"]}
               </FieldLabel>
               <Input
-                id={`translator-email-${language}`}
+                id={`org-translator-email-${language}`}
                 name="translatorEmail"
                 type="email"
                 required
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor={`translator-name-${language}`}>
+              <FieldLabel htmlFor={`org-translator-name-${language}`}>
                 {labels["translation.name"]}
               </FieldLabel>
               <Input
-                id={`translator-name-${language}`}
+                id={`org-translator-name-${language}`}
                 name="translatorName"
                 maxLength={200}
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor={`translator-instructions-${language}`}>
+              <FieldLabel htmlFor={`org-translator-instructions-${language}`}>
                 {labels["translation.instructions"]}
               </FieldLabel>
               <Textarea
-                id={`translator-instructions-${language}`}
+                id={`org-translator-instructions-${language}`}
                 name="instructions"
                 rows={4}
                 maxLength={2000}
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor={`translator-expires-${language}`}>
+              <FieldLabel htmlFor={`org-translator-expires-${language}`}>
                 {labels["translation.expires"]}
               </FieldLabel>
               <SelectField
-                id={`translator-expires-${language}`}
+                id={`org-translator-expires-${language}`}
                 name="lifetimeHours"
                 defaultValue="72"
               >
@@ -245,13 +259,13 @@ function RequestDialog({
 
 function ReviewDialog({
   locale,
-  flowId,
+  organizationId,
   assignmentId,
   language,
   labels,
 }: {
   locale: EditorialLanguage;
-  flowId: string;
+  organizationId: string;
   assignmentId: string;
   language: EditorialLanguage;
   labels: Labels;
@@ -260,7 +274,7 @@ function ReviewDialog({
   const showActionError = useActionErrorToast();
   const submit = async (formData: FormData) => {
     try {
-      await reviewSimulatorTranslation(formData);
+      await reviewOrganizationTranslation(formData);
       toast.success(labels["translation.reviewed"]);
       setOpen(false);
     } catch (error) {
@@ -278,7 +292,7 @@ function ReviewDialog({
       <DialogContent className="sm:max-w-lg">
         <form action={submit}>
           <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="flowId" value={flowId} />
+          <input type="hidden" name="organizationId" value={organizationId} />
           <input type="hidden" name="assignmentId" value={assignmentId} />
           <DialogHeader>
             <DialogTitle>
@@ -293,11 +307,11 @@ function ReviewDialog({
           </DialogHeader>
           <div className="py-5">
             <Field>
-              <FieldLabel htmlFor={`review-note-${language}`}>
+              <FieldLabel htmlFor={`org-review-note-${language}`}>
                 {labels["translation.reviewNote"]}
               </FieldLabel>
               <Textarea
-                id={`review-note-${language}`}
+                id={`org-review-note-${language}`}
                 name="reviewNote"
                 rows={4}
                 maxLength={2000}

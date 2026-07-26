@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 import { env } from "~/env";
 
-export const translationAssignmentCookie = "calais_translation_assignment";
+export const translationAssignmentCookie = "infokit_translation_assignment";
 
 function signature(payload: string): string {
   return createHmac("sha256", env.AUTH_SECRET)

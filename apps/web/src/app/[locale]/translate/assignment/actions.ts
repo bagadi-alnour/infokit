@@ -16,7 +16,9 @@ import { readTranslationAssignmentSession } from "~/server/translation-assignmen
 
 const intentSchema = z.object({
   locale: z.enum(["fr", "en", "ar"]),
-  entityKind: z.enum(["standard", "simulator_flow"]).default("standard"),
+  entityKind: z
+    .enum(["standard", "simulator_flow", "organization_profile"])
+    .default("standard"),
   intent: z.enum(["draft", "submit"]),
 });
 
@@ -24,6 +26,13 @@ const standardSchema = z.object({
   title: z.string().trim().max(200),
   summary: z.string().trim().max(2000),
   body: z.string().trim().max(40_000),
+});
+
+/** The organisation narrative: purpose is what the public profile needs. */
+const narrativeSchema = z.object({
+  purpose: z.string().trim().max(4000),
+  goals: z.string().trim().max(4000),
+  values: z.string().trim().max(4000),
 });
 
 function escapeHtml(value: string): string {
@@ -142,6 +151,23 @@ export async function saveExternalTranslation(formData: FormData) {
         assignment.sourceContent,
         intent.intent === "submit",
       );
+    } else if (
+      intent.entityKind === "organization_profile" &&
+      assignment.entityKind === "organization_profile"
+    ) {
+      const parsed = narrativeSchema.parse({
+        purpose: formData.get("purpose"),
+        goals: formData.get("goals"),
+        values: formData.get("values"),
+      });
+      if (intent.intent === "submit" && !parsed.purpose) {
+        throw new Error("The purpose is required before submission");
+      }
+      content = {
+        purpose: parsed.purpose,
+        goals: parsed.goals || null,
+        values: parsed.values || null,
+      };
     } else {
       const parsed = standardSchema.parse({
         title: formData.get("title"),

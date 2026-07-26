@@ -311,7 +311,7 @@ export function ActivityTranslationsEditor({
                 >
                   <InkpilotEditor
                     key={`${language}-${String(editorRevision[language])}`}
-                    className="calais-rich-text-editor"
+                    className="infokit-rich-text-editor"
                     locale={interfaceLocale}
                     content={{ html: content[language].html }}
                     i18n={{ translations }}
@@ -320,17 +320,17 @@ export function ActivityTranslationsEditor({
                       mode: "auto",
                       preset: "minimal",
                       colors: {
-                        primary: "var(--calais-accent)",
-                        secondary: "var(--calais-surface-subtle)",
-                        accent: "var(--calais-accent-soft)",
-                        background: "var(--calais-surface)",
-                        foreground: "var(--calais-ink)",
-                        border: "var(--calais-border)",
-                        muted: "var(--calais-surface-subtle)",
-                        mutedForeground: "var(--calais-text-muted)",
-                        error: "var(--calais-danger)",
-                        warning: "var(--calais-warning)",
-                        success: "var(--calais-success)",
+                        primary: "var(--infokit-accent)",
+                        secondary: "var(--infokit-surface-subtle)",
+                        accent: "var(--infokit-accent-soft)",
+                        background: "var(--infokit-surface)",
+                        foreground: "var(--infokit-ink)",
+                        border: "var(--infokit-border)",
+                        muted: "var(--infokit-surface-subtle)",
+                        mutedForeground: "var(--infokit-text-muted)",
+                        error: "var(--infokit-danger)",
+                        warning: "var(--infokit-warning)",
+                        success: "var(--infokit-success)",
                       },
                     }}
                     onChange={(nextContent) => {

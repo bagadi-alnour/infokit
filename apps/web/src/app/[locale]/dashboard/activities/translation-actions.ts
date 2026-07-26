@@ -1,7 +1,7 @@
 "use server";
 
 import { createHash, randomBytes } from "node:crypto";
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import { and, desc, eq, gt, isNull, lte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -161,7 +161,7 @@ export const requestActivityTranslation = protectedPermissionAction(
         url,
         locale,
         language: parsed.targetLanguageCode,
-        senderName: session.user.name ?? session.user.email ?? "Calais Info",
+        senderName: session.user.name ?? session.user.email ?? "InfoKit",
         expiresAt,
       });
     } catch (error) {

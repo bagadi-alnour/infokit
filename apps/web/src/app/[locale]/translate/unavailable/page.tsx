@@ -1,4 +1,4 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { requireRouteLocale } from "~/i18n/route-locale";
