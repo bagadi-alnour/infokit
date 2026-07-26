@@ -21,6 +21,8 @@ The boundary follows the interaction, not the person's title. An organisation co
 
 `apps/mobile` is a reading and viewing surface: the public content, plus the admin calendar/inter-organisation/event visualisation. Authoring, approving, and translating stay in the web workspace.
 
+Native screens read the public endpoints through `@infokit/api-client`, and the payloads arrive already presented: every label, status word, schedule line, and date is localized and formatted on the server (`apps/web/src/server/content/public-activity-payload.ts`, the same presenter the public web pages use), so a phone and the site can never word the same activity differently. A screen therefore renders strings; it does not translate, format a date, or choose a fallback language. The one exception is `apps/mobile/lib/client.ts`, which owns the handful of connection strings shown _before_ any payload exists — loading, unreachable, retry — with an English base and fr/ar overrides, mirroring the catalogue rule.
+
 ## 2. Package and import boundaries
 
 ```text
@@ -28,6 +30,7 @@ packages/
   tokens/       canonical semantic themes and dimensions
   shared/       i18n, domain states, freshness/status behavior
   validation/   shared input contracts
+  api-client/   typed reader of the public endpoints (no server imports)
   ui/           React Native Reusables + NativeWind components (native only)
 
 apps/web/src/
@@ -38,6 +41,8 @@ apps/web/src/
 
 apps/mobile/
   app/                 expo-router screens
+  components/          screen states shared between them
+  lib/                 the public client, device locale, request state
   tailwind.config.js   NativeWind + the shared preset from @infokit/ui
 ```
 

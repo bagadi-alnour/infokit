@@ -10,6 +10,7 @@ Domain: [infokit.org](https://infokit.org)
 | --------------------- | --------------------- | ------------------------------------------------------- |
 | `apps/web`            | `@infokit/web`        | Next.js App Router — public pages + editor console      |
 | `apps/mobile`         | `@infokit/mobile`     | Expo app — reads public content, shows admin calendars  |
+| `packages/api-client` | `@infokit/api-client` | Typed reader of the public `/api/public/*` endpoints    |
 | `packages/shared`     | `@infokit/shared`     | i18n catalogs, locales, public read models              |
 | `packages/tokens`     | `@infokit/tokens`     | Semantic design tokens (single source for web + native) |
 | `packages/ui`         | `@infokit/ui`         | React Native Reusables + NativeWind components          |
@@ -28,6 +29,7 @@ pnpm dev:web
 ## Commands
 
 - `pnpm dev:web` — Next.js dev server
+- `pnpm dev:mobile` — Expo dev server; the app reads the web app's public endpoints (`EXPO_PUBLIC_INFOKIT_API_URL`, see `apps/mobile/.env.example`), so run `dev:web` too
 - `pnpm check:ci` — format check + lint + typecheck; the health question
 - `pnpm db:push` / `pnpm db:generate --name <slug>` / `pnpm db:studio`
 - `pnpm test:unit` — web unit tests

@@ -87,7 +87,7 @@ EP-next's scripted EAS pipeline: named build profiles (`development-device`, `pr
 
 ## 10. Slice 0 bootstrap order (when coding starts)
 
-> **Status 25 July 2026:** the monorepo includes `packages/{tokens,shared,ui,validation}` and `apps/{web,mobile}`. Tamagui was removed: the web app renders with Tailwind v4 (public primitives + shadcn workspace adapters), and `packages/ui` is now React Native Reusables + NativeWind for the Expo app. `apps/mobile` is scaffolded as a reading surface — public content plus the admin visualisation of calendars, inter-organisation coordination, and events; authoring stays on the web. Still pending: `packages/api-client` and shared config packages, created only when real consumers exist — never as empty shells.
+> **Status 25 July 2026:** the monorepo includes `packages/{tokens,shared,ui,validation}` and `apps/{web,mobile}`. Tamagui was removed: the web app renders with Tailwind v4 (public primitives + shadcn workspace adapters), and `packages/ui` is now React Native Reusables + NativeWind for the Expo app. `apps/mobile` is scaffolded as a reading surface — public content plus the admin visualisation of calendars, inter-organisation coordination, and events; authoring stays on the web. `packages/api-client` now exists because a real consumer arrived: it reads the anonymous `/api/public/*` endpoints for `apps/mobile` (26 July 2026). Still pending: shared config packages, created only when real consumers exist — never as empty shells.
 
 1. `git init`, initial commit of this suite + prototype.
 2. Scaffold the monorepo (§1) with `packages/tokens` from `DESIGN.md` + prototype CSS variables, and the i18n registry (fr, en, ar) with the fail-on-missing generator (§3).
