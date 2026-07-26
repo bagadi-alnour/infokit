@@ -1,4 +1,4 @@
-# Calais Info — Engineering Notes (patterns adopted from prior projects)
+# InfoKit — Engineering Notes (patterns adopted from prior projects)
 
 > `PRODUCT.md` is the canonical product requirements document. This file records proven engineering patterns extracted from two of the operator's existing monorepos — `EP-next` (echoparol) and `GFB/kawa-web` (zenkap) — examined 18 July 2026. These are **notes to build on, not code**: when Slice 0 starts, this is the blueprint.
 
@@ -12,7 +12,7 @@ apps/
   mobile/     Expo / React Native
 packages/
   tokens/     design tokens (see §2)
-  ui/         Tamagui components shared by web and mobile
+  ui/         React Native Reusables + NativeWind components (apps/mobile only)
   shared/     domain logic, i18n catalogs, constants (status/freshness rules)
   api-client/ typed client consumed by web and mobile
   validation/ zod schemas shared by API and clients
@@ -28,9 +28,9 @@ packages/
 
 EP-next `packages/design-tokens`: typed semantic themes (`light`/`dark` `SemanticTheme` objects, `designRadii`, border widths) consumed by **both** platforms.
 
-For Calais Info: `packages/tokens` is the single encoding of `DESIGN.md` §2. `packages/ui` maps those tokens into one Tamagui configuration and holds universal components used by Next.js now and Expo when the mobile app is scaffolded; platform session, routing, and navigation adapters stay app-specific. The authenticated web workspace uses shadcn open-code primitives kept inside `apps/web`, because its tables, planners, review queues, imports, audit views, document queues, and inventory ledgers are deliberately web-native. Both layers adapt the same semantic tokens; shadcn never introduces a second palette. See `UI-ARCHITECTURE.md` for the import boundary and reuse rules. Hard rule from kawa's AGENTS.md, adopted verbatim: **no color decisions in JSX/component CSS — token package only, consumed semantically.**
+For InfoKit: `packages/tokens` is the single encoding of `DESIGN.md` §2. There is no universal component layer — a component is written once per platform, and what crosses the boundary is tokens, data contracts, and copy. `packages/ui` maps the tokens into a NativeWind preset plus React Native Reusables components for `apps/mobile` and is never imported by Next.js; the public web site uses Tailwind primitives in `apps/web/src/components/public`, and the authenticated web workspace uses shadcn open-code primitives in `apps/web/src/components/ui`, because its tables, planners, review queues, imports, audit views, document queues, and inventory ledgers are deliberately web-native. Every layer adapts the same semantic tokens under the same utility names; none of them introduces a second palette. See `UI-ARCHITECTURE.md` for the import boundary and reuse rules. Hard rule from kawa's AGENTS.md, adopted verbatim: **no color decisions in JSX/component CSS — token package only, consumed semantically.**
 
-## 3. i18n pipeline — adopt, with one Calais-specific split
+## 3. i18n pipeline — adopt, with one InfoKit-specific split
 
 EP-next mechanism (`scripts/generate-shared-i18n-resources.mjs`):
 
@@ -38,7 +38,7 @@ EP-next mechanism (`scripts/generate-shared-i18n-resources.mjs`):
 - A generator compiles them into a typed TS module consumed by web **and** mobile — one source of truth, two runtimes.
 - The generator **fails the build if a registered locale is missing its catalog**; `check:i18n` and `check-locale-branches` validate drift; `scaffold-locale` bootstraps a new language.
 
-Calais Info split to respect: this pipeline is for **UI strings only**. Public _content_ translations (activities, reusable services, articles) live in the database with immutable source-version links, per-language quality states, separate locale publication, and fallback rules (`DATABASE-SCHEMA.md` §2). Code catalogs never hold public content. The registry maps to `core.languages`; the fail-on-missing-catalog behavior implements §17's "a language is an operational commitment."
+InfoKit split to respect: this pipeline is for **UI strings only**. Public _content_ translations (activities, reusable services, articles) live in the database with immutable source-version links, per-language quality states, separate locale publication, and fallback rules (`DATABASE-SCHEMA.md` §2). Code catalogs never hold public content. The registry maps to `core.languages`; the fail-on-missing-catalog behavior implements §17's "a language is an operational commitment."
 
 Cautionary tale from the same repo: `fix-missing-translations.mjs`, `fix-tour-search-translations.mjs` — one-off repair scripts accumulating means catalog debt crept in. Prevention: the check scripts run in CI from day one, and RTL (Arabic) is in the catalog from the first commit, not retrofitted.
 
@@ -47,15 +47,15 @@ Cautionary tale from the same repo: `fix-missing-translations.mjs`, `fix-tour-se
 kawa `drizzle/README.md` workflow:
 
 - `0000_baseline_schema.sql` + named, numbered SQL migrations; `meta/_journal.json` validated by a migration wrapper.
-- **Custom SQL migrations for DB-level enforcement** — kawa's `0001_invoice_immutability_triggers.sql` enforces French e-invoicing immutability _in the database_. Calais Info has the identical need three times over: append-only inventory ledger, immutable publication revisions, audit events. Triggers, not application promises.
+- **Custom SQL migrations for DB-level enforcement** — kawa's `0001_invoice_immutability_triggers.sql` enforces French e-invoicing immutability _in the database_. InfoKit has the identical need three times over: append-only inventory ledger, immutable publication revisions, audit events. Triggers, not application promises.
 - `db:migrate:verify` runs the full migration chain against a **disposable database** in CI/pre-release.
 - **Never `db:push` against persistent environments**; guarded one-time baseline/rebase via explicit env flags (`ALLOW_MIGRATION_BASELINE=true`) with automatic backup of prior journal rows.
-- `drizzle/seed/` folder for seed data — Calais Info's taxonomy catalogs (categories, specialities, audiences, cities, languages) are seeds. Slice 0 may also seed a curated, idempotent set of real organisation identity/profile drafts from official public sources when every record is unpublished, source-dated, and paired with pending verification; it must not seed public service claims. A platform editor may later create an unpublished provisional activity linked to one of those known organisation rows through the audited authoring/import workflow, but that is application data with creator/provider acceptance state—not catalogue seed data.
+- `drizzle/seed/` folder for seed data — InfoKit's taxonomy catalogs (categories, specialities, audiences, cities, languages) are seeds. Slice 0 may also seed a curated, idempotent set of real organisation identity/profile drafts from official public sources when every record is unpublished, source-dated, and paired with pending verification; it must not seed public service claims. A platform editor may later create an unpublished provisional activity linked to one of those known organisation rows through the audited authoring/import workflow, but that is application data with creator/provider acceptance state—not catalogue seed data.
 
 ## 5. Testing and quality gates — adopt
 
 - Split runners (EP-next `scripts/run-{unit,integration,api,e2e}-tests.mjs`; Playwright for e2e; Vitest workspaces).
-- **Coverage gate** (kawa): `test:coverage:gate` with a strict env flag and a summary script with `--enforce` — coverage is a CI gate, not a report. For Calais Info, the strict set starts with the boundaries: tenant isolation, publish gates, never-public invariants (`SUSTAINABILITY.md` AI practices).
+- **Coverage gate** (kawa): `test:coverage:gate` with a strict env flag and a summary script with `--enforce` — coverage is a CI gate, not a report. For InfoKit, the strict set starts with the boundaries: tenant isolation, publish gates, never-public invariants (`SUSTAINABILITY.md` AI practices).
 - `dependency-cruiser` with a config enforcing package boundaries (EP-next `deps:check`) — mechanical enforcement of "domain never imports app code, api-client never imports server code". This is the tool that makes the monorepo layout _stay_ the layout.
 - Env validation exists in EP-next (`SKIP_ENV_VALIDATION` flag implies a validated env schema) — adopt validated env (t3-env style); avoid normalizing the skip flag.
 
@@ -63,7 +63,7 @@ kawa `drizzle/README.md` workflow:
 
 Both repos keep standing AI instructions at the repo root; kawa's points to a **mandatory** `docs/UI_DESIGN_REFERENCE.md`, EP-next's is a full design contract ("build in the spirit of Linear/Stripe; when a choice feels like a generic AI UI move, pick the harder, cleaner option"; component defaults; accent policy; token paths).
 
-Calais Info's AGENTS.md (written at repo bootstrap) should contain:
+InfoKit's AGENTS.md (written at repo bootstrap) should contain:
 
 - `DESIGN.md` and `DESIGN-BRIEF.md` are mandatory, not inspiration; tokens only via `packages/tokens`; reuse before inventing.
 - The suite's own rules AI sessions must carry: demo-data labeling, never-public invariants, the cross-doc consistency pass after doc edits, context packs per slice (`SUSTAINABILITY.md`).
@@ -87,7 +87,7 @@ EP-next's scripted EAS pipeline: named build profiles (`development-device`, `pr
 
 ## 10. Slice 0 bootstrap order (when coding starts)
 
-> **Status 19 July 2026:** the monorepo now includes `packages/{tokens,shared,ui,validation}`. The web auth slice consumes the shared locale registry, validation schemas, and Tamagui auth components. Still pending: `apps/mobile` (Expo), `packages/api-client`, and shared config packages, created only when real consumers exist — never as empty shells.
+> **Status 25 July 2026:** the monorepo includes `packages/{tokens,shared,ui,validation}` and `apps/{web,mobile}`. Tamagui was removed: the web app renders with Tailwind v4 (public primitives + shadcn workspace adapters), and `packages/ui` is now React Native Reusables + NativeWind for the Expo app. `apps/mobile` is scaffolded as a reading surface — public content plus the admin visualisation of calendars, inter-organisation coordination, and events; authoring stays on the web. Still pending: `packages/api-client` and shared config packages, created only when real consumers exist — never as empty shells.
 
 1. `git init`, initial commit of this suite + prototype.
 2. Scaffold the monorepo (§1) with `packages/tokens` from `DESIGN.md` + prototype CSS variables, and the i18n registry (fr, en, ar) with the fail-on-missing generator (§3).

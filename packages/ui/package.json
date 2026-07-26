@@ -1,11 +1,11 @@
 {
-  "name": "@calais/ui",
+  "name": "@infokit/ui",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./config": "./src/config.ts"
+    "./tailwind-preset": "./tailwind-preset.cjs"
   },
   "scripts": {
     "lint": "eslint . --cache --cache-location .cache/eslint",
@@ -18,18 +18,25 @@
     ]
   },
   "dependencies": {
-    "@calais/tokens": "workspace:*",
-    "@calais/validation": "workspace:*",
-    "@tamagui/config": "2.4.6",
-    "tamagui": "2.4.6"
+    "@infokit/tokens": "workspace:*",
+    "@rn-primitives/slot": "^1.5.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0"
   },
   "peerDependencies": {
-    "react": ">=19"
+    "nativewind": ">=4.2",
+    "react": ">=19",
+    "react-native": ">=0.81"
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
+    "@types/react": "^19.1.1",
     "eslint": "^9.23.0",
+    "nativewind": "4.2.6",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
     "typescript": "^5.8.2",
-    "typescript-eslint": "^8.27.0"
+    "typescript-eslint": "^8.27.0",
+    "tailwindcss": "^3.4.17"
   }
 }

@@ -1,0 +1,6 @@
+/* NativeWind entry point. Colour values are not here: InfoKitThemeProvider
+   injects the @infokit/tokens variables at runtime, exactly as the web app
+   does (apps/web/src/components/design-tokens.tsx). */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
