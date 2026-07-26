@@ -255,7 +255,7 @@ This publishing capability is intentionally narrower than the Phase 2 associatio
 - No persistent personal profile or stored simulator answers.
 - Do not collect identity, contact details, country of origin, or passport status merely to show essential information.
 - A simulator question may ask for contextual information only when optional, purposeful, and documented.
-- Support the configured 15-language catalogue, visible fallback states, and Arabic RTL.
+- Support the configured 11-language catalogue, visible fallback states, and RTL for Arabic, Persian, Dari, Pashto, and Sorani.
 - Meet WCAG 2.2 AA, 44×44px touch targets, keyboard navigation, and 200% zoom.
 - Design for limited literacy: short summaries and key actions precede detail, priority content has reviewed audio, and audio/video never autoplays.
 - Status and speciality use icon, label, and color together.

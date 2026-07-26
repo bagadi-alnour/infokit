@@ -34,7 +34,7 @@ A person using a basic phone can find a relevant service or reviewed information
 - Association directory with verified specialities and consistent icon-and-text labels.
 - Minimum restricted platform-editor workflows and audit history needed to publish on behalf of associations.
 - Invitation acceptance, sign-in, and a minimal organisation-scoped article editor for designated association authors/publishers.
-- Complete public-interface support for the configured 15-language catalogue.
+- Public-interface support for the configured 11-language catalogue: complete catalogues in French, English, and Arabic, and the English base plus per-language chrome overlays for the other eight.
 - Equivalent core public journeys on responsive web, Android, and iOS, with platform-appropriate navigation and accessibility.
 
 ### Out of scope for these designs
@@ -483,7 +483,7 @@ Complete and validate these Phase 1 artifacts before starting Phase 2 workspace 
 
 ## 15. Open Questions to Resolve During Design
 
-- What are the agreed 15 languages and fallback order?
+- Which of the eleven configured languages earn a complete interface catalogue after French, English, and Arabic, and in what order?
 - Which four public destinations belong in mobile primary navigation?
 - Which fixed-information topics and basic-information topics are approved for launch?
 - Which translated eligibility details distinguish children-only from under-18-only services, and how should exact age bounds appear?
