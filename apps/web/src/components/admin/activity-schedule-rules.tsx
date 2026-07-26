@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 
 import { deleteActivitySchedule } from "~/app/[locale]/dashboard/activities/actions";
+import { TooltipHint } from "~/components/admin/tooltip-hint";
 import { PendingButton } from "~/components/pending-button";
 import {
   AlertDialog,
@@ -86,20 +87,21 @@ export function ActivityScheduleRules({
               className="h-9 gap-2 rounded-md py-0 pe-1 ps-3"
             >
               <span>{scheduleLabel}</span>
-              <AlertDialogTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive -me-0.5 size-7"
-                  />
-                }
-                aria-label={removeLabel}
-                title={removeLabel}
-              >
-                <X aria-hidden />
-              </AlertDialogTrigger>
+              <TooltipHint label={removeLabel}>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive -me-0.5 size-7"
+                    />
+                  }
+                  aria-label={removeLabel}
+                >
+                  <X aria-hidden />
+                </AlertDialogTrigger>
+              </TooltipHint>
             </Badge>
             <AlertDialogContent>
               <AlertDialogHeader>

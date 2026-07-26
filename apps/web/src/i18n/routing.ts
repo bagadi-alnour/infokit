@@ -4,7 +4,7 @@ import {
   supportedLocales,
   type Locale,
   type PublicLocale,
-} from "@calais/shared/i18n";
+} from "@infokit/shared/i18n";
 
 export type AuthRoute = "login" | "check" | "error" | "verify";
 

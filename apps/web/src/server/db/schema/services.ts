@@ -15,6 +15,7 @@ import { organizations } from "./organizations";
 import {
   archival,
   content,
+  stewardContact,
   timestamps,
   translationMethod,
   translationState,
@@ -43,6 +44,7 @@ export const services = content.table(
       .references(() => serviceCategories.id),
     active: boolean("active").notNull().default(true),
     sourceNote: text("source_note"),
+    ...stewardContact,
     ...archival,
     ...timestamps,
   },

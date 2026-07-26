@@ -1,16 +1,18 @@
-import Link from "next/link";
-
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import {
-  Button,
   Card,
   Field,
+  Notice,
   PageHeader,
   Select,
   TextInput,
+  WorkspacePage,
 } from "~/components/admin/workspace";
+import { PendingButton } from "~/components/pending-button";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
+import { getRoleTestState } from "~/server/auth/authorization";
+import { requireEditor } from "~/server/auth/require";
 import { createOrganization } from "../actions";
 
 export default async function NewOrganizationPage({
@@ -20,15 +22,42 @@ export default async function NewOrganizationPage({
 }) {
   const locale = requireRouteLocale((await params).locale);
   const t = await loadPageCatalog(locale, "dashboard-console");
+  // Only the platform creates directory records. Someone without the
+  // permission is told so here rather than by a failed submit.
+  const user = await requireEditor(locale);
+  const authorization = await getRoleTestState(user.id);
+  const canCreate = authorization.effectivePermissions.has(
+    "organization.verify",
+  );
+  if (!canCreate) {
+    return (
+      <WorkspacePage width="narrow">
+        <PageHeader
+          back={{
+            href: localizedPath("/dashboard/organizations", locale),
+            label: t["org.listTitle"],
+          }}
+          title={t["org.newTitle"]}
+        />
+        <Notice tone="warn" title={t["console.readOnlyTitle"]}>
+          {t["org.createDenied"]}
+        </Notice>
+      </WorkspacePage>
+    );
+  }
   return (
-    <div className="mx-auto max-w-lg">
-      <Link
-        href={localizedPath("/dashboard/organizations", locale)}
-        className="text-brand text-sm"
-      >
-        ← {t["console.back"]}
-      </Link>
-      <PageHeader title={t["org.newTitle"]} sub={t["org.statusHint"]} />
+    <WorkspacePage width="narrow">
+      <PageHeader
+        back={{
+          href: localizedPath("/dashboard/organizations", locale),
+          label: t["org.listTitle"],
+        }}
+        title={t["org.newTitle"]}
+        sub={t["org.newSub"]}
+      />
+      <Notice tone="info" title={t["org.claimFlowTitle"]}>
+        {t["org.claimFlowBody"]}
+      </Notice>
       <Card>
         <form action={createOrganization} className="grid gap-4">
           <input type="hidden" name="locale" value={locale} />
@@ -54,10 +83,10 @@ export default async function NewOrganizationPage({
             </Select>
           </Field>
           <div>
-            <Button>{t["console.create"]}</Button>
+            <PendingButton>{t["console.create"]}</PendingButton>
           </div>
         </form>
       </Card>
-    </div>
+    </WorkspacePage>
   );
 }

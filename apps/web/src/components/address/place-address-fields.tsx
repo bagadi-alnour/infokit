@@ -1,13 +1,12 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   AddressAutocomplete,
-  Paragraph,
   type AddressAutocompleteLabels,
   type AddressSuggestion,
-  YStack,
-} from "@calais/ui";
-import { useState } from "react";
+} from "~/components/address/address-autocomplete";
 
 export function PlaceAddressFields({
   labels,
@@ -19,7 +18,7 @@ export function PlaceAddressFields({
   const [selection, setSelection] = useState<AddressSuggestion | null>(null);
 
   return (
-    <YStack gap="$calais2">
+    <div className="flex flex-col gap-1">
       <AddressAutocomplete
         endpoint="/api/addresses"
         labels={labels}
@@ -46,12 +45,12 @@ export function PlaceAddressFields({
         value={selection ? String(selection.longitude) : ""}
       />
       {selection ? (
-        <Paragraph color="$mutedText" fontSize="$2" role="status">
+        <p className="text-copy-muted text-xs" role="status">
           {selectedLabel
             .replace("{latitude}", selection.latitude.toFixed(6))
             .replace("{longitude}", selection.longitude.toFixed(6))}
-        </Paragraph>
+        </p>
       ) : null}
-    </YStack>
+    </div>
   );
 }

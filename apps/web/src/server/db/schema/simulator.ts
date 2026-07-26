@@ -20,6 +20,7 @@ import {
   flowVersionStatus,
   simulator,
   simulatorNodeKind,
+  stewardContact,
   timestamps,
   translationState,
 } from "./schemas";
@@ -39,6 +40,7 @@ export const flows = simulator.table("flows", {
     () => organizations.id,
   ),
   cityId: uuid("city_id").references(() => cities.id),
+  ...stewardContact,
   ...archival,
   ...timestamps,
 });

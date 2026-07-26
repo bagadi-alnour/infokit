@@ -1,4 +1,4 @@
-import { StatusNotice } from "@calais/ui";
+import { Callout } from "~/components/public/primitives";
 
 const statuses = {
   login_error: "danger",
@@ -24,5 +24,10 @@ export function AuthStatus({
   const code = status as AuthStatusCode;
   const message = labels[code];
   if (!message) return null;
-  return <StatusNotice tone={statuses[code]}>{message}</StatusNotice>;
+  const tone = statuses[code];
+  return (
+    <Callout tone={tone} role={tone === "info" ? "status" : "alert"}>
+      {message}
+    </Callout>
+  );
 }

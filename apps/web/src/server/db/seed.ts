@@ -1,6 +1,6 @@
 /* eslint-disable no-console -- CLI seed script reports progress to stdout */
 import "dotenv/config";
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
@@ -480,7 +480,10 @@ async function seedCategories(): Promise<Map<string, string>> {
     const values = {
       code: cat.code,
       icon: cat.icon,
-      colorToken: cat.code, // resolved against @calais/tokens categoryAccents
+      // Kept for editors who want a per-category label colour later; the public
+      // surface renders every category from the single accent plus its icon and
+      // word (docs/DESIGN-SYSTEM.md §1), so nothing reads this today.
+      colorToken: cat.code,
       enabled: true,
       displayOrder: displayOrder + 1,
     };
@@ -952,6 +955,11 @@ const PERMISSIONS: { code: string; description: string }[] = [
       "Review and accept, reject, or request changes to translator submissions",
   },
   {
+    code: "content.translation.verify",
+    description:
+      "Confirm that a machine-generated translation has been checked by a person who reads the language",
+  },
+  {
     code: "organization.profile.manage",
     description:
       "Maintain the organisation's public profile, contacts, and approved presentation information",
@@ -1060,8 +1068,19 @@ const ROLES: { code: string; description: string; permissions: string[] }[] = [
   {
     code: "platform_operator",
     description:
-      "Verifies organisations, maintains taxonomies, investigates audit events",
-    permissions: ["organization.verify", "taxonomy.manage", "audit.read"],
+      "Maintains and verifies unclaimed organisations, taxonomies, and audit events",
+    /**
+     * `organization.profile.manage` is what lets the platform keep a directory
+     * record accurate before the organisation claims it; the claim rule
+     * (server/auth/org-access.ts) turns that write access into read-only the
+     * moment an org steward links their account.
+     */
+    permissions: [
+      "organization.verify",
+      "organization.profile.manage",
+      "taxonomy.manage",
+      "audit.read",
+    ],
   },
   {
     code: "platform_editor",
@@ -1075,6 +1094,7 @@ const ROLES: { code: string; description: string; permissions: string[] }[] = [
       "content.simulator.review",
       "content.translation.request",
       "content.translation.review",
+      "content.translation.verify",
     ],
   },
   {
@@ -1097,7 +1117,11 @@ const ROLES: { code: string; description: string; permissions: string[] }[] = [
     code: "translation_reviewer",
     description:
       "Reviews translation assignments and submitted article translations",
-    permissions: ["content.translation.review", "content.article.review"],
+    permissions: [
+      "content.translation.review",
+      "content.translation.verify",
+      "content.article.review",
+    ],
   },
   {
     code: "organization_admin",
@@ -1264,10 +1288,23 @@ async function seedRoles() {
 }
 
 /**
- * Grants the support role to the account selected by deployment configuration.
- * A clean local database may not have seen its first Auth.js sign-in yet, so
- * the configured bootstrap identity is created when absent. The address still
- * comes only from environment configuration and is never stored in source.
+ * The platform roles the first staff account receives. Support access on its
+ * own grants no editing, so an account holding only `platform_superadmin`
+ * would see the whole workspace read-only; the operator and editor roles are
+ * what make the platform side of the dashboard usable on a fresh deployment.
+ */
+const BOOTSTRAP_ROLES = [
+  "platform_superadmin",
+  "platform_operator",
+  "platform_editor",
+] as const;
+
+/**
+ * Grants the platform roles to the account selected by deployment
+ * configuration. A clean local database may not have seen its first Auth.js
+ * sign-in yet, so the configured bootstrap identity is created when absent. The
+ * address still comes only from environment configuration and is never stored
+ * in source.
  */
 async function seedBootstrapSuperadmin() {
   const email = process.env.BOOTSTRAP_SUPERADMIN_EMAIL?.trim().toLowerCase();
@@ -1276,24 +1313,28 @@ async function seedBootstrapSuperadmin() {
     return;
   }
 
-  const [[existingUser], [role]] = await Promise.all([
+  const [[existingUser], roleRows] = await Promise.all([
     db
       .select({ id: s.users.id })
       .from(s.users)
       .where(eq(s.users.email, email))
       .limit(1),
     db
-      .select({ id: s.roles.id })
+      .select({ id: s.roles.id, code: s.roles.code })
       .from(s.roles)
       .where(
         and(
-          eq(s.roles.code, "platform_superadmin"),
+          inArray(s.roles.code, [...BOOTSTRAP_ROLES]),
           isNull(s.roles.organizationId),
         ),
-      )
-      .limit(1),
+      ),
   ]);
-  if (!role) throw new Error("platform_superadmin role was not seeded");
+  const missing = BOOTSTRAP_ROLES.filter(
+    (code) => !roleRows.some((row) => row.code === code),
+  );
+  if (missing.length > 0) {
+    throw new Error(`Platform roles were not seeded: ${missing.join(", ")}`);
+  }
 
   const [createdUser] = existingUser
     ? []
@@ -1304,7 +1345,13 @@ async function seedBootstrapSuperadmin() {
 
   await db
     .insert(s.userPlatformRoles)
-    .values({ userId: user.id, roleId: role.id, grantedById: user.id })
+    .values(
+      roleRows.map((role) => ({
+        userId: user.id,
+        roleId: role.id,
+        grantedById: user.id,
+      })),
+    )
     .onConflictDoNothing();
 
   const password = process.env.BOOTSTRAP_SUPERADMIN_PASSWORD;

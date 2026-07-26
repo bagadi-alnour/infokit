@@ -1,6 +1,6 @@
 "use server";
 
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import { and, eq, inArray, isNull, lte, or, gte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";

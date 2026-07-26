@@ -1,4 +1,4 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -8,6 +8,7 @@ import {
   archiveSimulatorFlow,
   restoreSimulatorFlow,
 } from "~/app/[locale]/dashboard/simulator/actions";
+import { updateSimulatorFlowSteward } from "~/app/[locale]/dashboard/steward-actions";
 import {
   SimulatorFlowEditor,
   type SimulatorChoice,
@@ -17,6 +18,7 @@ import {
   type SimulatorTranslation,
 } from "~/components/admin/simulator-flow-editor";
 import { SimulatorTranslationPanel } from "~/components/admin/simulator-translation-panel";
+import { StewardContactForm } from "~/components/admin/steward-contact-form";
 import { PendingButton } from "~/components/pending-button";
 import { Button } from "~/components/ui/button";
 import { requireRouteLocale } from "~/i18n/route-locale";
@@ -55,7 +57,12 @@ export default async function SimulatorEditorPage({
   const { locale: localeParam, id } = await params;
   const locale = requireRouteLocale(localeParam);
   await requirePermission("content.simulator.review", locale);
-  const t = await loadPageCatalog(locale, "dashboard-simulator");
+  const [t, shared] = await Promise.all([
+    loadPageCatalog(locale, "dashboard-simulator"),
+    // The steward contact reads from the shared console catalogue, so the
+    // wording is the same on every content type.
+    loadPageCatalog(locale, "dashboard-console"),
+  ]);
 
   const [flow] = await db
     .select({
@@ -63,6 +70,10 @@ export default async function SimulatorEditorPage({
       slug: flows.slug,
       internalName: flows.internalName,
       archivedAt: flows.archivedAt,
+      // Workspace-only: who to ask about this flow. Never read publicly.
+      stewardName: flows.stewardName,
+      stewardPhone: flows.stewardPhone,
+      stewardEmail: flows.stewardEmail,
     })
     .from(flows)
     .where(eq(flows.id, id))
@@ -362,6 +373,24 @@ export default async function SimulatorEditorPage({
             labels={t}
             disabled={flow.archivedAt !== null}
           />
+        }
+        stewardPanel={
+          <>
+            <h2 className="font-semibold">{shared["steward.title"]}</h2>
+            <p className="text-copy-muted mt-1 text-xs leading-relaxed">
+              {shared["steward.hint"]}
+            </p>
+            <div className="mt-4">
+              <StewardContactForm
+                action={updateSimulatorFlowSteward}
+                locale={locale}
+                recordId={flow.id}
+                values={flow}
+                labels={shared}
+                columns={false}
+              />
+            </div>
+          </>
         }
         messages={t}
       />

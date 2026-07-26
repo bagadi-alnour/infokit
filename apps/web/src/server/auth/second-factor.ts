@@ -1,5 +1,5 @@
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import {
   and,
   count,
@@ -103,7 +103,10 @@ export async function createSecondFactorChallenge({
       .set({ deliveryState: "sent", sentAt: new Date() })
       .where(eq(secondFactorChallenges.id, id));
     return "sent";
-  } catch {
+  } catch (error) {
+    // The editor only ever sees a generic "unavailable", so without this the
+    // cause (bad credentials, unverified region, throttling) is invisible.
+    console.error("[auth] second-factor SMS delivery failed", error);
     await db
       .update(secondFactorChallenges)
       .set({ deliveryState: "failed", failedAt: new Date() })

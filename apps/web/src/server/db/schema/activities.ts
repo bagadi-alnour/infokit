@@ -36,6 +36,7 @@ import {
   holidayBehavior,
   scheduleExceptionKind,
   serviceManualStatus,
+  stewardContact,
   timestamps,
   translationMethod,
   translationState,
@@ -121,9 +122,15 @@ export const activities = content.table(
     organizationId: uuid("organization_id").references(() => organizations.id, {
       onDelete: "cascade",
     }),
-    cityId: uuid("city_id")
-      .notNull()
-      .references(() => cities.id),
+    /**
+     * The city this activity happens in, or null when it is global.
+     *
+     * Almost everything is local: one city, one team, usually one address. A
+     * nationwide helpline or an online service is the rare exception, and it
+     * belongs to no city — the same nullable-city convention editorial entries
+     * already use. A global activity therefore has no city team either.
+     */
+    cityId: uuid("city_id").references(() => cities.id),
     teamId: uuid("team_id"),
     placeId: uuid("place_id").references(() => places.id),
     categoryId: uuid("category_id")
@@ -155,6 +162,7 @@ export const activities = content.table(
       () => users.id,
     ),
     sourceNote: text("source_note"),
+    ...stewardContact,
     ...verification,
     ...archival,
     ...timestamps,
@@ -172,6 +180,12 @@ export const activities = content.table(
     check(
       "activities_platform_origin_check",
       sql`${t.createdByScope} <> 'platform' or ${t.provisionedByPlatform}`,
+    ),
+    // A team is an organisation-and-city pair, so a global activity cannot have
+    // one; the database refuses the combination rather than trusting callers.
+    check(
+      "activities_global_has_no_team_check",
+      sql`${t.cityId} is not null or ${t.teamId} is null`,
     ),
     index("activities_org_city_idx").on(t.organizationId, t.cityId),
     index("activities_team_idx").on(t.teamId),

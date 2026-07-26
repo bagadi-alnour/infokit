@@ -1,6 +1,6 @@
 "use client";
 
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import {
   Archive,
   CalendarClock,
@@ -65,10 +65,7 @@ import {
 } from "~/components/ui/dialog";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import {
   Sheet,
   SheetContent,
@@ -816,21 +813,15 @@ function TranslationRequestDialog({
             <FieldLabel htmlFor={`translator-expiry-${language}`}>
               {labels["translation.expiry"]}
             </FieldLabel>
-            <NativeSelect
+            <SelectField
               id={`translator-expiry-${language}`}
               name="lifetimeHours"
               defaultValue="72"
             >
-              <NativeSelectOption value="24">
-                {labels["translation.expiry.24"]}
-              </NativeSelectOption>
-              <NativeSelectOption value="72">
-                {labels["translation.expiry.72"]}
-              </NativeSelectOption>
-              <NativeSelectOption value="168">
-                {labels["translation.expiry.168"]}
-              </NativeSelectOption>
-            </NativeSelect>
+              <option value="24">{labels["translation.expiry.24"]}</option>
+              <option value="72">{labels["translation.expiry.72"]}</option>
+              <option value="168">{labels["translation.expiry.168"]}</option>
+            </SelectField>
           </Field>
           <Field>
             <FieldLabel htmlFor={`translator-instructions-${language}`}>
@@ -993,7 +984,7 @@ function ArticlePreview({
           </SheetDescription>
         </SheetHeader>
         <article
-          className="calais-article-preview grid gap-4 px-4 pb-8"
+          className="infokit-article-preview grid gap-4 px-4 pb-8"
           dir={rtl ? "rtl" : "ltr"}
         >
           <h2 className="text-2xl font-semibold tracking-tight">

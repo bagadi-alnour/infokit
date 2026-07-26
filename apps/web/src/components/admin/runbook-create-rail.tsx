@@ -1,6 +1,6 @@
 "use client";
 
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import {
   CalendarPlus,
   ChevronRight,
@@ -13,6 +13,7 @@ import { useId, useState } from "react";
 import { SearchableSelect } from "~/components/admin/searchable-select";
 import { PendingButton } from "~/components/pending-button";
 import { Button } from "~/components/ui/button";
+import { DatePicker } from "~/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,7 @@ import {
 } from "~/components/ui/dialog";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import { Separator } from "~/components/ui/separator";
 import { Textarea } from "~/components/ui/textarea";
 import {
@@ -265,7 +266,7 @@ export function RunbookCreateRail({
                 <FieldLabel htmlFor={fieldId("closure-activity")}>
                   {labels.activity}
                 </FieldLabel>
-                <NativeSelect
+                <SelectField
                   id={fieldId("closure-activity")}
                   name="activityId"
                   required
@@ -276,17 +277,22 @@ export function RunbookCreateRail({
                       {item.name}
                     </option>
                   ))}
-                </NativeSelect>
+                </SelectField>
               </Field>
               <Field>
                 <FieldLabel htmlFor={fieldId("closure-date")}>
                   {labels.date}
                 </FieldLabel>
-                <Input
+                <DatePicker
+                  // Remount when the runbook day changes so the field follows
+                  // the calendar instead of holding the first day opened.
+                  key={selectedDate}
                   id={fieldId("closure-date")}
                   name="date"
-                  type="date"
+                  locale={locale}
                   defaultValue={selectedDate}
+                  placeholder={labels.selectDate ?? ""}
+                  clearLabel={labels.clearDate ?? ""}
                   required
                 />
               </Field>

@@ -1,4 +1,4 @@
-import { isLocale, type Locale } from "@calais/shared/i18n";
+import { isLocale, type Locale } from "@infokit/shared/i18n";
 import { cookies, headers } from "next/headers";
 
 import { localeCookieName } from "~/i18n/constants";

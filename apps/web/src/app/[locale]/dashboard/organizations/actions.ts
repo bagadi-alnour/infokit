@@ -2,23 +2,44 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
-import { type Locale } from "@calais/shared/i18n";
+import { type Locale } from "@infokit/shared/i18n";
 
 import { localizedPath } from "~/i18n/routing";
+import { editorialLanguageCodes } from "~/lib/editorial-languages";
 import { recordAudit } from "~/server/audit";
+import { auth } from "~/server/auth";
+import {
+  hasActualPlatformPermission,
+  superadminPermission,
+} from "~/server/auth/authorization";
+import { claimOrganizationIfSteward } from "~/server/auth/link-memberships";
+import { assertOrganizationWritable } from "~/server/auth/org-access";
 import { protectedPermissionAction } from "~/server/auth/require";
+import { hashContent } from "~/server/content/editorial";
 import { db } from "~/server/db";
 import {
   contacts,
   contactTranslations,
+  invitationRoles,
+  invitations,
+  memberRoles,
   organizationLanguages,
+  organizationMembers,
   organizationProfiles,
   organizationProfileTranslations,
   organizations,
   organizationSpecialities,
+  roles,
+  translationSourceVersions,
+  users,
 } from "~/server/db/schema";
+import {
+  INVITABLE_ROLE_CODES,
+  invitationKindForRole,
+  sendRepresentativeInvitation,
+} from "~/server/invitations";
 
 const optional = z
   .string()
@@ -39,6 +60,17 @@ function refresh(locale: Locale, organizationId?: string) {
     );
   }
   revalidatePath(localizedPath("/dashboard", locale));
+}
+
+/**
+ * Enforce the claim rule for a mutation on an existing organisation: platform
+ * admins are read-only once the organisation is claimed, while its own members
+ * may always edit it. Throws when the actor may not write.
+ */
+async function guardOrganizationWrite(organizationId: string) {
+  const session = await auth();
+  if (!session?.user.id) throw new Error("Authentication required");
+  await assertOrganizationWritable(session.user.id, organizationId);
 }
 
 function slugify(input: string): string {
@@ -120,7 +152,9 @@ const updateOrganizationSchema = z.object({
   displayName: z.string().trim().min(2),
   legalName: optional,
   foundedYear: optionalFoundedYear,
-  status: z.enum(["draft", "verified", "suspended"]),
+  /** `archived` is never offered in the form; it round-trips so an actor who
+   * cannot change status (an org member) does not silently restore a record. */
+  status: z.enum(["draft", "verified", "suspended", "archived"]),
   website: optional,
   sourceUrl: optional,
   sourceCheckedOn: optional,
@@ -141,6 +175,7 @@ export const updateOrganization = protectedPermissionAction(
       sourceCheckedOn: formData.get("sourceCheckedOn") ?? "",
       published: formData.get("published"),
     });
+    await guardOrganizationWrite(parsed.organizationId);
     await db
       .update(organizations)
       .set({
@@ -178,6 +213,125 @@ export const updateOrganization = protectedPermissionAction(
   },
 );
 
+/* ---------------------------- narrative ------------------------------ */
+
+/**
+ * Seal the authored narrative so a translation request can be pinned to the
+ * exact text the translator receives (docs/PHASE-1.3-COLLABORATION.md).
+ *
+ * Only the source language travels: editing a translated language must not
+ * invalidate an assignment already in flight, and the translator has no
+ * business reading the other targets. A save that changes nothing re-uses the
+ * current version, so an unchanged form submit leaves live assignments alone.
+ */
+async function sealNarrativeSource(organizationId: string, actorId: string) {
+  await db.transaction(async (tx) => {
+    const [profile] = await tx
+      .select({
+        sourceLanguage: organizationProfiles.narrativeSourceLanguage,
+      })
+      .from(organizationProfiles)
+      .where(eq(organizationProfiles.organizationId, organizationId))
+      .limit(1);
+    const sourceLanguage = profile?.sourceLanguage ?? "fr";
+    const [narrative] = await tx
+      .select({
+        purpose: organizationProfileTranslations.purpose,
+        goals: organizationProfileTranslations.goals,
+        values: organizationProfileTranslations.values,
+        method: organizationProfileTranslations.method,
+      })
+      .from(organizationProfileTranslations)
+      .where(
+        and(
+          eq(organizationProfileTranslations.organizationId, organizationId),
+          eq(organizationProfileTranslations.languageCode, sourceLanguage),
+        ),
+      )
+      .limit(1);
+    // Nothing authored in the source language yet: there is nothing to translate.
+    if (!narrative?.purpose.trim()) return;
+
+    const payload = {
+      sourceLanguage,
+      translations: {
+        [sourceLanguage]: {
+          purpose: narrative.purpose,
+          goals: narrative.goals,
+          values: narrative.values,
+          method: narrative.method,
+        },
+      },
+    };
+    const hash = hashContent(payload);
+    const [latest] = await tx
+      .select({
+        id: translationSourceVersions.id,
+        version: translationSourceVersions.version,
+        hash: translationSourceVersions.sourceContentHash,
+      })
+      .from(translationSourceVersions)
+      .where(
+        and(
+          eq(translationSourceVersions.entityKind, "organization_profile"),
+          eq(translationSourceVersions.entityId, organizationId),
+        ),
+      )
+      .orderBy(desc(translationSourceVersions.version))
+      .limit(1);
+    if (latest?.hash === hash) return;
+
+    await tx.insert(translationSourceVersions).values({
+      organizationId,
+      entityKind: "organization_profile",
+      entityId: organizationId,
+      version: latest ? latest.version + 1 : 1,
+      previousVersionId: latest?.id ?? null,
+      sourceLanguageCode: sourceLanguage,
+      sourceContentJson: payload,
+      sourceContentHash: hash,
+      impact: latest ? "review_required" : "initial",
+      createdById: actorId,
+    });
+  });
+}
+
+/**
+ * Which language the narrative is written in. Changing it re-seals the source
+ * version, so the request buttons immediately target the other languages.
+ */
+export const setOrganizationNarrativeLanguage = protectedPermissionAction(
+  "organization.profile.manage",
+  async (formData, locale) => {
+    const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    const sourceLanguage = z
+      .enum(editorialLanguageCodes)
+      .parse(formData.get("sourceLanguage"));
+    await guardOrganizationWrite(organizationId);
+    const session = await auth();
+    if (!session?.user.id) throw new Error("Authentication required");
+    await db
+      .insert(organizationProfiles)
+      .values({ organizationId, narrativeSourceLanguage: sourceLanguage })
+      .onConflictDoUpdate({
+        target: organizationProfiles.organizationId,
+        set: { narrativeSourceLanguage: sourceLanguage },
+      });
+    await sealNarrativeSource(organizationId, session.user.id);
+    await recordAudit({
+      action: "organization.updated",
+      subjectType: "organization",
+      subjectId: organizationId,
+      organizationId,
+      metadata: {
+        field: "narrative_source_language",
+        languageCode: sourceLanguage,
+      },
+    });
+    refresh(locale, organizationId);
+  },
+);
+
 const purposeSchema = z.object({
   organizationId: orgIdSchema,
   languageCode: z.enum(["fr", "en", "ar"]),
@@ -196,6 +350,9 @@ export const upsertOrganizationPurpose = protectedPermissionAction(
       goals: formData.get("goals") ?? "",
       values: formData.get("values") ?? "",
     });
+    await guardOrganizationWrite(parsed.organizationId);
+    const session = await auth();
+    if (!session?.user.id) throw new Error("Authentication required");
     await db
       .insert(organizationProfiles)
       .values({ organizationId: parsed.organizationId })
@@ -214,6 +371,7 @@ export const upsertOrganizationPurpose = protectedPermissionAction(
           values: parsed.values,
         },
       });
+    await sealNarrativeSource(parsed.organizationId, session.user.id);
     await recordAudit({
       action: "organization.updated",
       subjectType: "organization",
@@ -234,6 +392,7 @@ export const addOrganizationSpeciality = protectedPermissionAction(
   "organization.profile.manage",
   async (formData, locale) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await guardOrganizationWrite(organizationId);
     const specialityId = z.string().uuid().parse(formData.get("specialityId"));
     await db
       .insert(organizationSpecialities)
@@ -253,6 +412,7 @@ export const retireOrganizationSpeciality = protectedPermissionAction(
   "organization.profile.manage",
   async (formData, locale) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await guardOrganizationWrite(organizationId);
     const assignmentId = z.string().uuid().parse(formData.get("assignmentId"));
     await db
       .update(organizationSpecialities)
@@ -278,6 +438,7 @@ export const setPrimarySpeciality = protectedPermissionAction(
   "organization.profile.manage",
   async (formData, locale) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await guardOrganizationWrite(organizationId);
     const raw = z.string().parse(formData.get("assignmentId") ?? "");
     const assignmentId = raw === "" ? null : z.string().uuid().parse(raw);
     await db
@@ -318,6 +479,7 @@ export const toggleOrganizationLanguage = protectedPermissionAction(
   "organization.profile.manage",
   async (formData, locale) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await guardOrganizationWrite(organizationId);
     const languageCode = z.string().min(2).parse(formData.get("languageCode"));
     const enabled = formData.get("enabled") === "true";
     if (enabled) {
@@ -357,6 +519,7 @@ export const addOrganizationContact = protectedPermissionAction(
       value: formData.get("value") ?? "",
       labelFr: formData.get("labelFr") ?? "",
     });
+    await guardOrganizationWrite(parsed.organizationId);
     const [contact] = await db
       .insert(contacts)
       .values({
@@ -386,6 +549,7 @@ export const toggleOrganizationContact = protectedPermissionAction(
   "organization.profile.manage",
   async (formData, locale) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await guardOrganizationWrite(organizationId);
     const contactId = z.string().uuid().parse(formData.get("contactId"));
     const active = formData.get("active") === "true";
     await db
@@ -409,10 +573,17 @@ export const toggleOrganizationContact = protectedPermissionAction(
 
 /* ------------------------------ lifecycle ---------------------------- */
 
+/**
+ * Archiving is how an organisation leaves the public directory — there is no
+ * hard delete. Audit events reference the organisation and are append-only
+ * (see server/db/schema/audit-log.ts), so a row that has ever been touched
+ * cannot be removed without destroying its record.
+ */
 export const setOrganizationArchived = protectedPermissionAction(
   "organization.verify",
   async (formData, locale) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await guardOrganizationWrite(organizationId);
     const archive = formData.get("archive") === "true";
     await db
       .update(organizations)
@@ -430,6 +601,327 @@ export const setOrganizationArchived = protectedPermissionAction(
       subjectType: "organization",
       subjectId: organizationId,
       organizationId,
+    });
+    refresh(locale, organizationId);
+  },
+);
+
+/* --------------------------- representatives ------------------------- */
+
+const inviteRepresentativeSchema = z.object({
+  organizationId: orgIdSchema,
+  email: z.string().trim().toLowerCase().email(),
+  displayName: optional,
+  roleCode: z.enum(INVITABLE_ROLE_CODES),
+});
+
+const invitationIdSchema = z.string().uuid();
+
+/**
+ * Fetch the organisation an invitation is about, failing loudly rather than
+ * inviting someone into a record that no longer exists.
+ */
+async function requireOrganization(organizationId: string) {
+  const [organization] = await db
+    .select({ id: organizations.id, displayName: organizations.displayName })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+  if (!organization) throw new Error("Unknown organisation");
+  return organization;
+}
+
+/** The platform-defined (organisation-agnostic) template for a role code. */
+async function requireRoleTemplate(code: string) {
+  const [role] = await db
+    .select({ id: roles.id })
+    .from(roles)
+    .where(and(eq(roles.code, code), isNull(roles.organizationId)))
+    .limit(1);
+  if (!role) throw new Error(`Role ${code} is not seeded`);
+  return role;
+}
+
+/**
+ * Invite the organisation's own representative — the platform side of Phase 1.3
+ * Flow 1 (docs/PHASE-1.3-COLLABORATION.md). There is no public organisation
+ * signup: an operator names the address, and the invitation is what turns into
+ * access.
+ *
+ * The membership is reserved immediately so the roster shows who is expected,
+ * but the roles ride on the invitation until it is accepted — a revoked or
+ * expired invitation must never have granted anything. When the address already
+ * has an account there is nothing left to prove, so the roles are granted on the
+ * spot and no email is sent.
+ */
+export const inviteOrganizationRepresentative = protectedPermissionAction(
+  "organization.verify",
+  async (formData, locale) => {
+    const parsed = inviteRepresentativeSchema.parse({
+      organizationId: formData.get("organizationId"),
+      email: formData.get("email"),
+      displayName: formData.get("displayName") ?? "",
+      roleCode: formData.get("roleCode"),
+    });
+    await guardOrganizationWrite(parsed.organizationId);
+
+    const [organization, role, session] = await Promise.all([
+      requireOrganization(parsed.organizationId),
+      requireRoleTemplate(parsed.roleCode),
+      auth(),
+    ]);
+    const [account] = await db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(sql`lower(${users.email}) = ${parsed.email}`)
+      .limit(1);
+
+    const memberId = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({
+          id: organizationMembers.id,
+          userId: organizationMembers.userId,
+        })
+        .from(organizationMembers)
+        .where(
+          and(
+            eq(organizationMembers.organizationId, parsed.organizationId),
+            account
+              ? or(
+                  eq(organizationMembers.contactEmail, parsed.email),
+                  eq(organizationMembers.userId, account.id),
+                )
+              : eq(organizationMembers.contactEmail, parsed.email),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        const [created] = await tx
+          .insert(organizationMembers)
+          .values({
+            organizationId: parsed.organizationId,
+            userId: account?.id ?? null,
+            displayName:
+              parsed.displayName ??
+              account?.name ??
+              parsed.email.split("@")[0] ??
+              parsed.email,
+            contactEmail: parsed.email,
+            status: account ? "active" : "invited",
+          })
+          .returning({ id: organizationMembers.id });
+        if (!created) throw new Error("Member insert returned no row");
+        return created.id;
+      }
+
+      /**
+       * Re-inviting someone who left, or who has since created an account,
+       * revives the same membership row: activity assignments and audit events
+       * already point at it.
+       */
+      const userId = account?.id ?? existing.userId;
+      await tx
+        .update(organizationMembers)
+        .set({
+          displayName: parsed.displayName ?? undefined,
+          userId,
+          status: userId ? "active" : "invited",
+          offboardedAt: null,
+        })
+        .where(eq(organizationMembers.id, existing.id));
+      return existing.id;
+    });
+
+    const linkedAccount = Boolean(account);
+    if (linkedAccount) {
+      await db
+        .insert(memberRoles)
+        .values({
+          memberId,
+          roleId: role.id,
+          grantedById: session?.user.id ?? null,
+        })
+        .onConflictDoNothing();
+      await claimOrganizationIfSteward(memberId, parsed.organizationId);
+      await recordAudit({
+        action: "organization.representative_granted",
+        subjectType: "member",
+        subjectId: memberId,
+        organizationId: parsed.organizationId,
+        metadata: { role: parsed.roleCode },
+      });
+    } else {
+      await sendRepresentativeInvitation({
+        organizationId: parsed.organizationId,
+        email: parsed.email,
+        memberId,
+        kind: invitationKindForRole(parsed.roleCode),
+        roleIds: [role.id],
+        invitedById: session?.user.id ?? null,
+        locale,
+        organizationName: organization.displayName,
+        inviterName:
+          session?.user.name ?? session?.user.email ?? organization.displayName,
+      });
+    }
+    refresh(locale, parsed.organizationId);
+  },
+);
+
+/**
+ * Send the invitation again with a fresh token and expiry. An invitation that
+ * has already lapsed is replaced rather than extended, so the old link stays
+ * dead.
+ */
+export const resendOrganizationInvitation = protectedPermissionAction(
+  "organization.verify",
+  async (formData, locale) => {
+    const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await guardOrganizationWrite(organizationId);
+    const invitationId = invitationIdSchema.parse(formData.get("invitationId"));
+
+    const [invitation] = await db
+      .select({
+        id: invitations.id,
+        email: invitations.email,
+        kind: invitations.kind,
+      })
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.id, invitationId),
+          eq(invitations.organizationId, organizationId),
+          isNull(invitations.acceptedAt),
+          isNull(invitations.revokedAt),
+        ),
+      )
+      .limit(1);
+    if (!invitation) throw new Error("No pending invitation to resend");
+    if (invitation.kind === "member") {
+      throw new Error("Team invitations are resent from the team console");
+    }
+
+    const [roleRows, memberRow, organization, session] = await Promise.all([
+      db
+        .select({ roleId: invitationRoles.roleId })
+        .from(invitationRoles)
+        .where(eq(invitationRoles.invitationId, invitation.id)),
+      db
+        .select({ id: organizationMembers.id })
+        .from(organizationMembers)
+        .where(
+          and(
+            eq(organizationMembers.organizationId, organizationId),
+            sql`lower(${organizationMembers.contactEmail}) = ${invitation.email.toLowerCase()}`,
+          ),
+        )
+        .limit(1),
+      requireOrganization(organizationId),
+      auth(),
+    ]);
+    const memberId = memberRow[0]?.id;
+    if (!memberId) throw new Error("The invited membership no longer exists");
+
+    await sendRepresentativeInvitation({
+      organizationId,
+      email: invitation.email,
+      memberId,
+      kind: invitation.kind,
+      roleIds: roleRows.map((row) => row.roleId),
+      invitedById: session?.user.id ?? null,
+      locale,
+      organizationName: organization.displayName,
+      inviterName:
+        session?.user.name ?? session?.user.email ?? organization.displayName,
+    });
+    refresh(locale, organizationId);
+  },
+);
+
+/**
+ * Withdraw a pending invitation. The reserved membership goes with it: a
+ * roster row promising access nobody can accept is worse than no row at all.
+ * Anyone who already signed in keeps their membership — that invitation is
+ * accepted, and this action does not touch it.
+ */
+export const revokeOrganizationInvitation = protectedPermissionAction(
+  "organization.verify",
+  async (formData, locale) => {
+    const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await guardOrganizationWrite(organizationId);
+    const invitationId = invitationIdSchema.parse(formData.get("invitationId"));
+
+    const now = new Date();
+    const [invitation] = await db
+      .update(invitations)
+      .set({ revokedAt: now })
+      .where(
+        and(
+          eq(invitations.id, invitationId),
+          eq(invitations.organizationId, organizationId),
+          isNull(invitations.acceptedAt),
+          isNull(invitations.revokedAt),
+        ),
+      )
+      .returning({ id: invitations.id, email: invitations.email });
+    if (!invitation) throw new Error("No pending invitation to revoke");
+
+    await db
+      .update(organizationMembers)
+      .set({ status: "offboarded", offboardedAt: now })
+      .where(
+        and(
+          eq(organizationMembers.organizationId, organizationId),
+          sql`lower(${organizationMembers.contactEmail}) = ${invitation.email.toLowerCase()}`,
+          isNull(organizationMembers.userId),
+          eq(organizationMembers.status, "invited"),
+        ),
+      );
+    await recordAudit({
+      action: "organization.representative_invitation_revoked",
+      subjectType: "organization",
+      subjectId: organizationId,
+      organizationId,
+    });
+    refresh(locale, organizationId);
+  },
+);
+
+/**
+ * Undo a claim. Support-only and always audited: it hands write access back to
+ * the platform, so it exists for mistakes (a claim by the wrong person, a
+ * membership created in error), not as a routine lifecycle step.
+ */
+export const releaseOrganizationClaim = protectedPermissionAction(
+  superadminPermission,
+  async (formData, locale) => {
+    const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    const session = await auth();
+    if (!session?.user.id) throw new Error("Authentication required");
+    if (
+      !(await hasActualPlatformPermission(
+        session.user.id,
+        superadminPermission,
+      ))
+    ) {
+      throw new Error("Support access required to release a claim");
+    }
+    const reason = z
+      .string()
+      .trim()
+      .min(4)
+      .parse(formData.get("reason") ?? "");
+    await db
+      .update(organizations)
+      .set({ claimedAt: null })
+      .where(eq(organizations.id, organizationId));
+    await recordAudit({
+      action: "organization.claim_released",
+      subjectType: "organization",
+      subjectId: organizationId,
+      organizationId,
+      reason,
     });
     refresh(locale, organizationId);
   },

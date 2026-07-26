@@ -1,9 +1,10 @@
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { getActionLocale } from "~/i18n/request-locale";
 import { authPath } from "~/i18n/routing";
+import { secondFactorRequired } from "~/server/account/settings";
 import { auth } from "~/server/auth";
 import { getRoleTestState } from "~/server/auth/authorization";
 import { safeReturnTo } from "~/server/auth/return-to";
@@ -48,7 +49,13 @@ export async function requireEditor(candidateLocale?: Locale) {
   const locale = await getActionLocale(candidateLocale);
   const session = await auth();
   if (!session?.user) redirect(authPath("login", locale));
-  if (!session.secondFactorVerified) {
+  // The step-up is on for every account by default and cannot be turned off
+  // by a platform administrator; `secondFactorRequired` re-reads that on the
+  // server, so the stored preference is a policy input, never a bypass.
+  if (
+    !session.secondFactorVerified &&
+    (await secondFactorRequired(session.user.id))
+  ) {
     const returnTo = await requestedReturnTo(locale);
     redirect(authPath("verify", locale, { returnTo }));
   }
@@ -77,6 +84,28 @@ export async function requirePermission(
     throw new Error("Forbidden");
   }
   return user;
+}
+
+/**
+ * Read-side counterpart to `requirePermission`, for deciding whether to render
+ * a control at all. It never redirects: a missing grant simply hides the
+ * button. The action behind the button still gates itself.
+ */
+export async function hasPermission(
+  permissionCode: string,
+  organizationId?: string,
+): Promise<boolean> {
+  const session = await auth();
+  if (!session?.user) return false;
+  const authorization = await getRoleTestState(session.user.id, organizationId);
+  const assumedOrganizationId = authorization.assumedOrganizationId;
+  if (
+    assumedOrganizationId !== null &&
+    assumedOrganizationId !== organizationId
+  ) {
+    return false;
+  }
+  return authorization.effectivePermissions.has(permissionCode);
 }
 
 export function protectedEditorAction<Result>(

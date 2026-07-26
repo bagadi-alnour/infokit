@@ -9,7 +9,7 @@ import { cn } from "~/lib/utils";
 type TimePickerProps = Omit<ComponentProps<typeof Input>, "type">;
 
 /**
- * Shadcn Studio Date Picker 09, adapted as a controlled Calais time field.
+ * Shadcn Studio Date Picker 09, adapted as a controlled InfoKit time field.
  * Labels remain outside the control so Field can own errors and descriptions.
  */
 export function TimePicker({

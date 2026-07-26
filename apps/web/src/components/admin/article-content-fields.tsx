@@ -2,7 +2,7 @@
 
 import type { EditorContent, TranslationStrings } from "@inkpilot/editor";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
@@ -52,8 +52,10 @@ export const emptyArticleContent: ArticleContentValue = {
 
 /**
  * Authoring fields for every configured editorial language: title,
- * plain-language summary, and a rich body. Body HTML rides along as hidden
- * inputs so the whole thing posts inside a normal server-action form.
+ * plain-language summary, and a rich body. Every value lives in React state and
+ * posts through hidden inputs, because the language tabs unmount the panel they
+ * hide — the visible fields would otherwise lose what was typed in the other
+ * languages as soon as the author switches tab.
  * `sourceLanguage` decides which tab is required and shown first.
  */
 export function ArticleContentFields({
@@ -161,9 +163,15 @@ export function ArticleContentFields({
                 </FieldLabel>
                 <Input
                   id={`article-title-${language}`}
-                  name={`title${language.toUpperCase()}`}
                   dir={rtl ? "rtl" : "ltr"}
-                  defaultValue={initial[language].title}
+                  value={content[language].title}
+                  onChange={(event) => {
+                    const { value } = event.target;
+                    setContent((current) => ({
+                      ...current,
+                      [language]: { ...current[language], title: value },
+                    }));
+                  }}
                   required={isSource}
                   minLength={isSource ? 2 : undefined}
                   maxLength={200}
@@ -181,9 +189,15 @@ export function ArticleContentFields({
                 </FieldLabel>
                 <Textarea
                   id={`article-summary-${language}`}
-                  name={`summary${language.toUpperCase()}`}
                   dir={rtl ? "rtl" : "ltr"}
-                  defaultValue={initial[language].summary}
+                  value={content[language].summary}
+                  onChange={(event) => {
+                    const { value } = event.target;
+                    setContent((current) => ({
+                      ...current,
+                      [language]: { ...current[language], summary: value },
+                    }));
+                  }}
                   rows={2}
                   maxLength={2000}
                 />
@@ -217,26 +231,26 @@ export function ArticleContentFields({
                   }}
                 >
                   <InkpilotEditor
-                    className="calais-rich-text-editor"
+                    className="infokit-rich-text-editor"
                     locale={interfaceLocale}
-                    content={{ html: initial[language].bodyHtml }}
+                    content={{ html: content[language].bodyHtml }}
                     i18n={{ translations }}
                     placeholder={labels["field.bodyPlaceholder"]}
                     theme={{
                       mode: "auto",
                       preset: "minimal",
                       colors: {
-                        primary: "var(--calais-accent)",
-                        secondary: "var(--calais-surface-subtle)",
-                        accent: "var(--calais-accent-soft)",
-                        background: "var(--calais-surface)",
-                        foreground: "var(--calais-ink)",
-                        border: "var(--calais-border)",
-                        muted: "var(--calais-surface-subtle)",
-                        mutedForeground: "var(--calais-text-muted)",
-                        error: "var(--calais-danger)",
-                        warning: "var(--calais-warning)",
-                        success: "var(--calais-success)",
+                        primary: "var(--infokit-accent)",
+                        secondary: "var(--infokit-surface-subtle)",
+                        accent: "var(--infokit-accent-soft)",
+                        background: "var(--infokit-surface)",
+                        foreground: "var(--infokit-ink)",
+                        border: "var(--infokit-border)",
+                        muted: "var(--infokit-surface-subtle)",
+                        mutedForeground: "var(--infokit-text-muted)",
+                        error: "var(--infokit-danger)",
+                        warning: "var(--infokit-warning)",
+                        success: "var(--infokit-success)",
                       },
                     }}
                     onChange={(next: EditorContent) => {
@@ -255,14 +269,28 @@ export function ArticleContentFields({
           );
         })}
       </Tabs>
-      {languages.map((language) => (
-        <input
-          key={`${language}-html`}
-          type="hidden"
-          name={`body${language.toUpperCase()}Html`}
-          value={content[language].bodyHtml}
-        />
-      ))}
+      {languages.map((language) => {
+        const upper = language.toUpperCase();
+        return (
+          <Fragment key={`${language}-values`}>
+            <input
+              type="hidden"
+              name={`title${upper}`}
+              value={content[language].title}
+            />
+            <input
+              type="hidden"
+              name={`summary${upper}`}
+              value={content[language].summary}
+            />
+            <input
+              type="hidden"
+              name={`body${upper}Html`}
+              value={content[language].bodyHtml}
+            />
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

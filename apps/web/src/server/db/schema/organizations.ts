@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   integer,
   primaryKey,
   text,
@@ -12,7 +13,9 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
+import { users } from "./auth";
 import { languages } from "./catalog";
+import { translationSourceVersions } from "./translation-sources";
 import {
   contactKind,
   contactVisibility,
@@ -20,6 +23,7 @@ import {
   core,
   organizationStatus,
   specialityAssignmentState,
+  stewardContact,
   timestamps,
   translationMethod,
   translationState,
@@ -43,6 +47,12 @@ export const organizations = core.table(
     publishingSuspended: boolean("publishing_suspended")
       .notNull()
       .default(false),
+    /**
+     * Set when the organisation first takes ownership of its own workspace (an
+     * org-admin member links their account). Once claimed, platform admins are
+     * read-only for this organisation and the org's own members edit its data.
+     */
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -66,6 +76,16 @@ export const organizationProfiles = content.table("organization_profiles", {
     .notNull()
     .default(false),
   published: boolean("published").notNull().default(false),
+  /**
+   * The language the narrative below is authored in. Every other editorial
+   * language is a translation of it, so this is what a translation request on
+   * the record page pins its source version to.
+   */
+  narrativeSourceLanguage: varchar("narrative_source_language", { length: 35 })
+    .notNull()
+    .default("fr")
+    .references(() => languages.code),
+  ...stewardContact,
   ...verification,
   ...timestamps,
 });
@@ -85,10 +105,41 @@ export const organizationProfileTranslations = content.table(
     goals: text("goals"),
     values: text("values"),
     accessibilitySummary: text("accessibility_summary"),
+    /** Rich narrative, sanitised HTML plus its plain-text rendering. */
+    presentationHtml: text("presentation_html"),
+    presentationText: text("presentation_text"),
     state: translationState("state").notNull().default("draft"),
     method: translationMethod("method").notNull().default("human"),
+    /**
+     * Provenance, mirroring `activity_translations`: which sealed source
+     * version this language was translated from, which provider produced it,
+     * and who confirmed it reads correctly. Without these a profile
+     * translation could not be verified or shown as stale.
+     */
+    sourceVersionId: uuid("source_version_id"),
+    contentHash: varchar("content_hash", { length: 64 }),
+    providerCode: varchar("provider_code", { length: 100 }),
+    carriedForwardFromSourceVersionId: uuid(
+      "carried_forward_from_source_version_id",
+    ),
+    verifiedById: varchar("verified_by_id", { length: 255 }).references(
+      () => users.id,
+    ),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
   },
-  (t) => [primaryKey({ columns: [t.organizationId, t.languageCode] })],
+  (t) => [
+    primaryKey({ columns: [t.organizationId, t.languageCode] }),
+    foreignKey({
+      name: "organization_profile_translations_source_scope_fk",
+      columns: [t.sourceVersionId],
+      foreignColumns: [translationSourceVersions.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "organization_profile_translations_carried_source_scope_fk",
+      columns: [t.carriedForwardFromSourceVersionId],
+      foreignColumns: [translationSourceVersions.id],
+    }).onDelete("restrict"),
+  ],
 );
 
 /**

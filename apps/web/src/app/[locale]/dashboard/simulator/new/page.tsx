@@ -1,8 +1,9 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, asc, eq } from "drizzle-orm";
 import { ArrowLeft, GitBranch, Plus } from "lucide-react";
 import Link from "next/link";
 
+import { WorkspacePage } from "~/components/admin/workspace";
 import { PendingButton } from "~/components/pending-button";
 import { Button } from "~/components/ui/button";
 import {
@@ -15,10 +16,7 @@ import {
 import { DatePicker } from "~/components/ui/date-picker";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import { Textarea } from "~/components/ui/textarea";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
@@ -66,7 +64,7 @@ export default async function NewSimulatorPage({
   nextReview.setDate(nextReview.getDate() + 30);
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-7 md:px-7 lg:px-8">
+    <WorkspacePage width="content">
       <Button
         variant="ghost"
         nativeButton={false}
@@ -113,46 +111,41 @@ export default async function NewSimulatorPage({
             </Field>
             <Field>
               <FieldLabel htmlFor="simulator-owner">{t.owner}</FieldLabel>
-              <NativeSelect id="simulator-owner" name="organizationId">
-                <NativeSelectOption value="">
-                  {t.platformOwner}
-                </NativeSelectOption>
+              <SelectField id="simulator-owner" name="organizationId">
+                <option value="">{t.platformOwner}</option>
                 {organizationRows.map((organization) => (
-                  <NativeSelectOption
-                    key={organization.id}
-                    value={organization.id}
-                  >
+                  <option key={organization.id} value={organization.id}>
                     {organization.name}
-                  </NativeSelectOption>
+                  </option>
                 ))}
-              </NativeSelect>
+              </SelectField>
             </Field>
             <Field>
               <FieldLabel htmlFor="simulator-city">{t.city}</FieldLabel>
-              <NativeSelect id="simulator-city" name="cityId">
-                <NativeSelectOption value="">{t.allCities}</NativeSelectOption>
+              <SelectField id="simulator-city" name="cityId">
+                <option value="">{t.allCities}</option>
                 {cityRows.map((city) => (
-                  <NativeSelectOption key={city.id} value={city.id}>
+                  <option key={city.id} value={city.id}>
                     {city.name ?? city.code}
-                  </NativeSelectOption>
+                  </option>
                 ))}
-              </NativeSelect>
+              </SelectField>
             </Field>
             <Field>
               <FieldLabel htmlFor="simulator-source-language">
                 {t.sourceLanguage}
               </FieldLabel>
-              <NativeSelect
+              <SelectField
                 id="simulator-source-language"
                 name="sourceLanguage"
                 defaultValue={locale}
               >
                 {(["fr", "en", "ar"] as const).map((language) => (
-                  <NativeSelectOption key={language} value={language}>
+                  <option key={language} value={language}>
                     {t[`language.${language}`]}
-                  </NativeSelectOption>
+                  </option>
                 ))}
-              </NativeSelect>
+              </SelectField>
             </Field>
           </CardContent>
         </Card>
@@ -247,6 +240,6 @@ export default async function NewSimulatorPage({
           </PendingButton>
         </div>
       </form>
-    </div>
+    </WorkspacePage>
   );
 }

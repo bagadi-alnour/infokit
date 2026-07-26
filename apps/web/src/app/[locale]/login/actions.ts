@@ -7,8 +7,8 @@ import {
   passwordUpdateSchema,
   smsChallengeRequestSchema,
   smsVerificationSchema,
-} from "@calais/validation/auth";
-import { resolveLocale, type Locale } from "@calais/shared/i18n";
+} from "@infokit/validation/auth";
+import { resolveLocale, type Locale } from "@infokit/shared/i18n";
 import { AuthError } from "next-auth";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -100,7 +100,7 @@ export async function requestPasswordReset(formData: FormData) {
   const parsed = magicLinkRequestSchema.safeParse({
     email: formData.get("email"),
     locale: formData.get("locale"),
-    returnTo: localizedPath("/dashboard/account", locale),
+    returnTo: localizedPath("/dashboard/account/password", locale),
   });
   if (!parsed.success) {
     redirect(authPath("login", locale, { error: "invalid" }));
@@ -209,7 +209,9 @@ export async function updatePassword(formData: FormData) {
     locale: formData.get("locale"),
   });
   if (!parsed.success) {
-    redirect(`${localizedPath("/dashboard/account", locale)}?error=password`);
+    redirect(
+      `${localizedPath("/dashboard/account/password", locale)}?error=password`,
+    );
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
@@ -225,7 +227,9 @@ export async function updatePassword(formData: FormData) {
       subjectId: user.id,
     });
   });
-  redirect(`${localizedPath("/dashboard/account", locale)}?status=updated`);
+  redirect(
+    `${localizedPath("/dashboard/account/password", locale)}?status=updated`,
+  );
 }
 
 export async function sendSecondFactorCode(formData: FormData) {

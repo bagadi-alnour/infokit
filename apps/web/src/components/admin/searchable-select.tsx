@@ -27,6 +27,7 @@ const sameOption = (left: SearchableOption, right: SearchableOption) =>
   left.value === right.value;
 
 export function SearchableSelect({
+  id,
   name,
   options,
   value,
@@ -37,6 +38,8 @@ export function SearchableSelect({
   required = false,
   disabled = false,
 }: {
+  /** Lets a visible label point at the input instead of wrapping it. */
+  id?: string;
   name: string;
   options: readonly SearchableOption[];
   value: string;
@@ -64,6 +67,7 @@ export function SearchableSelect({
     >
       <input type="hidden" name={name} value={value} />
       <ComboboxInput
+        id={id}
         aria-label={label}
         placeholder={placeholder}
         required={required}

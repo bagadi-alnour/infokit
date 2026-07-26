@@ -1,6 +1,5 @@
-import { formatMessage } from "@calais/shared/i18n";
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { Paragraph, YStack } from "@calais/ui";
+import { formatMessage } from "@infokit/shared/i18n";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -21,6 +20,7 @@ import { Label } from "~/components/ui/label";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { authPath } from "~/i18n/routing";
 import { localizedAuthMetadata } from "~/seo/site";
+import { secondFactorRequired } from "~/server/account/settings";
 import { auth } from "~/server/auth";
 import { editorRecipient, maskPhone } from "~/server/auth/editors";
 import { safeReturnTo } from "~/server/auth/return-to";
@@ -58,6 +58,9 @@ export default async function VerifySecondFactorPage({
   const session = await auth();
   if (!session?.user.email) redirect(authPath("login", locale));
   if (session.secondFactorVerified) redirect(returnTo);
+  // An account that turned the second factor off never sees this page: no
+  // code is sent, and requireEditor lets the same session through.
+  if (!(await secondFactorRequired(session.user.id))) redirect(returnTo);
 
   const recipient = editorRecipient(session.user.email);
   if (!recipient) redirect(authPath("error", locale));
@@ -76,12 +79,12 @@ export default async function VerifySecondFactorPage({
       })}
       messages={messages}
     >
-      <YStack gap="$calais5">
-        <Paragraph color="$mutedText" fontSize="$3">
+      <div className="flex flex-col gap-5">
+        <p className="text-copy-muted text-[0.95rem]">
           {formatMessage(messages["auth.verify.signedInAs"], {
             email: session.user.email,
           })}
-        </Paragraph>
+        </p>
         <AuthStatus
           status={query.error ?? query.status}
           labels={{
@@ -106,7 +109,7 @@ export default async function VerifySecondFactorPage({
         <form action={confirmSecondFactorCode}>
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="returnTo" value={returnTo} />
-          <YStack gap="$calais5">
+          <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-3">
               <Label htmlFor="code" className="text-base font-semibold">
                 {messages["auth.verify.codeLabel"]}
@@ -141,7 +144,7 @@ export default async function VerifySecondFactorPage({
               label={messages["auth.verify.submit"]}
               pendingLabel={messages["auth.verify.submitting"]}
             />
-          </YStack>
+          </div>
         </form>
 
         <form action={endEditorSession}>
@@ -152,7 +155,7 @@ export default async function VerifySecondFactorPage({
             tone="ghost"
           />
         </form>
-      </YStack>
+      </div>
     </AuthShell>
   );
 }

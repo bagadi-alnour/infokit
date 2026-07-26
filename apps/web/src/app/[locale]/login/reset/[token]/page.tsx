@@ -1,13 +1,12 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { ActionLinkSurface, Text, YStack } from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { resetPassword } from "../../actions";
 import { AuthShell } from "~/components/auth/auth-shell";
 import { AuthStatus } from "~/components/auth/auth-status";
 import { SubmitButton } from "~/components/auth/submit-button";
 import { Field, TextInput } from "~/components/admin/workspace";
+import { ActionLink } from "~/components/public/primitives";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { authPath } from "~/i18n/routing";
 import { localizedAuthMetadata } from "~/seo/site";
@@ -51,14 +50,13 @@ export default async function ResetPasswordPage({
         description={messages["auth.reset.invalidBody"]}
         messages={messages}
       >
-        <Link
+        <ActionLink
           href={authPath("login", locale)}
-          style={{ textDecoration: "none" }}
+          tone="outline"
+          size="block"
         >
-          <ActionLinkSurface tone="outline">
-            <Text fontWeight="600">{messages["auth.reset.backToSignIn"]}</Text>
-          </ActionLinkSurface>
-        </Link>
+          {messages["auth.reset.backToSignIn"]}
+        </ActionLink>
       </AuthShell>
     );
   }
@@ -72,7 +70,7 @@ export default async function ResetPasswordPage({
       description={messages["auth.reset.description"]}
       messages={messages}
     >
-      <YStack gap="$calais5">
+      <div className="flex flex-col gap-5">
         <AuthStatus
           status={query.error === "password" ? "invalid" : undefined}
           labels={{ invalid: messages["auth.reset.error"] }}
@@ -108,7 +106,7 @@ export default async function ResetPasswordPage({
             pendingLabel={messages["auth.reset.submitting"]}
           />
         </form>
-      </YStack>
+      </div>
     </AuthShell>
   );
 }

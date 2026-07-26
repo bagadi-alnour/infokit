@@ -1,4 +1,4 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import {
   ArrowLeft,
@@ -17,6 +17,9 @@ import { ActivityScheduleForm } from "~/components/admin/activity-schedule-form"
 import { ActivityScheduleRules } from "~/components/admin/activity-schedule-rules";
 import { ActivityServiceManager } from "~/components/admin/activity-service-manager";
 import { ActivityTranslationPanel } from "~/components/admin/activity-translation-panel";
+import { StewardContactForm } from "~/components/admin/steward-contact-form";
+import type { WorkspaceTranslation } from "~/components/admin/translation-workspace";
+import { WorkspacePage } from "~/components/admin/workspace";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -27,10 +30,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
@@ -42,6 +42,7 @@ import { createAssetReadUrl } from "~/server/assets/s3";
 import { db } from "~/server/db";
 import { auth } from "~/server/auth";
 import { hasActualPlatformPermission } from "~/server/auth/authorization";
+import { hasPermission } from "~/server/auth/require";
 import {
   activities,
   activityAssets,
@@ -69,6 +70,7 @@ import {
   translationAssignments,
   users,
 } from "~/server/db/schema";
+import { updateActivitySteward } from "../steward-actions";
 
 const weekdays = [1, 2, 3, 4, 5, 6, 7] as const;
 
@@ -166,6 +168,10 @@ export default async function ActivitiesPage({
       audienceCategoryId: activities.audienceCategoryId,
       updatedAt: activities.updatedAt,
       reviewDueAt: activities.reviewDueAt,
+      // Workspace-only: who to ask about this activity. Never read publicly.
+      stewardName: activities.stewardName,
+      stewardPhone: activities.stewardPhone,
+      stewardEmail: activities.stewardEmail,
       organization: organizations.displayName,
       cityCode: cities.code,
       cityName: cityTranslations.name,
@@ -173,8 +179,10 @@ export default async function ActivitiesPage({
     })
     .from(activities)
     .innerJoin(organizations, eq(activities.organizationId, organizations.id))
-    .innerJoin(cities, eq(activities.cityId, cities.id))
-    .innerJoin(cityTeams, eq(activities.teamId, cityTeams.id))
+    // A global activity belongs to no city and therefore to no city team, so
+    // both joins are outer: requiring them would hide those rows entirely.
+    .leftJoin(cities, eq(activities.cityId, cities.id))
+    .leftJoin(cityTeams, eq(activities.teamId, cityTeams.id))
     .leftJoin(
       cityTranslations,
       and(
@@ -185,15 +193,14 @@ export default async function ActivitiesPage({
     .where(isNull(activities.archivedAt))
     .orderBy(asc(organizations.displayName), asc(cities.code));
   const rows = activityRows.map((activity) => {
-    if (!activity.organizationId || !activity.teamId) {
+    if (!activity.organizationId) {
       throw new Error(
-        "Claimed activity query returned an unassigned organization or team",
+        "Claimed activity query returned an unassigned organization",
       );
     }
     return {
       ...activity,
       organizationId: activity.organizationId,
-      teamId: activity.teamId,
     };
   });
   const ids = rows.map((row) => row.id);
@@ -255,6 +262,8 @@ export default async function ActivitiesPage({
   const list = rows.map((row) => ({
     ...row,
     title: getName(row.id),
+    /** Where this activity applies: one city, or everywhere. */
+    scopeLabel: row.cityName ?? row.cityCode ?? t["activity.scopeGlobal"],
     state: activityState({
       ...row,
       published: (publishedLanguagesById.get(row.id) ?? []).length > 0,
@@ -274,7 +283,7 @@ export default async function ActivitiesPage({
     const matchesStatus =
       !requestedStatus || activity.state === requestedStatus;
     const searchable =
-      `${activity.title} ${activity.organization} ${activity.cityName ?? activity.cityCode}`.toLocaleLowerCase(
+      `${activity.title} ${activity.organization} ${activity.scopeLabel}`.toLocaleLowerCase(
         locale,
       );
     return matchesStatus && (!query || searchable.includes(query));
@@ -309,8 +318,13 @@ export default async function ActivitiesPage({
             state: activityTranslations.state,
             method: activityTranslations.method,
             verifiedById: activityTranslations.verifiedById,
+            verifiedByName: users.name,
+            // Set when the source moved after this language was last checked.
+            carriedForwardFrom:
+              activityTranslations.carriedForwardFromSourceVersionId,
           })
           .from(activityTranslations)
+          .leftJoin(users, eq(users.id, activityTranslations.verifiedById))
           .where(eq(activityTranslations.activityId, selected.id)),
         db
           .select({ id: services.id })
@@ -381,28 +395,27 @@ export default async function ActivitiesPage({
     : [[], [], [], [], [], []];
 
   const initialContent: Partial<
-    Record<
-      EditorialLanguage,
-      {
-        name: string;
-        html: string;
-        text: string;
-        method: "human" | "ai" | "ai_then_human_review";
-      }
-    >
+    Record<EditorialLanguage, WorkspaceTranslation>
   > = {};
   for (const row of initialTranslationRows) {
     if (
       editorialLanguageCodes.includes(row.languageCode as EditorialLanguage)
     ) {
       initialContent[row.languageCode as EditorialLanguage] = {
-        name: row.name,
+        title: row.name,
         html: row.descriptionHtml ?? "",
         text: row.descriptionText ?? "",
+        state: row.state,
         method: row.method,
+        verifiedByName: row.verifiedByName,
+        stale: row.carriedForwardFrom !== null,
       };
     }
   }
+  // Rendering the verify control is a read-side decision; the action re-checks.
+  const canVerifyTranslations = selected
+    ? await hasPermission("content.translation.verify", selected.organizationId)
+    : false;
 
   // ---- Classification, translator, and media (selected activity only) --
   const countWords = (value: string) =>
@@ -715,7 +728,7 @@ export default async function ActivitiesPage({
     };
   });
   return (
-    <div className="px-4 py-7 md:px-7 lg:px-8">
+    <WorkspacePage>
       {!selected ? (
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -774,20 +787,18 @@ export default async function ActivitiesPage({
               placeholder={t["list.searchPlaceholder"]}
               aria-label={t["list.searchPlaceholder"]}
             />
-            <NativeSelect
+            <SelectField
               name="status"
               defaultValue={requestedStatus}
               aria-label={t["list.filterState"]}
             >
-              <NativeSelectOption value="">
-                {t["list.allStates"]}
-              </NativeSelectOption>
+              <option value="">{t["list.allStates"]}</option>
               {activityStates.map((state) => (
-                <NativeSelectOption key={state} value={state}>
+                <option key={state} value={state}>
                   {t[`state.${state}`]}
-                </NativeSelectOption>
+                </option>
               ))}
-            </NativeSelect>
+            </SelectField>
             <Button type="submit">
               <Search aria-hidden />
               {t["list.applyFilters"]}
@@ -823,8 +834,10 @@ export default async function ActivitiesPage({
                         {activity.title}
                       </span>
                       <span className="text-copy-muted mt-1 block truncate text-xs">
-                        {activity.cityName ?? activity.cityCode} ·{" "}
-                        {t["activity.cityTeam"]}: {activity.teamName}
+                        {activity.scopeLabel}
+                        {activity.teamName
+                          ? ` · ${t["activity.cityTeam"]}: ${activity.teamName}`
+                          : ""}
                       </span>
                     </div>
                     <p className="text-copy-muted min-w-0 truncate text-sm">
@@ -902,8 +915,7 @@ export default async function ActivitiesPage({
                         {selected.title}
                       </CardTitle>
                       <CardDescription className="mt-1">
-                        {selected.organization} ·{" "}
-                        {selected.cityName ?? selected.cityCode}
+                        {selected.organization} · {selected.scopeLabel}
                       </CardDescription>
                     </div>
                     <Badge variant={stateBadge[selected.state]}>
@@ -931,8 +943,10 @@ export default async function ActivitiesPage({
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <MapPin className="size-3.5" aria-hidden />
-                      {selected.cityName ?? selected.cityCode} ·{" "}
-                      {t["activity.cityTeam"]}: {selected.teamName}
+                      {selected.scopeLabel}
+                      {selected.teamName
+                        ? ` · ${t["activity.cityTeam"]}: ${selected.teamName}`
+                        : ""}
                     </span>
                   </div>
                   {selected.reviewDue ? (
@@ -956,10 +970,13 @@ export default async function ActivitiesPage({
                     key={selected.id}
                     locale={locale}
                     activityId={selected.id}
+                    organizationId={selected.organizationId}
                     sourceLanguage={
                       selected.sourceLanguageCode as EditorialLanguage
                     }
                     initial={initialContent}
+                    canVerify={canVerifyTranslations}
+                    returnPath={`/${locale}/dashboard/activities?activity=${selected.id}`}
                     categories={categoryOptions}
                     audiences={audienceOptions}
                     tags={tagOptions}
@@ -1198,10 +1215,32 @@ export default async function ActivitiesPage({
                   />
                 </CardContent>
               </Card>
+
+              {/* Who to ask when this activity turns out to be wrong. Saved on
+               * its own, so recording a phone number never means re-submitting
+               * the whole record. */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    {t["steward.title"]}
+                  </CardTitle>
+                  <CardDescription>{t["steward.hint"]}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <StewardContactForm
+                    key={selected.id}
+                    action={updateActivitySteward}
+                    locale={locale}
+                    recordId={selected.id}
+                    values={selected}
+                    labels={t}
+                  />
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </WorkspacePage>
   );
 }

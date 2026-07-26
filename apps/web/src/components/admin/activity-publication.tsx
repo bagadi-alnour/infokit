@@ -1,6 +1,6 @@
 "use client";
 
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import { CalendarClock, Globe } from "lucide-react";
 import { toast } from "sonner";
 

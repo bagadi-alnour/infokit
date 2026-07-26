@@ -24,6 +24,26 @@
   "catalogue.action.disable": "Désactiver",
   "catalogue.action.activate": "Activer",
   "catalogue.action.deactivate": "Désactiver",
+  "catalogue.actionError": "La modification n’a pas été enregistrée. Réessayez.",
+
+  "catalogue.tabs.label": "Sections du catalogue",
+  "catalogue.stat.services": "Services",
+  "catalogue.stat.categories": "Catégories",
+  "catalogue.stat.tags": "Étiquettes",
+  "catalogue.stat.hidden": "Désactivés",
+  "catalogue.stat.hiddenHint": "Entrées que les éditeurs ne peuvent plus choisir.",
+  "catalogue.column.usage": "Utilisé par",
+  "catalogue.column.services": "Services",
+  "catalogue.column.order": "Ordre",
+  "catalogue.column.actions": "Actions",
+  "catalogue.search.services": "Rechercher un service",
+  "catalogue.search.categories": "Rechercher une catégorie",
+  "catalogue.search.tags": "Rechercher une étiquette",
+  "catalogue.filter.anyCategory": "Toutes les catégories",
+  "catalogue.filter.anyScope": "Toutes les portées",
+  "catalogue.filter.anyState": "Tous les états",
+  "catalogue.filter.anyVisibility": "Toutes les visibilités",
+  "catalogue.filter.anyNamespace": "Tous les espaces de noms",
 
   "catalogue.services.title": "Services",
   "catalogue.services.count": "{count} services",
@@ -41,6 +61,8 @@
   "catalogue.services.create": "Ajouter un service",
   "catalogue.services.edit": "Modifier le service",
   "catalogue.services.save": "Enregistrer",
+  "catalogue.services.newHint": "Un service est ce qu’une activité propose : une douche, un repas, un conseil juridique.",
+  "catalogue.services.created": "Service ajouté.",
 
   "catalogue.categories.title": "Catégories",
   "catalogue.categories.count": "{count} catégories",
@@ -55,6 +77,8 @@
   "catalogue.categories.services": "{count} services",
   "catalogue.categories.create": "Ajouter une catégorie",
   "catalogue.categories.edit": "Modifier la catégorie",
+  "catalogue.categories.newHint": "Une catégorie regroupe des services dans les filtres publics. Commune à la plateforme.",
+  "catalogue.categories.created": "Catégorie ajoutée.",
 
   "catalogue.tags.title": "Étiquettes",
   "catalogue.tags.count": "{count} étiquettes",
@@ -73,5 +97,7 @@
   "catalogue.tags.visibility.workspace": "Espace de travail uniquement",
   "catalogue.tags.scope": "Portée",
   "catalogue.tags.create": "Ajouter une étiquette",
-  "catalogue.tags.edit": "Modifier l’étiquette"
+  "catalogue.tags.edit": "Modifier l’étiquette",
+  "catalogue.tags.newHint": "Une étiquette classe un contenu pour la recherche et les filtres. Elle n’accorde aucun accès.",
+  "catalogue.tags.created": "Étiquette ajoutée."
 }

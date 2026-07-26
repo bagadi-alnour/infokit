@@ -1,4 +1,4 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import {
   ArrowLeft,
@@ -23,6 +23,8 @@ import {
   type ArticleLanguageStatus,
   type ArticleSource,
 } from "~/components/admin/article-manage";
+import { StewardContactForm } from "~/components/admin/steward-contact-form";
+import { WorkspacePage } from "~/components/admin/workspace";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -33,10 +35,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
@@ -65,6 +64,7 @@ import {
   translationAssignments,
   users,
 } from "~/server/db/schema";
+import { updateEditorialSteward } from "../steward-actions";
 
 const contentLanguages = editorialLanguageCodes;
 type ContentLanguage = EditorialLanguage;
@@ -136,7 +136,12 @@ export default async function ArticlesPage({
 }) {
   const locale = requireRouteLocale((await params).locale);
   const search = await searchParams;
-  const t = await loadPageCatalog(locale, "dashboard-articles");
+  const [t, shared] = await Promise.all([
+    loadPageCatalog(locale, "dashboard-articles"),
+    // The steward contact reads from the shared console catalogue, so the
+    // wording is the same on every content type.
+    loadPageCatalog(locale, "dashboard-console"),
+  ]);
 
   // ---- Article list (each entry with its latest revision) ---------------
   const entryRows = await db
@@ -148,6 +153,10 @@ export default async function ArticlesPage({
       updatedAt: editorialEntries.updatedAt,
       articleDate: articleDetails.articleDate,
       featured: articleDetails.featured,
+      // Workspace-only: who to ask about this entry. Never read publicly.
+      stewardName: editorialEntries.stewardName,
+      stewardPhone: editorialEntries.stewardPhone,
+      stewardEmail: editorialEntries.stewardEmail,
       custodianKind: editorialCustodianships.custodianKind,
       organizationId: editorialCustodianships.organizationId,
       ownerName: organizations.displayName,
@@ -626,7 +635,7 @@ export default async function ArticlesPage({
   }
 
   return (
-    <div className="px-4 py-7 md:px-7 lg:px-8">
+    <WorkspacePage>
       {!selected ? (
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -681,20 +690,18 @@ export default async function ArticlesPage({
               placeholder={t["list.searchPlaceholder"]}
               aria-label={t["list.searchPlaceholder"]}
             />
-            <NativeSelect
+            <SelectField
               name="status"
               defaultValue={requestedStatus}
               aria-label={t["list.filterState"]}
             >
-              <NativeSelectOption value="">
-                {t["list.allStates"]}
-              </NativeSelectOption>
+              <option value="">{t["list.allStates"]}</option>
               {workflowStates.map((state) => (
-                <NativeSelectOption key={state} value={state}>
+                <option key={state} value={state}>
                   {t[`state.${state}`]}
-                </NativeSelectOption>
+                </option>
               ))}
-            </NativeSelect>
+            </SelectField>
             <Button type="submit">
               <Search aria-hidden />
               {t["list.applyFilters"]}
@@ -1026,10 +1033,31 @@ export default async function ArticlesPage({
                   />
                 </CardContent>
               </Card>
+
+              {/* Who to ask about this entry — workspace only, and saved on its
+               * own so it never re-submits a revision. */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    {shared["steward.title"]}
+                  </CardTitle>
+                  <CardDescription>{shared["steward.hint"]}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <StewardContactForm
+                    key={selected.id}
+                    action={updateEditorialSteward}
+                    locale={locale}
+                    recordId={selected.id}
+                    values={selected}
+                    labels={shared}
+                  />
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
       ) : null}
-    </div>
+    </WorkspacePage>
   );
 }

@@ -11,7 +11,7 @@ import {
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
-const informationRailStorageKey = "calais-info-runbook-information-rail";
+const informationRailStorageKey = "infokit-runbook-information-rail";
 
 export function RunbookInformationRail({
   main,

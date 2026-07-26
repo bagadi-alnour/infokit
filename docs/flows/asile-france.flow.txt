@@ -1,0 +1,189 @@
+# Parcours de la demande d'asile en France
+# Source : fiche imprimée « ARRIVÉE EN FRANCE » (version FRENCH, réf. 985-81)
+# Colle ce texte dans Simulateur → éditeur → vue « Texte », puis Appliquer.
+name: Procédure d'asile en France
+summary: Reprise de la fiche imprimée « ARRIVÉE EN FRANCE » (parcours de la demande d'asile, réf. 985-81) remise au pré-accueil SPADA.
+| La fiche ne donne aucun délai : ne pas en ajouter sans source vérifiable.
+| À confirmer avec la SPADA de Calais avant publication.
+reviewed: 2026-07-25
+review-due: 2026-10-25
+
+info arrivee @start
+  fr: Arrivée en France
+  fr.explanation: Voici les grandes étapes d'une demande d'asile en France. Chaque étape se passe dans un lieu différent.
+  en: Arriving in France
+  en.explanation: These are the main steps of an asylum claim in France. Each step happens in a different place.
+  ar: الوصول إلى فرنسا
+  ar.explanation: هذه هي المراحل الرئيسية لطلب اللجوء في فرنسا. كل مرحلة تجري في مكان مختلف.
+  -> spada
+
+info spada
+  fr: Pré-accueil à la SPADA
+  fr.explanation: La SPADA est la structure de premier accueil des demandeurs d'asile. C'est le premier lieu où aller : on y enregistre votre demande de rendez-vous.
+  en: First reception at the SPADA
+  en.explanation: The SPADA is the first-reception service for asylum seekers. It is the first place to go: your appointment request is registered there.
+  ar: الاستقبال الأولي في «سبادا» (SPADA)
+  ar.explanation: «سبادا» هي جهة الاستقبال الأولي لطالبي اللجوء. إنها أول مكان تتوجه إليه، وفيه يُسجَّل طلب الموعد الخاص بك.
+  -> guichet_unique
+
+info guichet_unique
+  fr: Rendez-vous au Guichet Unique, à la préfecture
+  fr.explanation: Prise d'empreintes et remise de l'attestation de demande d'asile. Un agent de l'OFII est présent : il évalue le droit aux conditions matérielles d'accueil (CMA) — argent et logement.
+  en: Appointment at the Guichet Unique, at the prefecture
+  en.explanation: Fingerprints are taken and you receive the asylum application certificate. An OFII officer is present and assesses your right to material reception conditions (CMA) — allowance and housing.
+  ar: موعد في «الشباك الموحّد» (Guichet Unique) في المحافظة
+  ar.explanation: تُؤخذ بصماتك ويُسلَّم لك إشعار طلب اللجوء. يحضر موظف من «أوفي» (OFII) لتقييم حقك في ظروف الاستقبال المادية (CMA): المخصص المالي والإيواء.
+  -> type_procedure
+
+question type_procedure
+  fr: Quel type de procédure a été décidé pour votre demande ?
+  fr.explanation: Le type de procédure est déterminé au Guichet Unique. Il est écrit sur votre attestation de demande d'asile. Vous pouvez passer cette question.
+  en: Which type of procedure was decided for your claim?
+  en.explanation: The type of procedure is decided at the Guichet Unique and written on your asylum application certificate. You can skip this question.
+  ar: أي نوع من الإجراءات تم تحديده لطلبك؟
+  ar.explanation: يُحدَّد نوع الإجراء في الشباك الموحّد ويُكتب على إشعار طلب اللجوء. يمكنك تخطي هذا السؤال.
+  - normale -> proc_normale
+    fr: Procédure normale
+    en: Normal procedure
+    ar: الإجراء العادي
+  - acceleree -> proc_acceleree
+    fr: Procédure accélérée
+    en: Accelerated procedure
+    ar: الإجراء المعجَّل
+  - dublin -> res_dublin
+    fr: Procédure Dublin
+    en: Dublin procedure
+    ar: إجراء دبلن
+  - inconnu -> entretien_ofpra @prefer-not-to-say
+    fr: Je ne sais pas encore
+    en: I don't know yet
+    ar: لا أعرف بعد
+
+info proc_normale
+  fr: Procédure normale
+  fr.explanation: Votre demande est examinée par l'OFPRA dans le cadre de la procédure normale. L'étape suivante est l'entretien personnel.
+  en: Normal procedure
+  en.explanation: Your claim is examined by OFPRA under the normal procedure. The next step is the personal interview.
+  ar: الإجراء العادي
+  ar.explanation: يُدرس طلبك من قِبل «أوفبرا» (OFPRA) وفق الإجراء العادي. المرحلة التالية هي المقابلة الشخصية.
+  -> entretien_ofpra
+
+info proc_acceleree
+  fr: Procédure accélérée
+  fr.explanation: Votre demande est examinée plus vite par l'OFPRA. L'étape suivante reste l'entretien personnel. Faites relire votre dossier par une permanence juridique dès que possible.
+  en: Accelerated procedure
+  en.explanation: OFPRA examines your claim faster. The next step is still the personal interview. Have your file checked by a legal advice service as soon as you can.
+  ar: الإجراء المعجَّل
+  ar.explanation: تدرس «أوفبرا» طلبك بوتيرة أسرع. المرحلة التالية تبقى المقابلة الشخصية. اطلب مراجعة ملفك في مكتب للمساعدة القانونية في أقرب وقت.
+  -> entretien_ofpra
+
+info entretien_ofpra
+  fr: Entretien personnel à l'OFPRA
+  fr.explanation: Vous racontez votre histoire à un officier de protection. Vous pouvez demander un interprète dans votre langue.
+  en: Personal interview at OFPRA
+  en.explanation: You tell your story to a protection officer. You can ask for an interpreter in your language.
+  ar: المقابلة الشخصية في «أوفبرا»
+  ar.explanation: تروي قصتك أمام موظف الحماية. يمكنك طلب مترجم بلغتك.
+  -> decision_ofpra
+
+question decision_ofpra
+  fr: Quelle décision avez-vous reçue de l'OFPRA ?
+  fr.explanation: La décision arrive par courrier. Vous pouvez passer cette question.
+  en: What decision did you receive from OFPRA?
+  en.explanation: The decision arrives by post. You can skip this question.
+  ar: ما القرار الذي وصلك من «أوفبرا»؟
+  ar.explanation: يصل القرار بالبريد. يمكنك تخطي هذا السؤال.
+  - acceptee -> res_protection
+    fr: Acceptation de la demande d'asile
+    en: Claim accepted
+    ar: قبول طلب اللجوء
+  - refusee -> recours_cnda
+    fr: Refus de la demande d'asile
+    en: Claim refused
+    ar: رفض طلب اللجوء
+  - attente -> res_attente @prefer-not-to-say
+    fr: Je n'ai pas encore de réponse
+    en: I have no answer yet
+    ar: لم يصلني ردّ بعد
+
+info recours_cnda
+  fr: Recours à la Cour nationale du droit d'asile (CNDA)
+  fr.explanation: Après un refus de l'OFPRA, un recours devant la CNDA est possible. Le courrier de refus indique le délai à respecter : allez rapidement à une permanence juridique avec ce courrier.
+  en: Appeal to the National Court of Asylum Law (CNDA)
+  en.explanation: After an OFPRA refusal, an appeal to the CNDA is possible. The refusal letter states the deadline: take it to a legal advice service quickly.
+  ar: الطعن أمام المحكمة الوطنية لحق اللجوء (CNDA)
+  ar.explanation: بعد رفض «أوفبرا»، يمكن الطعن أمام المحكمة الوطنية لحق اللجوء. يذكر خطاب الرفض المهلة الواجب احترامها: اذهب سريعًا بالخطاب إلى مكتب للمساعدة القانونية.
+  -> decision_cnda
+
+question decision_cnda
+  fr: Quelle décision la CNDA a-t-elle rendue ?
+  fr.explanation: Vous pouvez passer cette question.
+  en: What decision did the CNDA give?
+  en.explanation: You can skip this question.
+  ar: ما القرار الذي أصدرته المحكمة الوطنية لحق اللجوء؟
+  ar.explanation: يمكنك تخطي هذا السؤال.
+  - acceptee -> res_protection
+    fr: Acceptation de la demande d'asile
+    en: Claim accepted
+    ar: قبول طلب اللجوء
+  - refusee -> res_refus_definitif
+    fr: Refus de la demande d'asile
+    en: Claim refused
+    ar: رفض طلب اللجوء
+  - attente -> res_attente @prefer-not-to-say
+    fr: Je n'ai pas encore de réponse
+    en: I have no answer yet
+    ar: لم يصلني ردّ بعد
+
+result res_protection
+  fr: Acceptation de la demande d'asile
+  fr.result: Vous obtenez une protection : le statut de réfugié, valable 10 ans, ou la protection subsidiaire, valable 4 ans.
+  | La décision précise laquelle des deux vous est accordée. Gardez le courrier : il sert pour toutes les démarches suivantes.
+  fr.disclaimer: Information générale reprise d'une fiche d'accueil. Seule la décision écrite qui vous est adressée fait foi.
+  en: Claim accepted
+  en.result: You are granted protection: refugee status, valid for 10 years, or subsidiary protection, valid for 4 years.
+  | The decision says which of the two you are granted. Keep the letter: every next step needs it.
+  en.disclaimer: General information taken from a reception leaflet. Only the written decision addressed to you is binding.
+  ar: قبول طلب اللجوء
+  ar.result: تحصل على حماية: صفة اللاجئ لمدة 10 سنوات، أو الحماية الفرعية لمدة 4 سنوات.
+  | يحدّد القرار أيّ الحمايتين مُنحت لك. احتفظ بالخطاب فهو ضروري لكل الإجراءات اللاحقة.
+  ar.disclaimer: معلومات عامة مأخوذة من نشرة استقبال. القرار المكتوب الموجَّه إليك هو المرجع الوحيد.
+
+result res_refus_definitif
+  fr: Refus de la demande d'asile
+  fr.result: Après le refus de la CNDA, la demande d'asile est rejetée. D'autres démarches peuvent rester possibles selon votre situation : faites examiner votre dossier par une permanence juridique.
+  fr.disclaimer: Information générale reprise d'une fiche d'accueil. Elle ne remplace pas l'avis d'un juriste ou d'un avocat sur votre dossier.
+  en: Claim refused
+  en.result: After a CNDA refusal, the asylum claim is rejected. Other steps may still be possible depending on your situation: have your file reviewed by a legal advice service.
+  en.disclaimer: General information taken from a reception leaflet. It does not replace advice from a legal adviser or lawyer on your own file.
+  ar: رفض طلب اللجوء
+  ar.result: بعد رفض المحكمة الوطنية لحق اللجوء، يُرفض طلب اللجوء. قد تبقى خطوات أخرى ممكنة حسب حالتك: اطلب مراجعة ملفك في مكتب للمساعدة القانونية.
+  ar.disclaimer: معلومات عامة مأخوذة من نشرة استقبال، ولا تُغني عن رأي مستشار قانوني أو محامٍ في ملفك.
+
+result res_dublin
+  fr: Procédure Dublin
+  fr.result: La procédure Dublin suit un parcours différent : un autre pays d'Europe peut être responsable de votre demande. Elle est expliquée sur une fiche séparée.
+  | Allez à une permanence juridique avec votre attestation : les délais de la procédure Dublin sont particuliers.
+  fr.disclaimer: Information générale reprise d'une fiche d'accueil. Seuls les courriers de la préfecture font foi pour votre situation.
+  en: Dublin procedure
+  en.result: The Dublin procedure follows a different path: another European country may be responsible for your claim. It is explained on a separate sheet.
+  | Take your certificate to a legal advice service: Dublin deadlines are specific.
+  en.disclaimer: General information taken from a reception leaflet. Only the prefecture's letters are binding for your situation.
+  ar: إجراء دبلن
+  ar.result: يسير إجراء دبلن في مسار مختلف: قد تكون دولة أوروبية أخرى هي المسؤولة عن طلبك. وهو موضّح في نشرة منفصلة.
+  | اذهب بإشعارك إلى مكتب للمساعدة القانونية: مهل إجراء دبلن خاصة.
+  ar.disclaimer: معلومات عامة مأخوذة من نشرة استقبال. خطابات المحافظة هي المرجع الوحيد لحالتك.
+
+result res_attente
+  fr: Votre demande est en cours d'examen
+  fr.result: Tant que la réponse n'est pas arrivée, gardez votre attestation de demande d'asile valable et signalez tout changement d'adresse.
+  | Dès que le courrier arrive, apportez-le à une permanence juridique : c'est lui qui fixe la suite et les délais.
+  fr.disclaimer: Information générale reprise d'une fiche d'accueil. Les délais qui s'appliquent à votre dossier sont écrits sur vos courriers.
+  en: Your claim is still being examined
+  en.result: Until the answer arrives, keep your asylum application certificate valid and report any change of address.
+  | As soon as the letter arrives, take it to a legal advice service: it sets what comes next and the deadlines.
+  en.disclaimer: General information taken from a reception leaflet. The deadlines that apply to your file are written on your own letters.
+  ar: طلبك قيد الدراسة
+  ar.result: إلى أن يصل الرد، حافظ على سريان إشعار طلب اللجوء وأبلغ عن أي تغيير في العنوان.
+  | بمجرد وصول الخطاب، خُذه إلى مكتب للمساعدة القانونية: فهو الذي يحدد الخطوة التالية والمهل.
+  ar.disclaimer: معلومات عامة مأخوذة من نشرة استقبال. المهل التي تنطبق على ملفك مكتوبة في خطاباتك.

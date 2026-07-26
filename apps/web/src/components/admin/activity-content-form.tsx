@@ -5,18 +5,16 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { updateActivityContent } from "~/app/[locale]/dashboard/activities/actions";
-import {
-  ActivityTranslationsEditor,
-  type ActivityInitialTranslation,
-} from "~/components/admin/activity-translations-editor";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import { SearchableMultiSelect } from "~/components/admin/searchable-select";
+import { SidebarFocusMode } from "~/components/admin/sidebar-focus-mode";
+import {
+  TranslationWorkspace,
+  type WorkspaceTranslation,
+} from "~/components/admin/translation-workspace";
 import { PendingButton } from "~/components/pending-button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import type { EditorialLanguage } from "~/lib/editorial-languages";
 
 type Option = { value: string; label: string; description?: string };
@@ -29,8 +27,11 @@ type Option = { value: string; label: string; description?: string };
 export function ActivityEditorForm({
   locale,
   activityId,
+  organizationId,
   sourceLanguage,
   initial,
+  canVerify,
+  returnPath,
   categories,
   audiences,
   tags,
@@ -42,8 +43,11 @@ export function ActivityEditorForm({
 }: {
   locale: string;
   activityId: string;
+  organizationId: string;
   sourceLanguage: EditorialLanguage;
-  initial: Partial<Record<EditorialLanguage, ActivityInitialTranslation>>;
+  initial: Partial<Record<EditorialLanguage, WorkspaceTranslation>>;
+  canVerify: boolean;
+  returnPath: string;
   categories: Option[];
   audiences: Option[];
   tags: Option[];
@@ -76,70 +80,78 @@ export function ActivityEditorForm({
   };
   return (
     <form action={submit} className="grid gap-5">
+      <SidebarFocusMode />
       <input type="hidden" name="locale" value={locale} />
       <input type="hidden" name="activityId" value={activityId} />
       <input type="hidden" name="sourceLanguage" value={sourceLanguage} />
-      <ActivityTranslationsEditor
-        activityId={activityId}
+      {/* Classification travels in the source column, so the translation rail
+       * stays aligned with the text it mirrors. */}
+      <TranslationWorkspace
+        entityKind="activity"
+        entityId={activityId}
+        organizationId={organizationId}
         interfaceLocale={locale}
         sourceLanguage={sourceLanguage}
         initial={initial}
         labels={editorLabels}
-      />
-      <div className="grid gap-4 sm:grid-cols-2">
+        canVerify={canVerify}
+        returnPath={returnPath}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor="activity-edit-category">
+              {labels.category}
+            </FieldLabel>
+            <SelectField
+              id="activity-edit-category"
+              name="categoryId"
+              defaultValue={initialCategoryId}
+              required
+            >
+              {categories.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </SelectField>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="activity-edit-audience">
+              {labels.audience}
+            </FieldLabel>
+            <SelectField
+              id="activity-edit-audience"
+              name="audienceCategoryId"
+              defaultValue={initialAudienceId}
+              required
+            >
+              {audiences.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </SelectField>
+          </Field>
+        </div>
         <Field>
-          <FieldLabel htmlFor="activity-edit-category">
-            {labels.category}
-          </FieldLabel>
-          <NativeSelect
-            id="activity-edit-category"
-            name="categoryId"
-            defaultValue={initialCategoryId}
-            required
-          >
-            {categories.map((option) => (
-              <NativeSelectOption key={option.value} value={option.value}>
-                {option.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          <FieldLabel>{labels.tags}</FieldLabel>
+          {tags.length > 0 ? (
+            <SearchableMultiSelect
+              name="tagId"
+              maxSelections={3}
+              options={tags}
+              value={selectedTagIds}
+              onValueChange={setSelectedTagIds}
+              label={labels.tags}
+              placeholder={labels.tagsPlaceholder}
+              emptyLabel={labels.noMatch}
+            />
+          ) : (
+            <p className="text-copy-muted text-sm">{labels.tagsEmpty}</p>
+          )}
+          <FieldDescription>{labels.tagsHint}</FieldDescription>
         </Field>
-        <Field>
-          <FieldLabel htmlFor="activity-edit-audience">
-            {labels.audience}
-          </FieldLabel>
-          <NativeSelect
-            id="activity-edit-audience"
-            name="audienceCategoryId"
-            defaultValue={initialAudienceId}
-            required
-          >
-            {audiences.map((option) => (
-              <NativeSelectOption key={option.value} value={option.value}>
-                {option.label}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </Field>
-      </div>
-      <Field>
-        <FieldLabel>{labels.tags}</FieldLabel>
-        {tags.length > 0 ? (
-          <SearchableMultiSelect
-            name="tagId"
-            maxSelections={3}
-            options={tags}
-            value={selectedTagIds}
-            onValueChange={setSelectedTagIds}
-            label={labels.tags}
-            placeholder={labels.tagsPlaceholder}
-            emptyLabel={labels.noMatch}
-          />
-        ) : (
-          <p className="text-copy-muted text-sm">{labels.tagsEmpty}</p>
-        )}
-        <FieldDescription>{labels.tagsHint}</FieldDescription>
-      </Field>
+      </TranslationWorkspace>
       <PendingButton className="justify-self-end">
         <CheckCircle2 aria-hidden />
         {labels.save}

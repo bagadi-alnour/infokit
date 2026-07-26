@@ -1,6 +1,6 @@
 "use client";
 
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import {
   addEdge,
   Background,
@@ -23,13 +23,16 @@ import {
   ArrowRight,
   Check,
   CircleHelp,
+  Code2,
   FileText,
   Flag,
   GitBranch,
   Globe2,
   GripVertical,
   Info,
+  LayoutGrid,
   LockKeyhole,
+  Network,
   Plus,
   Save,
   Trash2,
@@ -56,13 +59,23 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
+import { SimulatorScriptView } from "~/components/admin/simulator-script-view";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { DatePicker } from "~/components/ui/date-picker";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { SelectField } from "~/components/ui/select-field";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  graphToScriptNodes,
+  layoutFlow,
+  parseFlowScript,
+  serializeFlowScript,
+  scriptNodesToGraph,
+  type EditorNode,
+} from "~/lib/simulator-script";
 import { cn } from "~/lib/utils";
 
 export type SimulatorLanguage = "fr" | "en" | "ar";
@@ -218,6 +231,43 @@ function uniqueKey(prefix: string, nodes: SimulatorFlowNode[]): string {
   return `${prefix}_${String(number)}`;
 }
 
+/** Canvas nodes reduced to the shape the script format works with. */
+function toEditorNodes(nodes: SimulatorFlowNode[]): EditorNode[] {
+  return nodes.map((node) => ({
+    id: node.id,
+    key: node.data.key,
+    kind: node.data.kind,
+    optional: node.data.optional,
+    entry: node.data.entry,
+    translations: node.data.translations,
+    options: node.data.options,
+  }));
+}
+
+function toEditorEdges(edges: Edge[]) {
+  return edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.sourceHandle ?? null,
+  }));
+}
+
+function canvasEdge(
+  source: string,
+  target: string,
+  sourceHandle: string | null,
+): Edge {
+  return {
+    id: crypto.randomUUID(),
+    source,
+    target,
+    sourceHandle,
+    type: "smoothstep",
+    markerEnd: { type: MarkerType.ArrowClosed },
+  };
+}
+
 export function SimulatorFlowEditor({
   locale,
   flowId,
@@ -232,6 +282,7 @@ export function SimulatorFlowEditor({
   publicUrl,
   demoContent,
   translationPanel,
+  stewardPanel,
   messages,
 }: {
   locale: SimulatorLanguage;
@@ -247,6 +298,11 @@ export function SimulatorFlowEditor({
   publicUrl: string;
   demoContent: boolean;
   translationPanel?: ReactNode;
+  /**
+   * "Who to ask about this flow" — the workspace-only steward contact, brought
+   * in with its own heading so its wording stays in the shared catalogue.
+   */
+  stewardPanel?: ReactNode;
   messages: Record<string, string>;
 }) {
   const router = useRouter();
@@ -269,6 +325,8 @@ export function SimulatorFlowEditor({
     hydratedNodes[0]?.id ?? "",
   );
   const [metadata, setMetadata] = useState(initialMetadata);
+  const [view, setView] = useState<"canvas" | "script">("canvas");
+  const [scriptDraft, setScriptDraft] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [isSaving, startSaving] = useTransition();
   const [isPublicationPending, startPublication] = useTransition();
@@ -389,6 +447,147 @@ export function SimulatorFlowEditor({
     },
     [markDirty, readOnly, setEdges],
   );
+
+  /** Connects a choice (or an information step) without dragging on the canvas. */
+  const connectBranch = useCallback(
+    (sourceId: string, handle: string, choice: string) => {
+      if (readOnly) return;
+      let targetId = choice;
+      if (choice.startsWith("create:")) {
+        const kind = choice.slice("create:".length) as SimulatorNodeKind;
+        const source = nodes.find((node) => node.id === sourceId);
+        targetId = crypto.randomUUID();
+        const key = uniqueKey(kind, nodes);
+        setNodes((current) => [
+          ...current,
+          {
+            id: targetId,
+            type: nodeType(kind),
+            position: {
+              x: (source?.position.x ?? 80) + 340,
+              y: (source?.position.y ?? 80) + current.length * 24,
+            },
+            data: {
+              key,
+              kind,
+              optional: kind === "question",
+              translations: {
+                fr: emptyTranslation(),
+                en: emptyTranslation(),
+                ar: emptyTranslation(),
+              },
+              options: [],
+              entry: false,
+              interfaceLanguage: language,
+              messages,
+            },
+          },
+        ]);
+      }
+      setEdges((current) => {
+        const without = current.filter(
+          (edge) =>
+            !(
+              edge.source === sourceId && (edge.sourceHandle ?? null) === handle
+            ),
+        );
+        return targetId
+          ? [...without, canvasEdge(sourceId, targetId, handle)]
+          : without;
+      });
+      markDirty();
+    },
+    [language, markDirty, messages, nodes, readOnly, setEdges, setNodes],
+  );
+
+  const autoArrange = useCallback(() => {
+    if (readOnly) return;
+    const positions = layoutFlow(
+      graphToScriptNodes(toEditorNodes(nodes), toEditorEdges(edges)),
+      nodes.find((node) => node.data.entry)?.data.key,
+    );
+    setNodes((current) =>
+      current.map((node) => ({
+        ...node,
+        position: positions.get(node.data.key) ?? node.position,
+      })),
+    );
+    markDirty();
+  }, [edges, markDirty, nodes, readOnly, setNodes]);
+
+  const scriptFromGraph = useMemo(
+    () =>
+      serializeFlowScript(
+        metadata,
+        graphToScriptNodes(toEditorNodes(nodes), toEditorEdges(edges)),
+      ),
+    [edges, metadata, nodes],
+  );
+  const scriptText = scriptDraft ?? scriptFromGraph;
+  const scriptDirty = scriptDraft !== null && scriptDraft !== scriptFromGraph;
+  const scriptIssues = useMemo(
+    () => (scriptDirty ? parseFlowScript(scriptText).issues : []),
+    [scriptDirty, scriptText],
+  );
+
+  const applyScript = useCallback(() => {
+    if (readOnly) return;
+    const parsed = parseFlowScript(scriptText);
+    if (parsed.issues.length > 0) return;
+    const graph = scriptNodesToGraph(parsed.nodes, toEditorNodes(nodes), () =>
+      crypto.randomUUID(),
+    );
+    const knownPositions = new Map(
+      nodes.map((node) => [node.data.key, node.position]),
+    );
+    const layout = layoutFlow(parsed.nodes);
+    setNodes(
+      graph.nodes.map((node) => ({
+        id: node.id,
+        type: nodeType(node.kind),
+        position: knownPositions.get(node.key) ??
+          layout.get(node.key) ?? { x: 80, y: 80 },
+        data: {
+          key: node.key,
+          kind: node.kind,
+          optional: node.optional,
+          translations: node.translations,
+          options: node.options,
+          entry: node.entry,
+          interfaceLanguage: language,
+          messages,
+        },
+      })),
+    );
+    setEdges(
+      graph.edges.map((edge) =>
+        canvasEdge(edge.source, edge.target, edge.sourceHandle),
+      ),
+    );
+    const scriptName = parsed.metadata.internalName?.trim() ?? "";
+    setMetadata((current) => ({
+      internalName: scriptName.length > 0 ? scriptName : current.internalName,
+      sourceSummary: parsed.metadata.sourceSummary ?? current.sourceSummary,
+      lastReviewedDate:
+        parsed.metadata.lastReviewedDate ?? current.lastReviewedDate,
+      reviewDueDate: parsed.metadata.reviewDueDate ?? current.reviewDueDate,
+    }));
+    setSelectedNodeId(
+      graph.nodes.find((node) => node.entry)?.id ?? graph.nodes[0]?.id ?? "",
+    );
+    setScriptDraft(null);
+    markDirty();
+    toast.success(messages["script.applied"]);
+  }, [
+    language,
+    markDirty,
+    messages,
+    nodes,
+    readOnly,
+    scriptText,
+    setEdges,
+    setNodes,
+  ]);
 
   const readiness = useMemo(() => {
     const issues: Array<{ nodeId: string; message: string }> = [];
@@ -636,266 +835,365 @@ export function SimulatorFlowEditor({
         </div>
       </div>
 
-      <div className="grid min-h-[calc(100dvh-12rem)] xl:grid-cols-[minmax(0,1fr)_24rem]">
+      <div
+        className={cn(
+          "grid min-h-[calc(100dvh-12rem)]",
+          view === "canvas" && "xl:grid-cols-[minmax(0,1fr)_24rem]",
+        )}
+      >
         <main className="bg-subtle min-w-0">
           <div className="border-line bg-surface flex flex-wrap items-center gap-2 border-b px-4 py-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                addNode("question");
-              }}
-              disabled={readOnly}
+            <div
+              className="border-line bg-subtle me-1 flex gap-1 rounded-lg border p-1"
+              role="group"
+              aria-label={messages["editor.viewLabel"]}
             >
-              <CircleHelp aria-hidden />
-              {messages["editor.addQuestion"]}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                addNode("information");
-              }}
-              disabled={readOnly}
-            >
-              <FileText aria-hidden />
-              {messages["editor.addInformation"]}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                addNode("result");
-              }}
-              disabled={readOnly}
-            >
-              <Flag aria-hidden />
-              {messages["editor.addResult"]}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSelectedNodeId("");
-              }}
-            >
-              <FileText aria-hidden />
-              {messages["editor.metadata"]}
-            </Button>
-            <p className="text-copy-muted ms-auto hidden text-xs md:block">
-              {messages["editor.graphHint"]}
-            </p>
-          </div>
-
-          <div className="hidden h-[calc(100dvh-15.2rem)] min-h-[36rem] md:block">
-            <ReactFlow<SimulatorFlowNode>
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              onNodesChange={(changes) => {
-                onNodesChange(changes);
-                if (
-                  changes.some(
-                    (change) =>
-                      change.type === "position" || change.type === "remove",
-                  )
-                ) {
-                  markDirty();
-                }
-              }}
-              onEdgesChange={(changes) => {
-                onEdgesChange(changes);
-                if (changes.length > 0) markDirty();
-              }}
-              onConnect={onConnect}
-              onNodeClick={(_, node) => {
-                setSelectedNodeId(node.id);
-              }}
-              onPaneClick={() => {
-                setSelectedNodeId("");
-              }}
-              nodesDraggable={!readOnly}
-              nodesConnectable={!readOnly}
-              edgesReconnectable={!readOnly}
-              deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
-              fitView
-              fitViewOptions={{ padding: 0.22 }}
-              minZoom={0.35}
-              maxZoom={1.5}
-              defaultEdgeOptions={{
-                type: "smoothstep",
-                markerEnd: { type: MarkerType.ArrowClosed },
-              }}
-              aria-label={messages["editor.canvas"]}
-            >
-              <Background
-                variant={BackgroundVariant.Dots}
-                gap={20}
-                size={1.2}
-              />
-              <Controls showInteractive={false} />
-              <MiniMap
-                pannable
-                zoomable
-                nodeStrokeWidth={2}
-                className="hidden lg:block"
-              />
-            </ReactFlow>
-          </div>
-
-          <div className="p-4 md:hidden">
-            <div className="border-line bg-brand-soft text-brand mb-4 flex gap-3 rounded-xl border p-3 text-sm">
-              <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <p>{messages["mobile.canvasNotice"]}</p>
+              <Button
+                type="button"
+                size="sm"
+                variant={view === "canvas" ? "default" : "ghost"}
+                onClick={() => {
+                  setView("canvas");
+                }}
+              >
+                <Network aria-hidden />
+                {messages["editor.viewCanvas"]}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={view === "script" ? "default" : "ghost"}
+                onClick={() => {
+                  setView("script");
+                }}
+              >
+                <Code2 aria-hidden />
+                {messages["editor.viewScript"]}
+              </Button>
             </div>
-            <div className="space-y-2" aria-label={messages["editor.outline"]}>
-              {nodes.map((node, index) => {
-                const Icon = kindIcon(node.data.kind);
-                const prompt =
-                  node.data.translations[language].prompt.trim() ||
-                  messages["node.untitled"];
-                return (
-                  <button
-                    key={node.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedNodeId(node.id);
-                    }}
-                    className={cn(
-                      "border-line bg-surface flex w-full items-center gap-3 rounded-xl border p-3 text-start",
-                      selectedNodeId === node.id &&
-                        "border-brand ring-brand/20 ring-4",
-                    )}
-                  >
-                    <GripVertical
-                      className="text-copy-muted size-4"
-                      aria-hidden
-                    />
-                    <span className="bg-brand-soft text-brand flex size-8 shrink-0 items-center justify-center rounded-lg">
-                      <Icon className="size-4" aria-hidden />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="text-copy-muted block text-[11px] font-semibold uppercase tracking-wide">
-                        {String(index + 1).padStart(2, "0")} ·{" "}
-                        {messages[`node.${node.data.kind}`]}
-                      </span>
-                      <span className="block truncate text-sm font-medium">
-                        {prompt}
-                      </span>
-                    </span>
-                    {node.data.entry ? (
-                      <Badge variant="secondary">
-                        {messages["editor.start"]}
-                      </Badge>
-                    ) : (
-                      <ArrowRight
-                        className="text-copy-muted size-4"
-                        aria-hidden
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </main>
-
-        <aside className="border-line bg-surface border-s xl:max-h-[calc(100dvh-8.8rem)] xl:overflow-y-auto xl:border-s">
-          <div className="border-line border-b p-4">
-            <h2 className="font-semibold">{messages["validation.heading"]}</h2>
-            <p className="text-copy-muted mt-1 text-xs leading-relaxed">
-              {messages["validation.hint"]}
-            </p>
-            <div className="mt-3 space-y-2">
-              {readiness.length === 0 ? (
-                <div className="bg-ok-soft text-ok flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium">
-                  <Check className="size-4" aria-hidden />
-                  {messages["validation.ready"]}
-                </div>
-              ) : (
-                readiness.slice(0, 4).map((issue, index) => (
-                  <button
-                    key={`${issue.nodeId}:${String(index)}`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedNodeId(issue.nodeId);
-                    }}
-                    className="bg-warn-soft text-warn flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start text-xs font-medium"
-                  >
-                    <AlertCircle className="size-4 shrink-0" aria-hidden />
-                    {issue.message}
-                  </button>
-                ))
-              )}
-            </div>
-            <p
-              id="simulator-publication-gate"
-              className="text-copy-muted mt-3 flex gap-2 text-xs leading-relaxed"
-            >
-              <LockKeyhole className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-              {demoContent
-                ? messages["publication.demoGate"]
-                : dirty
-                  ? messages["publication.saveFirst"]
-                  : readiness.length > 0
-                    ? messages["publication.structureGate"]
-                    : messages["publication.publishHint"]}
-            </p>
-          </div>
-
-          {translationPanel ? (
-            <div className="border-line border-b p-4">
-              <h2 className="font-semibold">
-                {messages["translation.heading"]}
-              </h2>
-              <p className="text-copy-muted mt-1 text-xs leading-relaxed">
-                {messages["translation.hint"]}
+            {view === "canvas" ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    addNode("question");
+                  }}
+                  disabled={readOnly}
+                >
+                  <CircleHelp aria-hidden />
+                  {messages["editor.addQuestion"]}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    addNode("information");
+                  }}
+                  disabled={readOnly}
+                >
+                  <FileText aria-hidden />
+                  {messages["editor.addInformation"]}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    addNode("result");
+                  }}
+                  disabled={readOnly}
+                >
+                  <Flag aria-hidden />
+                  {messages["editor.addResult"]}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={autoArrange}
+                  disabled={readOnly}
+                >
+                  <LayoutGrid aria-hidden />
+                  {messages["editor.autoArrange"]}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedNodeId("");
+                  }}
+                >
+                  <FileText aria-hidden />
+                  {messages["editor.metadata"]}
+                </Button>
+                <p className="text-copy-muted ms-auto hidden text-xs md:block">
+                  {messages["editor.graphHint"]}
+                </p>
+              </>
+            ) : (
+              <p className="text-copy-muted ms-auto hidden text-xs md:block">
+                {messages["script.toolbarHint"]}
               </p>
-              <div className="mt-4">{translationPanel}</div>
-            </div>
-          ) : null}
+            )}
+          </div>
 
-          {selectedNode ? (
-            <NodeInspector
-              node={selectedNode}
-              language={language}
+          {view === "script" ? (
+            <SimulatorScriptView
+              value={scriptText}
+              issues={scriptIssues}
+              dirty={scriptDirty}
               readOnly={readOnly}
               messages={messages}
-              canRemove={nodes.length > 1}
-              onUpdate={(update) => {
-                updateNodeData(selectedNode.id, update);
+              onChange={setScriptDraft}
+              onApply={applyScript}
+              onReset={() => {
+                setScriptDraft(null);
               }}
-              onRemoveChoice={(choiceId) => {
-                setEdges((current) =>
-                  current.filter(
-                    (edge) =>
-                      !(
-                        edge.source === selectedNode.id &&
-                        edge.sourceHandle === `option:${choiceId}`
-                      ),
-                  ),
-                );
-              }}
-              onMakeStart={makeStart}
-              onRemove={removeSelectedNode}
             />
           ) : (
-            <MetadataInspector
-              metadata={metadata}
-              locale={locale}
-              readOnly={readOnly}
-              messages={messages}
-              onChange={(next) => {
-                setMetadata(next);
-                markDirty();
-              }}
-            />
+            <>
+              <div className="hidden h-[calc(100dvh-15.2rem)] min-h-[36rem] md:block">
+                <ReactFlow<SimulatorFlowNode>
+                  nodes={nodes}
+                  edges={edges}
+                  nodeTypes={nodeTypes}
+                  onNodesChange={(changes) => {
+                    onNodesChange(changes);
+                    if (
+                      changes.some(
+                        (change) =>
+                          change.type === "position" ||
+                          change.type === "remove",
+                      )
+                    ) {
+                      markDirty();
+                    }
+                  }}
+                  onEdgesChange={(changes) => {
+                    onEdgesChange(changes);
+                    if (changes.length > 0) markDirty();
+                  }}
+                  onConnect={onConnect}
+                  onNodeClick={(_, node) => {
+                    setSelectedNodeId(node.id);
+                  }}
+                  onPaneClick={() => {
+                    setSelectedNodeId("");
+                  }}
+                  nodesDraggable={!readOnly}
+                  nodesConnectable={!readOnly}
+                  edgesReconnectable={!readOnly}
+                  deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
+                  fitView
+                  fitViewOptions={{ padding: 0.22 }}
+                  minZoom={0.35}
+                  maxZoom={1.5}
+                  defaultEdgeOptions={{
+                    type: "smoothstep",
+                    markerEnd: { type: MarkerType.ArrowClosed },
+                  }}
+                  aria-label={messages["editor.canvas"]}
+                >
+                  <Background
+                    variant={BackgroundVariant.Dots}
+                    gap={20}
+                    size={1.2}
+                  />
+                  <Controls showInteractive={false} />
+                  <MiniMap
+                    pannable
+                    zoomable
+                    nodeStrokeWidth={2}
+                    className="hidden lg:block"
+                  />
+                </ReactFlow>
+              </div>
+
+              <div className="p-4 md:hidden">
+                <div className="border-line bg-brand-soft text-brand mb-4 flex gap-3 rounded-xl border p-3 text-sm">
+                  <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+                  <p>{messages["mobile.canvasNotice"]}</p>
+                </div>
+                <div
+                  className="space-y-2"
+                  aria-label={messages["editor.outline"]}
+                >
+                  {nodes.map((node, index) => {
+                    const Icon = kindIcon(node.data.kind);
+                    const prompt =
+                      node.data.translations[language].prompt.trim() ||
+                      messages["node.untitled"];
+                    return (
+                      <button
+                        key={node.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedNodeId(node.id);
+                        }}
+                        className={cn(
+                          "border-line bg-surface flex w-full items-center gap-3 rounded-xl border p-3 text-start",
+                          selectedNodeId === node.id &&
+                            "border-brand ring-brand/20 ring-4",
+                        )}
+                      >
+                        <GripVertical
+                          className="text-copy-muted size-4"
+                          aria-hidden
+                        />
+                        <span className="bg-brand-soft text-brand flex size-8 shrink-0 items-center justify-center rounded-lg">
+                          <Icon className="size-4" aria-hidden />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="text-copy-muted block text-[11px] font-semibold uppercase tracking-wide">
+                            {String(index + 1).padStart(2, "0")} ·{" "}
+                            {messages[`node.${node.data.kind}`]}
+                          </span>
+                          <span className="block truncate text-sm font-medium">
+                            {prompt}
+                          </span>
+                        </span>
+                        {node.data.entry ? (
+                          <Badge variant="secondary">
+                            {messages["editor.start"]}
+                          </Badge>
+                        ) : (
+                          <ArrowRight
+                            className="text-copy-muted size-4"
+                            aria-hidden
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
           )}
-        </aside>
+        </main>
+
+        {view === "canvas" ? (
+          <aside className="border-line bg-surface border-s xl:max-h-[calc(100dvh-8.8rem)] xl:overflow-y-auto xl:border-s">
+            <div className="border-line border-b p-4">
+              <h2 className="font-semibold">
+                {messages["validation.heading"]}
+              </h2>
+              <p className="text-copy-muted mt-1 text-xs leading-relaxed">
+                {messages["validation.hint"]}
+              </p>
+              <div className="mt-3 space-y-2">
+                {readiness.length === 0 ? (
+                  <div className="bg-ok-soft text-ok flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium">
+                    <Check className="size-4" aria-hidden />
+                    {messages["validation.ready"]}
+                  </div>
+                ) : (
+                  readiness.slice(0, 4).map((issue, index) => (
+                    <button
+                      key={`${issue.nodeId}:${String(index)}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedNodeId(issue.nodeId);
+                      }}
+                      className="bg-warn-soft text-warn flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start text-xs font-medium"
+                    >
+                      <AlertCircle className="size-4 shrink-0" aria-hidden />
+                      {issue.message}
+                    </button>
+                  ))
+                )}
+              </div>
+              <p
+                id="simulator-publication-gate"
+                className="text-copy-muted mt-3 flex gap-2 text-xs leading-relaxed"
+              >
+                <LockKeyhole className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                {demoContent
+                  ? messages["publication.demoGate"]
+                  : dirty
+                    ? messages["publication.saveFirst"]
+                    : readiness.length > 0
+                      ? messages["publication.structureGate"]
+                      : messages["publication.publishHint"]}
+              </p>
+            </div>
+
+            {translationPanel ? (
+              <div className="border-line border-b p-4">
+                <h2 className="font-semibold">
+                  {messages["translation.heading"]}
+                </h2>
+                <p className="text-copy-muted mt-1 text-xs leading-relaxed">
+                  {messages["translation.hint"]}
+                </p>
+                <div className="mt-4">{translationPanel}</div>
+              </div>
+            ) : null}
+
+            {stewardPanel ? (
+              <div className="border-line border-b p-4">{stewardPanel}</div>
+            ) : null}
+
+            {selectedNode ? (
+              <NodeInspector
+                node={selectedNode}
+                language={language}
+                readOnly={readOnly}
+                messages={messages}
+                canRemove={nodes.length > 1}
+                steps={nodes
+                  .filter((candidate) => candidate.id !== selectedNode.id)
+                  .map((candidate) => ({
+                    id: candidate.id,
+                    key: candidate.data.key,
+                    kind: candidate.data.kind,
+                    label:
+                      candidate.data.translations[language].prompt.trim() ||
+                      candidate.data.key,
+                  }))}
+                outgoing={edges
+                  .filter((edge) => edge.source === selectedNode.id)
+                  .map((edge) => ({
+                    handle: edge.sourceHandle ?? "next",
+                    target: edge.target,
+                  }))}
+                onUpdate={(update) => {
+                  updateNodeData(selectedNode.id, update);
+                }}
+                onRemoveChoice={(choiceId) => {
+                  setEdges((current) =>
+                    current.filter(
+                      (edge) =>
+                        !(
+                          edge.source === selectedNode.id &&
+                          edge.sourceHandle === `option:${choiceId}`
+                        ),
+                    ),
+                  );
+                }}
+                onConnect={(handle, choice) => {
+                  connectBranch(selectedNode.id, handle, choice);
+                }}
+                onMakeStart={makeStart}
+                onRemove={removeSelectedNode}
+              />
+            ) : (
+              <MetadataInspector
+                metadata={metadata}
+                locale={locale}
+                readOnly={readOnly}
+                messages={messages}
+                onChange={(next) => {
+                  setMetadata(next);
+                  markDirty();
+                }}
+              />
+            )}
+          </aside>
+        ) : null}
       </div>
     </div>
   );
@@ -989,14 +1287,68 @@ function MetadataInspector({
   );
 }
 
+interface InspectorStep {
+  id: string;
+  key: string;
+  kind: SimulatorNodeKind;
+  label: string;
+}
+
+/** Picks (or creates) the next step for one branch, as an alternative to dragging. */
+function BranchSelect({
+  id,
+  value,
+  steps,
+  readOnly,
+  messages,
+  onSelect,
+}: {
+  id: string;
+  value: string;
+  steps: InspectorStep[];
+  readOnly: boolean;
+  messages: Record<string, string>;
+  onSelect: (choice: string) => void;
+}) {
+  return (
+    <SelectField
+      id={id}
+      value={value}
+      disabled={readOnly}
+      aria-label={messages["editor.nextStep"]}
+      className="h-8 text-xs"
+      onValueChange={onSelect}
+    >
+      <option value="">{messages["editor.noNextStep"]}</option>
+      {steps.map((step) => (
+        <option key={step.id} value={step.id}>
+          {step.label.length > 48 ? `${step.label.slice(0, 48)}…` : step.label}
+        </option>
+      ))}
+      <option value="create:question">
+        {messages["editor.createQuestionStep"]}
+      </option>
+      <option value="create:information">
+        {messages["editor.createInformationStep"]}
+      </option>
+      <option value="create:result">
+        {messages["editor.createResultStep"]}
+      </option>
+    </SelectField>
+  );
+}
+
 function NodeInspector({
   node,
   language,
   readOnly,
   messages,
   canRemove,
+  steps,
+  outgoing,
   onUpdate,
   onRemoveChoice,
+  onConnect,
   onMakeStart,
   onRemove,
 }: {
@@ -1005,12 +1357,17 @@ function NodeInspector({
   readOnly: boolean;
   messages: Record<string, string>;
   canRemove: boolean;
+  steps: InspectorStep[];
+  outgoing: { handle: string; target: string }[];
   onUpdate: (update: (data: SimulatorNodeData) => SimulatorNodeData) => void;
   onRemoveChoice: (choiceId: string) => void;
+  onConnect: (handle: string, choice: string) => void;
   onMakeStart: () => void;
   onRemove: () => void;
 }) {
   const translation = node.data.translations[language];
+  const targetFor = (handle: string) =>
+    outgoing.find((edge) => edge.handle === handle)?.target ?? "";
   const updateTranslation = (
     field: keyof SimulatorTranslation,
     value: string,
@@ -1119,6 +1476,25 @@ function NodeInspector({
           }}
         />
       </Field>
+
+      {node.data.kind === "information" ? (
+        <Field>
+          <FieldLabel htmlFor={`node-next-${node.id}`}>
+            {messages["editor.nextStep"]}
+          </FieldLabel>
+          <BranchSelect
+            id={`node-next-${node.id}`}
+            value={targetFor("next")}
+            steps={steps}
+            readOnly={readOnly}
+            messages={messages}
+            onSelect={(choice) => {
+              onConnect("next", choice);
+            }}
+          />
+          <FieldDescription>{messages["editor.nextStepHint"]}</FieldDescription>
+        </Field>
+      ) : null}
 
       {node.data.kind === "result" ? (
         <>
@@ -1281,10 +1657,21 @@ function NodeInspector({
                         {messages["node.preferNotToSay"]}
                       </label>
                     </div>
-                    <p className="text-copy-muted mt-2 text-[11px]">
-                      {String(index + 1).padStart(2, "0")} ·{" "}
-                      {messages["editor.connectHint"]}
-                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-copy-muted shrink-0 text-[11px] tabular-nums">
+                        {String(index + 1).padStart(2, "0")} →
+                      </span>
+                      <BranchSelect
+                        id={`option-target-${option.id}`}
+                        value={targetFor(`option:${option.id}`)}
+                        steps={steps}
+                        readOnly={readOnly}
+                        messages={messages}
+                        onSelect={(choice) => {
+                          onConnect(`option:${option.id}`, choice);
+                        }}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>

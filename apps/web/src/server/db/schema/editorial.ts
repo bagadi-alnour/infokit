@@ -26,6 +26,7 @@ import {
   editorialKind,
   editorialWorkflowState,
   reviewTaskStatus,
+  stewardContact,
   timestamps,
   translationMethod,
   translationState,
@@ -48,6 +49,7 @@ export const editorialEntries = content.table("editorial_entries", {
     .notNull()
     .default("draft"),
   cityId: uuid("city_id").references(() => cities.id),
+  ...stewardContact,
   ...archival,
   ...timestamps,
 });

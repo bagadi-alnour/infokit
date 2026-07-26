@@ -1,1 +1,1 @@
-export const localeCookieName = "calais-info-locale";
+export const localeCookieName = "infokit-locale";

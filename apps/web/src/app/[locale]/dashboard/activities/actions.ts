@@ -1,6 +1,6 @@
 "use server";
 
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import {
   and,
   desc,
@@ -19,6 +19,7 @@ import { z } from "zod";
 import { env } from "~/env";
 import { localizedPath } from "~/i18n/routing";
 import { editorialLanguageCodes } from "~/lib/editorial-languages";
+import { EDITOR_CONTACT_OPTION_ID } from "~/lib/editor-contact";
 import { recordAudit } from "~/server/audit";
 import { verifyAssetUpload } from "~/server/assets/s3";
 import { auth } from "~/server/auth";
@@ -31,6 +32,10 @@ import { protectedPermissionAction } from "~/server/auth/require";
 import { catalogueScopeKey } from "~/server/content/catalogue-scope";
 import { sanitizeRichText } from "~/server/content/sanitize-rich-text";
 import { hashContent } from "~/server/content/editorial";
+import {
+  classifyTranslation,
+  translationPayloadHash,
+} from "~/server/translation/provenance";
 import { parseScheduledPublication } from "~/server/content/publication-schedule";
 import { db } from "~/server/db";
 import { sendMemberInvitation } from "~/server/invitations";
@@ -56,10 +61,12 @@ import {
   activityTags,
   activityTranslations,
   assets,
+  assetTranslations,
   cities,
   cityTeamMembers,
   cityTeams,
   contacts,
+  contactTranslations,
   languages as languageCatalog,
   organizationMembers,
   organizations,
@@ -95,9 +102,19 @@ function stringField(formData: FormData, name: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function optionalStringField(formData: FormData, name: string) {
+  const value = formData.get(name);
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 const createActivitySchema = z.object({
   organizationId: z.string().uuid(),
-  cityId: z.string().uuid(),
+  /**
+   * `global` is the rare case — a helpline or an online service that belongs to
+   * no city. It carries no city, no city team, and no place.
+   */
+  scope: z.enum(["city", "global"]).default("city"),
+  cityId: z.string().uuid().nullable(),
   sourceLanguage: editorialLanguageSchema,
   locationMode: z.enum(["existing", "new", "mobile"]),
   placeId: optional,
@@ -135,11 +152,15 @@ function refresh(locale: Locale) {
 export const createActivity = protectedPermissionAction(
   "content.activity.manage",
   async (formData, locale) => {
+    const scope = formData.get("scope") === "global" ? "global" : "city";
     const parsed = createActivitySchema.parse({
       organizationId: formData.get("organizationId"),
-      cityId: formData.get("cityId"),
+      scope,
+      // A global activity submits no city at all, and must not inherit one.
+      cityId: scope === "global" ? null : formData.get("cityId"),
       sourceLanguage: formData.get("sourceLanguage"),
-      locationMode: formData.get("locationMode"),
+      locationMode:
+        scope === "global" ? "mobile" : formData.get("locationMode"),
       placeId: formData.get("placeId") ?? "",
       placeName: formData.get("placeName") ?? "",
       addressLine: formData.get("addressLine") ?? "",
@@ -219,6 +240,8 @@ export const createActivity = protectedPermissionAction(
       throw new Error("The exceptional end time must follow its start time");
     }
 
+    // An editor can generate translations before the first save, so creation
+    // carries signed proposals exactly like an update does.
     const translations = editorialLanguageCodes
       .map((languageCode) => {
         const name = stringField(formData, `name_${languageCode}`);
@@ -231,15 +254,37 @@ export const createActivity = protectedPermissionAction(
           descriptionHtml: description.html,
           descriptionText: description.text,
           shortDescription: description.text?.slice(0, 500) ?? null,
+          signature: optionalStringField(
+            formData,
+            `translation_proposal_${languageCode}`,
+          ),
         };
       })
       .filter((translation) => translation.name.length > 0);
-    const sourceName = translations.find(
+    /**
+     * Alternative text is content, not metadata: it is what a screen-reader
+     * user hears in place of the photograph, so it is translated alongside the
+     * title and body and stored per language on the asset itself.
+     */
+    const imageAltTexts = editorialLanguageCodes
+      .map((languageCode) => ({
+        languageCode,
+        altText: stringField(formData, `image_alt_${languageCode}`).slice(
+          0,
+          500,
+        ),
+        fromMachine: Boolean(
+          optionalStringField(formData, `translation_proposal_${languageCode}`),
+        ),
+      }))
+      .filter((row) => row.altText.length > 0);
+    const sourceTranslation = translations.find(
       (translation) => translation.languageCode === parsed.sourceLanguage,
-    )?.name;
-    if (!sourceName || sourceName.length < 2) {
+    );
+    if (!sourceTranslation || sourceTranslation.name.length < 2) {
       throw new Error("The source language needs a title");
     }
+    const sourceName = sourceTranslation.name;
 
     const serviceIds = z
       .array(z.string().uuid())
@@ -248,9 +293,20 @@ export const createActivity = protectedPermissionAction(
     const tagIds = [
       ...new Set(z.array(z.string().uuid()).parse(formData.getAll("tagId"))),
     ];
+    /**
+     * Contacts, plus the option that stands for the editor themselves. That one
+     * is not a stored contact yet, so it travels as a sentinel and is resolved
+     * to a real row below rather than linked straight through.
+     */
+    const submittedContactIds = z
+      .array(z.union([z.string().uuid(), z.literal(EDITOR_CONTACT_OPTION_ID)]))
+      .parse(formData.getAll("contactId"));
+    const wantsEditorContact = submittedContactIds.includes(
+      EDITOR_CONTACT_OPTION_ID,
+    );
     const contactIds = [
       ...new Set(
-        z.array(z.string().uuid()).parse(formData.getAll("contactId")),
+        submittedContactIds.filter((id) => id !== EDITOR_CONTACT_OPTION_ID),
       ),
     ];
     const creatorOrganizationIds = [
@@ -277,6 +333,16 @@ export const createActivity = protectedPermissionAction(
     const session = await auth();
     const actorId = session?.user.id;
     if (!actorId) throw new Error("Authentication required");
+    /**
+     * What "reach me" publishes: the address the editor signs in with, which is
+     * the only one the console knows. An account without one cannot stand in as
+     * the contact for a whole activity.
+     */
+    const editorContactValue = session.user.email?.trim() ?? "";
+    const editorContactLabel = session.user.name?.trim() ?? "";
+    if (wantsEditorContact && !editorContactValue) {
+      throw new Error("Your account has no address to publish as a contact");
+    }
     const [authorization, platformPermissions] = await Promise.all([
       getRoleTestState(actorId, parsed.organizationId),
       platformPermissionsForUser(actorId),
@@ -344,6 +410,12 @@ export const createActivity = protectedPermissionAction(
       }
     }
 
+    if (parsed.scope === "city" && !parsed.cityId) {
+      throw new Error("Choose the city this activity happens in");
+    }
+    if (parsed.scope === "global" && parsed.locationMode !== "mobile") {
+      throw new Error("A global activity cannot be attached to a place");
+    }
     if (parsed.locationMode === "existing" && !parsed.placeId) {
       throw new Error("Choose an existing place");
     }
@@ -360,7 +432,8 @@ export const createActivity = protectedPermissionAction(
     if (
       parsed.locationMode === "new" &&
       parsed.precision === "contact_to_learn" &&
-      contactIds.length === 0
+      contactIds.length === 0 &&
+      !wantsEditorContact
     ) {
       throw new Error("Contact-to-learn locations require a safe contact");
     }
@@ -432,35 +505,45 @@ export const createActivity = protectedPermissionAction(
       await verifyAssetUpload(uploadedCover);
     }
 
-    const activity = await db.transaction(async (tx) => {
-      let [team] = await tx
-        .select({ id: cityTeams.id })
-        .from(cityTeams)
-        .where(
-          and(
-            eq(cityTeams.organizationId, parsed.organizationId),
-            eq(cityTeams.cityId, parsed.cityId),
-          ),
-        );
+    // Null exactly when the scope is global; the check above guarantees it.
+    const cityId = parsed.cityId;
 
-      if (!team) {
-        const [city] = await tx
-          .select({ code: cities.code })
-          .from(cities)
-          .where(eq(cities.id, parsed.cityId));
-        [team] = await tx
-          .insert(cityTeams)
-          .values({
-            organizationId: parsed.organizationId,
-            cityId: parsed.cityId,
-            name: parsed.teamName ?? `${city?.code ?? "City"} publishing team`,
-          })
-          .returning({ id: cityTeams.id });
+    const activity = await db.transaction(async (tx) => {
+      // Teams are an organisation-and-city pair, so a global activity has none.
+      let teamId: string | null = null;
+      if (cityId) {
+        let [team] = await tx
+          .select({ id: cityTeams.id })
+          .from(cityTeams)
+          .where(
+            and(
+              eq(cityTeams.organizationId, parsed.organizationId),
+              eq(cityTeams.cityId, cityId),
+            ),
+          );
+
+        if (!team) {
+          const [city] = await tx
+            .select({ code: cities.code })
+            .from(cities)
+            .where(eq(cities.id, cityId));
+          [team] = await tx
+            .insert(cityTeams)
+            .values({
+              organizationId: parsed.organizationId,
+              cityId,
+              name:
+                parsed.teamName ?? `${city?.code ?? "City"} publishing team`,
+            })
+            .returning({ id: cityTeams.id });
+        }
+        if (!team) throw new Error("City team insert returned no row");
+        teamId = team.id;
       }
-      if (!team) throw new Error("City team insert returned no row");
 
       let placeId = parsed.locationMode === "existing" ? parsed.placeId : null;
       if (parsed.locationMode === "new") {
+        if (!cityId) throw new Error("A new place needs a city");
         const latitude = parsed.lat === null ? null : Number(parsed.lat);
         const longitude = parsed.lng === null ? null : Number(parsed.lng);
         if (
@@ -473,7 +556,7 @@ export const createActivity = protectedPermissionAction(
           .insert(places)
           .values({
             organizationId: parsed.organizationId,
-            cityId: parsed.cityId,
+            cityId,
             addressLine: parsed.addressLine,
             postalCode: parsed.postalCode,
             lat: latitude,
@@ -496,8 +579,8 @@ export const createActivity = protectedPermissionAction(
         .values({
           slug: uniqueSlug(sourceName, "activity"),
           organizationId: parsed.organizationId,
-          cityId: parsed.cityId,
-          teamId: team.id,
+          cityId,
+          teamId,
           placeId,
           categoryId: parsed.categoryId,
           audienceCategoryId: parsed.audienceCategoryId,
@@ -512,19 +595,18 @@ export const createActivity = protectedPermissionAction(
 
       const translationValues = translations;
 
-      // Shape matches the generic translator view (title/summary/plainText).
+      /**
+       * Version 1 seals the authored language only — the same shape and hash
+       * input `updateActivityContent` uses. Sealing the whole multilingual
+       * payload here would make the very first edit look like a source change
+       * and demote every translation that came with it.
+       */
       const sourcePayload = {
         sourceLanguage: parsed.sourceLanguage,
-        translations: Object.fromEntries(
-          translationValues.map((translation) => [
-            translation.languageCode,
-            {
-              title: translation.name,
-              summary: translation.shortDescription,
-              plainText: translation.descriptionText,
-            },
-          ]),
-        ),
+        title: sourceTranslation.name,
+        summary: sourceTranslation.shortDescription,
+        bodyHtml: sourceTranslation.descriptionHtml,
+        plainText: sourceTranslation.descriptionText,
       };
       const [sourceVersion] = await tx
         .insert(translationSourceVersions)
@@ -544,27 +626,37 @@ export const createActivity = protectedPermissionAction(
         throw new Error("Source version insert returned no row");
 
       await tx.insert(activityTranslations).values(
-        translationValues.map((translation) => ({
-          activityId: created.id,
-          ...translation,
-          state: "draft" as const,
-          method: "human" as const,
-          sourceVersionId: sourceVersion.id,
-          contentHash: hashContent({
-            languageCode: translation.languageCode,
+        translationValues.map(({ signature, ...translation }) => {
+          const payload = {
             title: translation.name,
-            descriptionHtml: translation.descriptionHtml,
-            descriptionText: translation.descriptionText,
-          }),
-        })),
+            bodyHtml: translation.descriptionHtml,
+          };
+          const isSource = translation.languageCode === parsed.sourceLanguage;
+          const provenance = classifyTranslation({
+            entityKind: "activity",
+            targetLanguageCode: translation.languageCode,
+            payload,
+            signature,
+            isSource,
+          });
+          return {
+            activityId: created.id,
+            ...translation,
+            state: provenance.state,
+            method: provenance.method,
+            providerCode: provenance.providerCode,
+            sourceVersionId: sourceVersion.id,
+            contentHash: translationPayloadHash({
+              languageCode: translation.languageCode,
+              ...payload,
+            }),
+            ...(isSource
+              ? { verifiedById: actorId, verifiedAt: new Date() }
+              : {}),
+          };
+        }),
       );
       if (parsed.publicationMode !== "draft") {
-        const sourceTranslation = translationValues.find(
-          (translation) => translation.languageCode === parsed.sourceLanguage,
-        );
-        if (!sourceTranslation) {
-          throw new Error("The source language needs a title");
-        }
         await tx.insert(activityPublications).values({
           activityId: created.id,
           languageCode: parsed.sourceLanguage,
@@ -578,19 +670,8 @@ export const createActivity = protectedPermissionAction(
           publishedById: actorId,
           scheduledFor,
         });
-        await tx
-          .update(activityTranslations)
-          .set({
-            state: "verified",
-            verifiedById: actorId,
-            verifiedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(activityTranslations.activityId, created.id),
-              eq(activityTranslations.languageCode, parsed.sourceLanguage),
-            ),
-          );
+        // The source language was already stamped verified on insert: it is
+        // authored, not translated.
         if (!scheduledFor) {
           await tx
             .update(activities)
@@ -635,9 +716,59 @@ export const createActivity = protectedPermissionAction(
           })),
         );
       }
-      if (contactIds.length > 0) {
+      const linkedContactIds = [...contactIds];
+      if (wantsEditorContact) {
+        /**
+         * The editor becomes a contact the organisation owns, reused on their
+         * next activity instead of duplicated. The match is on the address, and
+         * only against rows that are still public and active: a contact somebody
+         * archived or made workspace-only on purpose is not quietly republished.
+         */
+        const [existingContact] = await tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.organizationId, parsed.organizationId),
+              eq(contacts.kind, "email"),
+              eq(contacts.value, editorContactValue),
+              eq(contacts.active, true),
+              eq(contacts.visibility, "public"),
+            ),
+          )
+          .limit(1);
+        let editorContactId = existingContact?.id;
+        if (!editorContactId) {
+          const [insertedContact] = await tx
+            .insert(contacts)
+            .values({
+              organizationId: parsed.organizationId,
+              kind: "email",
+              value: editorContactValue,
+            })
+            .returning({ id: contacts.id });
+          if (!insertedContact) {
+            throw new Error("Could not save the contact for this activity");
+          }
+          editorContactId = insertedContact.id;
+          await tx.insert(contactTranslations).values({
+            contactId: editorContactId,
+            languageCode: locale,
+            label: (editorContactLabel.length > 0
+              ? editorContactLabel
+              : editorContactValue
+            ).slice(0, 100),
+          });
+        }
+        // The same row may already be in the list as a stored contact, and
+        // `activity_contacts` is keyed on the pair.
+        if (!linkedContactIds.includes(editorContactId)) {
+          linkedContactIds.push(editorContactId);
+        }
+      }
+      if (linkedContactIds.length > 0) {
         await tx.insert(activityContacts).values(
-          contactIds.map((contactId, displayOrder) => ({
+          linkedContactIds.map((contactId, displayOrder) => ({
             activityId: created.id,
             contactId,
             displayOrder,
@@ -665,6 +796,40 @@ export const createActivity = protectedPermissionAction(
           role: "cover",
           languageCode: parsed.sourceLanguage,
         });
+        if (imageAltTexts.length > 0) {
+          // The upload already wrote the source row, and the editor may have
+          // reworded it since, so every language is an upsert.
+          const altState = {
+            authored: "verified",
+            machine: "machine_generated",
+            human: "draft",
+          } as const;
+          await tx
+            .insert(assetTranslations)
+            .values(
+              imageAltTexts.map((row) => ({
+                assetId: cover.id,
+                languageCode: row.languageCode,
+                altText: row.altText,
+                state:
+                  row.languageCode === parsed.sourceLanguage
+                    ? altState.authored
+                    : row.fromMachine
+                      ? altState.machine
+                      : altState.human,
+              })),
+            )
+            .onConflictDoUpdate({
+              target: [
+                assetTranslations.assetId,
+                assetTranslations.languageCode,
+              ],
+              set: {
+                altText: sql`excluded.alt_text`,
+                state: sql`excluded.state`,
+              },
+            });
+        }
       }
 
       const occurrenceDate = parsed.occurrenceDate;
@@ -721,6 +886,7 @@ export const createActivity = protectedPermissionAction(
       subjectId: activity.id,
       organizationId: parsed.organizationId,
       metadata: {
+        scope: parsed.scope,
         cityId: parsed.cityId,
         createdByScope,
         creatorOrganizationIds: creatorOrganizationIds.join(","),
@@ -999,41 +1165,35 @@ export const updateActivityContent = protectedPermissionAction(
     const tagIds = [
       ...new Set(z.array(z.string().uuid()).parse(formData.getAll("tagId"))),
     ].slice(0, 3);
-    const translations = editorialLanguageCodes
+    // Provenance is decided on the server (see ~/server/translation/provenance):
+    // the form carries the text and, for freshly generated languages, a signed
+    // proposal token — never the `method` or `state` that gets stored.
+    const submitted = editorialLanguageCodes
       .map((languageCode) => {
         const name = stringField(formData, `name_${languageCode}`);
         const description = sanitizeRichText(
           stringField(formData, `description_${languageCode}_html`),
         );
-        const method = z
-          .enum(["human", "ai", "ai_then_human_review"])
-          .catch("human")
-          .parse(formData.get(`translation_method_${languageCode}`));
         return {
           languageCode,
           name,
           descriptionHtml: description.html,
           descriptionText: description.text,
           shortDescription: description.text?.slice(0, 500) ?? null,
-          method,
-          state:
-            method === "ai"
-              ? ("machine_generated" as const)
-              : method === "ai_then_human_review"
-                ? ("needs_review" as const)
-                : ("draft" as const),
+          signature: optionalStringField(
+            formData,
+            `translation_proposal_${languageCode}`,
+          ),
         };
       })
       .filter((translation) => translation.name.length > 0);
-    const sourceName = translations.find(
+    const source = submitted.find(
       (translation) => translation.languageCode === parsed.sourceLanguage,
-    )?.name;
-    if (!sourceName || sourceName.length < 2) {
+    );
+    if (!source || source.name.length < 2) {
       throw new Error("The source language needs a title");
     }
-    const keptCodes = translations.map(
-      (translation) => translation.languageCode,
-    );
+    const keptCodes = submitted.map((translation) => translation.languageCode);
 
     const session = await auth();
     const actorId = session?.user.id;
@@ -1066,25 +1226,24 @@ export const updateActivityContent = protectedPermissionAction(
         .orderBy(desc(translationSourceVersions.version))
         .limit(1);
 
-      // Shape matches the generic translator view (title/summary/plainText).
+      /**
+       * A source version seals the *authored* language only. Sealing the whole
+       * multilingual payload would stamp a new version — and so declare every
+       * translation stale — every time a translator touched a single target
+       * language, which is why `impact` was never usable before.
+       */
       const sourcePayload = {
         sourceLanguage: parsed.sourceLanguage,
-        translations: Object.fromEntries(
-          translations.map((translation) => [
-            translation.languageCode,
-            {
-              title: translation.name,
-              summary: translation.shortDescription,
-              plainText: translation.descriptionText,
-              method: translation.method,
-            },
-          ]),
-        ),
+        title: source.name,
+        summary: source.shortDescription,
+        bodyHtml: source.descriptionHtml,
+        plainText: source.descriptionText,
       };
       const sourceHash = hashContent(sourcePayload);
-      // Only seal a new source version and rewrite translations when the
-      // authored payload actually changed; classification below always saves.
-      if (latest?.hash !== sourceHash) {
+      const sourceChanged = latest?.hash !== sourceHash;
+
+      let sourceVersionId = latest?.id ?? null;
+      if (sourceChanged) {
         const [created] = await tx
           .insert(translationSourceVersions)
           .values({
@@ -1101,57 +1260,121 @@ export const updateActivityContent = protectedPermissionAction(
           })
           .returning({ id: translationSourceVersions.id });
         if (!created) throw new Error("Source version insert returned no row");
-        const sourceVersionId = created.id;
+        sourceVersionId = created.id;
+      }
 
-        // Drop languages whose title was cleared (the source language always
-        // survives the earlier guard), then upsert the remaining rows.
+      const existingRows = await tx
+        .select({
+          languageCode: activityTranslations.languageCode,
+          name: activityTranslations.name,
+          descriptionHtml: activityTranslations.descriptionHtml,
+          state: activityTranslations.state,
+          method: activityTranslations.method,
+          providerCode: activityTranslations.providerCode,
+        })
+        .from(activityTranslations)
+        .where(eq(activityTranslations.activityId, activity.id));
+      const existingByLanguage = new Map(
+        existingRows.map((row) => [row.languageCode, row]),
+      );
+
+      // Drop languages whose title was cleared (the source language always
+      // survives the earlier guard), then upsert the remaining rows.
+      await tx
+        .delete(activityTranslations)
+        .where(
+          and(
+            eq(activityTranslations.activityId, activity.id),
+            notInArray(activityTranslations.languageCode, keptCodes),
+          ),
+        );
+      for (const translation of submitted) {
+        // Canonical shape shared with ~/server/translation so a signed
+        // proposal hashes identically here and at generation time.
+        const payload = {
+          title: translation.name,
+          bodyHtml: translation.descriptionHtml,
+        };
+        const existing = existingByLanguage.get(translation.languageCode);
+        const provenance = classifyTranslation({
+          entityKind: "activity",
+          targetLanguageCode: translation.languageCode,
+          payload,
+          signature: translation.signature,
+          existing: existing
+            ? {
+                method: existing.method,
+                state: existing.state,
+                providerCode: existing.providerCode,
+                payload: {
+                  title: existing.name,
+                  bodyHtml: existing.descriptionHtml ?? "",
+                },
+              }
+            : null,
+          isSource: translation.languageCode === parsed.sourceLanguage,
+        });
+        const row = {
+          name: translation.name,
+          descriptionHtml: translation.descriptionHtml,
+          descriptionText: translation.descriptionText,
+          shortDescription: translation.shortDescription,
+          state: provenance.state,
+          method: provenance.method,
+          providerCode: provenance.providerCode,
+          sourceVersionId,
+          contentHash: translationPayloadHash({
+            languageCode: translation.languageCode,
+            ...payload,
+          }),
+          ...(provenance.state === "verified" &&
+          translation.languageCode === parsed.sourceLanguage
+            ? { verifiedById: actorId, verifiedAt: new Date() }
+            : {}),
+        };
         await tx
-          .delete(activityTranslations)
+          .insert(activityTranslations)
+          .values({
+            activityId: activity.id,
+            languageCode: translation.languageCode,
+            ...row,
+          })
+          .onConflictDoUpdate({
+            target: [
+              activityTranslations.activityId,
+              activityTranslations.languageCode,
+            ],
+            set: row,
+          });
+      }
+
+      /**
+       * The source moved, so every target language now describes text that no
+       * longer exists. Anything that claimed to be checked drops back into the
+       * review queue, keeping a pointer to the version it was checked against
+       * so the rail can show what it is behind.
+       */
+      if (sourceChanged && latest && sourceVersionId) {
+        await tx
+          .update(activityTranslations)
+          .set({
+            state: "needs_review",
+            verifiedById: null,
+            verifiedAt: null,
+            carriedForwardFromSourceVersionId: latest.id,
+          })
           .where(
             and(
               eq(activityTranslations.activityId, activity.id),
-              notInArray(activityTranslations.languageCode, keptCodes),
+              notInArray(activityTranslations.languageCode, [
+                parsed.sourceLanguage,
+              ]),
+              inArray(activityTranslations.state, [
+                "verified",
+                "machine_generated",
+              ]),
             ),
           );
-        for (const translation of translations) {
-          const contentHash = hashContent({
-            languageCode: translation.languageCode,
-            title: translation.name,
-            descriptionHtml: translation.descriptionHtml,
-            descriptionText: translation.descriptionText,
-            method: translation.method,
-          });
-          await tx
-            .insert(activityTranslations)
-            .values({
-              activityId: activity.id,
-              languageCode: translation.languageCode,
-              name: translation.name,
-              descriptionHtml: translation.descriptionHtml,
-              descriptionText: translation.descriptionText,
-              shortDescription: translation.shortDescription,
-              state: translation.state,
-              method: translation.method,
-              sourceVersionId,
-              contentHash,
-            })
-            .onConflictDoUpdate({
-              target: [
-                activityTranslations.activityId,
-                activityTranslations.languageCode,
-              ],
-              set: {
-                name: translation.name,
-                descriptionHtml: translation.descriptionHtml,
-                descriptionText: translation.descriptionText,
-                shortDescription: translation.shortDescription,
-                state: translation.state,
-                method: translation.method,
-                sourceVersionId,
-                contentHash,
-              },
-            });
-        }
       }
 
       // Replace the public tag set, keeping only globals or this org's tags.

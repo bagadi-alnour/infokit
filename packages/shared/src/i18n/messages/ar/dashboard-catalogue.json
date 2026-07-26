@@ -24,6 +24,26 @@
   "catalogue.action.disable": "تعطيل",
   "catalogue.action.activate": "تنشيط",
   "catalogue.action.deactivate": "إلغاء التنشيط",
+  "catalogue.actionError": "لم يُحفظ التغيير. أعد المحاولة.",
+
+  "catalogue.tabs.label": "أقسام الفهرس",
+  "catalogue.stat.services": "الخدمات",
+  "catalogue.stat.categories": "الفئات",
+  "catalogue.stat.tags": "الوسوم",
+  "catalogue.stat.hidden": "المعطّلة",
+  "catalogue.stat.hiddenHint": "صفوف لم يعد المحرّرون يستطيعون اختيارها.",
+  "catalogue.column.usage": "مستخدم في",
+  "catalogue.column.services": "الخدمات",
+  "catalogue.column.order": "الترتيب",
+  "catalogue.column.actions": "إجراءات",
+  "catalogue.search.services": "البحث في الخدمات",
+  "catalogue.search.categories": "البحث في الفئات",
+  "catalogue.search.tags": "البحث في الوسوم",
+  "catalogue.filter.anyCategory": "كل الفئات",
+  "catalogue.filter.anyScope": "كل النطاقات",
+  "catalogue.filter.anyState": "كل الحالات",
+  "catalogue.filter.anyVisibility": "كل مستويات الظهور",
+  "catalogue.filter.anyNamespace": "كل مساحات الأسماء",
 
   "catalogue.services.title": "الخدمات",
   "catalogue.services.count": "{count} خدمات",
@@ -41,6 +61,8 @@
   "catalogue.services.create": "إضافة خدمة",
   "catalogue.services.edit": "تعديل الخدمة",
   "catalogue.services.save": "حفظ التغييرات",
+  "catalogue.services.newHint": "الخدمة هي ما يقدّمه النشاط: استحمام، وجبة، استشارة قانونية.",
+  "catalogue.services.created": "تمت إضافة الخدمة.",
 
   "catalogue.categories.title": "الفئات",
   "catalogue.categories.count": "{count} فئات",
@@ -55,6 +77,8 @@
   "catalogue.categories.services": "{count} خدمات",
   "catalogue.categories.create": "إضافة فئة",
   "catalogue.categories.edit": "تعديل الفئة",
+  "catalogue.categories.newHint": "تجمع الفئة خدمات في فلاتر الموقع العام، وهي مشتركة على مستوى المنصّة.",
+  "catalogue.categories.created": "تمت إضافة الفئة.",
 
   "catalogue.tags.title": "الوسوم",
   "catalogue.tags.count": "{count} وسوم",
@@ -73,5 +97,7 @@
   "catalogue.tags.visibility.workspace": "مساحة العمل فقط",
   "catalogue.tags.scope": "النطاق",
   "catalogue.tags.create": "إضافة وسم",
-  "catalogue.tags.edit": "تعديل الوسم"
+  "catalogue.tags.edit": "تعديل الوسم",
+  "catalogue.tags.newHint": "يصنّف الوسم المحتوى للبحث والتصفية، ولا يمنح أي وصول.",
+  "catalogue.tags.created": "تمت إضافة الوسم."
 }

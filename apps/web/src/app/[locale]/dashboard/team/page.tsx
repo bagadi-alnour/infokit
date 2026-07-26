@@ -1,9 +1,10 @@
-import { formatMessage } from "@calais/shared/i18n";
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { formatMessage } from "@infokit/shared/i18n";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 
 import { CreateTeamDialog } from "~/components/admin/create-team-dialog";
 import { TeamRoster } from "~/components/admin/team-roster";
+import { WorkspacePage } from "~/components/admin/workspace";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -42,12 +43,12 @@ export default async function TeamPage({
 
   if (!env.ENABLE_PHASE3_MEMBER_ASSIGNMENTS) {
     return (
-      <div className="px-4 py-7 md:px-7 lg:px-8">
+      <WorkspacePage>
         <h1 className="text-3xl font-semibold tracking-tight">
           {t["team.title"]}
         </h1>
         <p className="text-copy-muted mt-2 text-sm">{t["team.disabled"]}</p>
-      </div>
+      </WorkspacePage>
     );
   }
 
@@ -259,7 +260,7 @@ export default async function TeamPage({
   };
 
   return (
-    <div className="px-4 py-7 md:px-7 lg:px-8">
+    <WorkspacePage>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">
@@ -331,6 +332,6 @@ export default async function TeamPage({
           })}
         </div>
       )}
-    </div>
+    </WorkspacePage>
   );
 }

@@ -27,10 +27,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--calais-surface)",
-          "--normal-text": "var(--calais-ink)",
-          "--normal-border": "var(--calais-border)",
-          "--border-radius": "var(--calais-radius-control)",
+          "--normal-bg": "var(--infokit-surface)",
+          "--normal-text": "var(--infokit-ink)",
+          "--normal-border": "var(--infokit-border)",
+          "--border-radius": "var(--infokit-radius-control)",
         } as React.CSSProperties
       }
       toastOptions={{

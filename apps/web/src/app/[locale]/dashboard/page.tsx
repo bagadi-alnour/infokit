@@ -1,5 +1,5 @@
-import { formatMessage, type Locale } from "@calais/shared/i18n";
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { formatMessage, type Locale } from "@infokit/shared/i18n";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, asc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import {
   Ban,
@@ -97,6 +97,21 @@ function translatedName(
     rows[0]?.name ??
     fallback
   );
+}
+
+/**
+ * Deep link into the activities console. A global activity has no city, so the
+ * `city` hint is left out rather than sent as an empty value.
+ */
+function activityConsoleQuery(activity: {
+  id: string;
+  organizationId: string | null;
+  cityId: string | null;
+}) {
+  const query = new URLSearchParams({ activity: activity.id });
+  if (activity.organizationId) query.set("org", activity.organizationId);
+  if (activity.cityId) query.set("city", activity.cityId);
+  return query.toString();
 }
 
 export default async function DashboardPage({
@@ -628,7 +643,16 @@ export default async function DashboardPage({
                         <div className="flex flex-wrap gap-2 lg:justify-end">
                           <Link
                             className={buttonVariants({ variant: "outline" })}
-                            href={`${localizedPath("/dashboard/activities", locale)}?activity=${occurrence.id}&org=${occurrence.organizationId ?? selectedOrganization?.id ?? ""}&city=${occurrence.cityId}`}
+                            href={`${localizedPath("/dashboard/activities", locale)}?${activityConsoleQuery(
+                              {
+                                id: occurrence.id,
+                                organizationId:
+                                  occurrence.organizationId ??
+                                  selectedOrganization?.id ??
+                                  null,
+                                cityId: occurrence.cityId,
+                              },
+                            )}`}
                           >
                             <Pencil aria-hidden />
                             {messages["runbook.correct"]}
@@ -791,8 +815,10 @@ export default async function DashboardPage({
                 name: category.label ?? category.code,
                 icon: category.icon,
               }))}
+              // This rail works within one organisation and city, so a global
+              // activity — which has neither — is not one of its options.
               activities={scopedActivities.flatMap((activity) =>
-                activity.organizationId
+                activity.organizationId && activity.cityId
                   ? [
                       {
                         id: activity.id,
@@ -857,7 +883,16 @@ export default async function DashboardPage({
                     variant: "outline",
                     className: "mt-3 w-full justify-between",
                   })}
-                  href={`${localizedPath("/dashboard/activities", locale)}?activity=${mainAttention.activity.id}&org=${mainAttention.activity.organizationId ?? selectedOrganization?.id ?? ""}&city=${mainAttention.activity.cityId}`}
+                  href={`${localizedPath("/dashboard/activities", locale)}?${activityConsoleQuery(
+                    {
+                      id: mainAttention.activity.id,
+                      organizationId:
+                        mainAttention.activity.organizationId ??
+                        selectedOrganization?.id ??
+                        null,
+                      cityId: mainAttention.activity.cityId,
+                    },
+                  )}`}
                 >
                   {messages["attention.review"]}
                   <Pencil aria-hidden />

@@ -1,4 +1,4 @@
-import { isLocale, type Locale } from "@calais/shared/i18n";
+import { isLocale, type Locale } from "@infokit/shared/i18n";
 import NextAuth from "next-auth";
 import { cache } from "react";
 

@@ -4,10 +4,14 @@ import {
   localeMetadata,
   supportedLocales,
   type Locale,
-} from "@calais/shared/i18n";
-import { PreferenceSelect, Text, type PreferenceOption } from "@calais/ui";
+} from "@infokit/shared/i18n";
+import { Languages } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
+import {
+  PreferenceSelect,
+  type PreferenceOption,
+} from "~/components/public/preference-select";
 import { localizedPath, unlocalizedPath } from "~/i18n/routing";
 
 export function LanguageSwitcher({
@@ -31,34 +35,21 @@ export function LanguageSwitcher({
     }),
   );
 
-  const changeLocale = (candidate: Locale) => {
-    router.push(
-      localizedPath(
-        pathname ?? unlocalizedPath(currentPathname),
-        candidate,
-        returnTo ? { returnTo } : undefined,
-      ),
-    );
-  };
-
   return (
     <PreferenceSelect
       label={label}
       value={locale}
       options={options}
-      onValueChange={changeLocale}
-      triggerMode="icon"
-      triggerValue={
-        <Text
-          height={18}
-          color="$color"
-          fontSize="$2"
-          fontWeight="700"
-          lineHeight={18}
-        >
-          {locale.toUpperCase()}
-        </Text>
-      }
+      icon={<Languages className="size-4" />}
+      onValueChange={(candidate) => {
+        router.push(
+          localizedPath(
+            pathname ?? unlocalizedPath(currentPathname),
+            candidate,
+            returnTo ? { returnTo } : undefined,
+          ),
+        );
+      }}
     />
   );
 }

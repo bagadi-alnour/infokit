@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Building2,
-  Check,
-  ChevronDown,
-  MapPin,
-  UsersRound,
-} from "lucide-react";
+import { Building2, Check, ChevronDown } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "~/components/ui/button";
@@ -65,26 +59,29 @@ export function AdminScopeIdentity({
 
   return (
     <DropdownMenu>
+      {/* A bordered card rather than bare text: switching association is the
+       * one control in the sidebar that changes what every page below it
+       * shows, so it should look like a control. */}
       <DropdownMenuTrigger
         render={
           <Button
             variant="ghost"
-            className="h-auto min-w-0 justify-start px-0 py-1 text-start hover:bg-transparent"
+            className="border-line bg-surface/60 hover:bg-surface h-auto w-full min-w-0 justify-start gap-2.5 rounded-lg border px-2 py-2 text-start"
           />
         }
       >
-        <span className="bg-brand text-canvas flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold">
+        <span className="bg-brand text-brand-ink flex size-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold">
           {organization.name.slice(0, 1).toUpperCase()}
         </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold">
-            {organization.name}
-          </span>
-          <span className="text-copy-muted block text-xs font-normal">
+        <span className="min-w-0 flex-1">
+          <span className="text-copy-muted block truncate text-[10.5px] font-semibold uppercase tracking-[0.09em]">
             {label}
           </span>
+          <span className="block truncate text-sm font-semibold leading-tight">
+            {organization.name}
+          </span>
         </span>
-        <ChevronDown className="text-copy-muted ms-auto" aria-hidden />
+        <ChevronDown className="text-copy-muted size-4 shrink-0" aria-hidden />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="start" className="w-64">
         <DropdownMenuGroup>
@@ -115,97 +112,5 @@ export function AdminScopeIdentity({
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-export function AdminScopeControls({
-  cities,
-  teams,
-  defaults,
-  cityLabel,
-  teamLabel,
-}: {
-  cities: ScopeCity[];
-  teams: ScopeTeam[];
-  defaults: { organizationId?: string; cityId?: string };
-  cityLabel: string;
-  teamLabel: string;
-}) {
-  const { replace, searchParams } = useScopeNavigation();
-  const organizationId = searchParams.get("org") ?? defaults.organizationId;
-  const cityId = searchParams.get("city") ?? defaults.cityId ?? cities[0]?.id;
-  const city = cities.find((item) => item.id === cityId);
-  const availableTeams = teams.filter(
-    (item) => item.organizationId === organizationId && item.cityId === cityId,
-  );
-  const teamId = searchParams.get("team") ?? availableTeams[0]?.id;
-  const team = availableTeams.find((item) => item.id === teamId);
-
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<Button variant="outline" size="lg" className="min-w-28" />}
-        >
-          <MapPin aria-hidden />
-          <span className="max-w-28 truncate">{city?.name ?? cityLabel}</span>
-          <ChevronDown aria-hidden />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>{cityLabel}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {cities.map((item) => (
-              <DropdownMenuItem
-                key={item.id}
-                onClick={() => {
-                  const firstTeam = teams.find(
-                    (candidate) =>
-                      candidate.organizationId === organizationId &&
-                      candidate.cityId === item.id,
-                  );
-                  replace({ city: item.id, team: firstTeam?.id ?? "" });
-                }}
-              >
-                <MapPin aria-hidden />
-                {item.name}
-                {item.id === cityId ? (
-                  <Check className="ms-auto" aria-hidden />
-                ) : null}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<Button variant="outline" size="lg" className="min-w-28" />}
-        >
-          <UsersRound aria-hidden />
-          <span className="max-w-28 truncate">{team?.name ?? teamLabel}</span>
-          <ChevronDown aria-hidden />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>{teamLabel}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {availableTeams.map((item) => (
-              <DropdownMenuItem
-                key={item.id}
-                onClick={() => {
-                  replace({ team: item.id });
-                }}
-              >
-                <UsersRound aria-hidden />
-                <span className="truncate">{item.name}</span>
-                {item.id === teamId ? (
-                  <Check className="ms-auto" aria-hidden />
-                ) : null}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
   );
 }

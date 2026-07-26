@@ -1,4 +1,4 @@
-import { supportedLocales } from "@calais/shared/i18n";
+import { supportedLocales } from "@infokit/shared/i18n";
 import { z } from "zod";
 
 export const localeSchema = z.enum(supportedLocales);

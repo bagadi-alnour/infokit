@@ -60,10 +60,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { DatePicker } from "~/components/ui/date-picker";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import { Separator } from "~/components/ui/separator";
 import {
   editorialLanguageCodes,
@@ -259,20 +256,20 @@ export function ArticleCreateForm({
                 <FieldLabel htmlFor="article-source-language">
                   {label(labels, "field.sourceLanguage")}
                 </FieldLabel>
-                <NativeSelect
+                <SelectField
                   id="article-source-language"
                   name="sourceLanguage"
                   value={sourceLanguage}
-                  onChange={(event) => {
-                    setSourceLanguage(event.target.value as SourceLanguage);
+                  onValueChange={(next) => {
+                    setSourceLanguage(next as SourceLanguage);
                   }}
                 >
                   {editorialLanguageCodes.map((language) => (
-                    <NativeSelectOption key={language} value={language}>
+                    <option key={language} value={language}>
                       {label(labels, `language.${language}`)}
-                    </NativeSelectOption>
+                    </option>
                   ))}
-                </NativeSelect>
+                </SelectField>
                 <FieldDescription>
                   {label(labels, "field.sourceLanguageHint")}
                 </FieldDescription>
@@ -325,21 +322,19 @@ export function ArticleCreateForm({
                 <FieldLabel htmlFor="article-scope">
                   {label(labels, "scope.type")}
                 </FieldLabel>
-                <NativeSelect
+                <SelectField
                   id="article-scope"
                   name="scope"
                   value={scope}
-                  onChange={(event) => {
-                    setScope(event.target.value as "global" | "city");
+                  onValueChange={(next) => {
+                    setScope(next as "global" | "city");
                   }}
                 >
-                  <NativeSelectOption value="global">
+                  <option value="global">
                     {label(labels, "scope.global")}
-                  </NativeSelectOption>
-                  <NativeSelectOption value="city">
-                    {label(labels, "scope.city")}
-                  </NativeSelectOption>
-                </NativeSelect>
+                  </option>
+                  <option value="city">{label(labels, "scope.city")}</option>
+                </SelectField>
                 <FieldDescription className="flex gap-2">
                   {scope === "global" ? (
                     <Globe2 className="mt-0.5 size-4 shrink-0" aria-hidden />

@@ -45,10 +45,7 @@ import {
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 
 export type ManagedService = {
   id: string;
@@ -291,22 +288,18 @@ export function ActivityServiceManager({
                       <FieldLabel htmlFor="new-service-scope">
                         {copy("scope")}
                       </FieldLabel>
-                      <NativeSelect
+                      <SelectField
                         id="new-service-scope"
                         value={createScope}
-                        onChange={(event) => {
-                          setCreateScope(
-                            event.target.value as typeof createScope,
-                          );
+                        onValueChange={(next) => {
+                          setCreateScope(next as typeof createScope);
                         }}
                       >
-                        <NativeSelectOption value="organization">
+                        <option value="organization">
                           {copy("scopeOrganization")}
-                        </NativeSelectOption>
-                        <NativeSelectOption value="global">
-                          {copy("scopeGlobal")}
-                        </NativeSelectOption>
-                      </NativeSelect>
+                        </option>
+                        <option value="global">{copy("scopeGlobal")}</option>
+                      </SelectField>
                     </Field>
                   ) : null}
                   <ServiceFields categories={categories} labels={labels} />

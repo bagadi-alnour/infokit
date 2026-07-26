@@ -1,4 +1,7 @@
-import { taxonomyEntry, type TaxonomyKind } from "@calais/shared/i18n/taxonomy";
+import {
+  taxonomyEntry,
+  type TaxonomyKind,
+} from "@infokit/shared/i18n/taxonomy";
 
 export const publicLanguageCodes = [
   "fr",

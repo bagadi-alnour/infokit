@@ -1,8 +1,21 @@
 "use client";
 
-import { ActionButton, PendingActionLabel } from "@calais/ui";
+import { Loader2 } from "lucide-react";
 import { useFormStatus } from "react-dom";
 
+import { ActionButton } from "~/components/public/primitives";
+
+const TONES = {
+  primary: "solid",
+  outline: "outline",
+  ghost: "quiet",
+} as const;
+
+/**
+ * The pending label replaces the label rather than sitting beside it, so the
+ * button never changes width mid-submit. The spinner disappears entirely under
+ * reduced motion (globals.css kills animations first).
+ */
 export function SubmitButton({
   label,
   pendingLabel,
@@ -10,23 +23,24 @@ export function SubmitButton({
 }: {
   label: string;
   pendingLabel: string;
-  tone?: "primary" | "outline" | "ghost";
+  tone?: keyof typeof TONES;
 }) {
   const { pending } = useFormStatus();
   return (
     <ActionButton
       type="submit"
-      tone={tone}
-      width="100%"
+      tone={TONES[tone]}
+      size="block"
       disabled={pending}
       aria-disabled={pending}
     >
-      <PendingActionLabel
-        pending={pending}
-        label={label}
-        pendingLabel={pendingLabel}
-        tone={tone}
-      />
+      {pending ? (
+        <Loader2
+          className="size-4 animate-spin motion-reduce:hidden"
+          aria-hidden
+        />
+      ) : null}
+      {pending ? pendingLabel : label}
     </ActionButton>
   );
 }

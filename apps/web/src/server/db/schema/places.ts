@@ -14,6 +14,7 @@ import {
   archival,
   content,
   locationPrecision,
+  stewardContact,
   timestamps,
   translationState,
 } from "./schemas";
@@ -38,6 +39,7 @@ export const places = content.table(
     lng: doublePrecision("lng"),
     precision: locationPrecision("precision").notNull().default("exact"),
     active: boolean("active").notNull().default(true),
+    ...stewardContact,
     ...archival,
     ...timestamps,
   },

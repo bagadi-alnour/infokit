@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pencil } from "lucide-react";
 
 import { IconPicker } from "~/components/admin/icon-picker";
+import { TooltipHint } from "~/components/admin/tooltip-hint";
 import { Button, Field, TextInput } from "~/components/admin/workspace";
 import {
   Popover,
@@ -41,13 +42,14 @@ export function EditCategoryButton({
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        aria-label={labels.edit}
-        title={labels.edit}
-        className="text-copy-muted hover:bg-subtle hover:text-ink focus-visible:ring-brand/50 inline-flex size-8 items-center justify-center rounded-md outline-none focus-visible:ring-2"
-      >
-        <Pencil className="size-4" aria-hidden />
-      </PopoverTrigger>
+      <TooltipHint label={labels.edit}>
+        <PopoverTrigger
+          aria-label={labels.edit}
+          className="text-copy-muted hover:bg-subtle hover:text-ink focus-visible:ring-brand/50 inline-flex size-8 items-center justify-center rounded-md outline-none focus-visible:ring-2"
+        >
+          <Pencil className="size-4" aria-hidden />
+        </PopoverTrigger>
+      </TooltipHint>
       <PopoverContent align="end" className="w-80">
         <form action={action} className="grid gap-3 text-start">
           <input type="hidden" name="locale" value={locale} />

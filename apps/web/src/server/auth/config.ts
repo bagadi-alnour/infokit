@@ -1,4 +1,4 @@
-import { isLocale, type Locale } from "@calais/shared/i18n";
+import { isLocale, type Locale } from "@infokit/shared/i18n";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
 
 import { env } from "~/env";
@@ -35,7 +35,7 @@ export function createAuthConfig(locale: Locale): NextAuthConfig {
         id: "ses",
         type: "email",
         name: "Amazon SES",
-        from: "Calais Info",
+        from: "InfoKit",
         maxAge: 15 * 60,
         options: {},
         async sendVerificationRequest({

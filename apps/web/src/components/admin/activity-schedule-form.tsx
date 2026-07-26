@@ -12,10 +12,7 @@ import { TimePicker } from "~/components/shadcn-studio/date-picker/date-picker-0
 import { Button } from "~/components/ui/button";
 import { DatePicker } from "~/components/ui/date-picker";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import { hasScheduleRuleOverlap } from "~/lib/schedule-overlap";
 
 type ScheduleRow = {
@@ -148,20 +145,16 @@ export function ActivityScheduleForm({
           <FieldLabel htmlFor={`activity-${activityId}-schedule-type`}>
             {labels.scheduleType}
           </FieldLabel>
-          <NativeSelect
+          <SelectField
             id={`activity-${activityId}-schedule-type`}
             value={scheduleType}
-            onChange={(event) => {
-              setScheduleType(event.target.value as "recurring" | "one_off");
+            onValueChange={(next) => {
+              setScheduleType(next as "recurring" | "one_off");
             }}
           >
-            <NativeSelectOption value="recurring">
-              {labels.recurring}
-            </NativeSelectOption>
-            <NativeSelectOption value="one_off">
-              {labels.oneOff}
-            </NativeSelectOption>
-          </NativeSelect>
+            <option value="recurring">{labels.recurring}</option>
+            <option value="one_off">{labels.oneOff}</option>
+          </SelectField>
         </Field>
         {scheduleType === "one_off" ? (
           <Field data-invalid={Boolean(errorMessage)}>
@@ -180,40 +173,34 @@ export function ActivityScheduleForm({
             <FieldLabel htmlFor={`activity-${activityId}-weekday`}>
               {labels.weekday}
             </FieldLabel>
-            <NativeSelect
+            <SelectField
               id={`activity-${activityId}-weekday`}
               name="weekday"
               value={weekday}
-              onChange={(event) => {
-                setWeekday(event.target.value);
-              }}
+              onValueChange={setWeekday}
               aria-invalid={Boolean(errorMessage)}
               aria-describedby={errorMessage ? errorId : undefined}
             >
               {Object.entries(labels.weekdays).map(([value, label]) => (
-                <NativeSelectOption key={value} value={value}>
+                <option key={value} value={value}>
                   {label}
-                </NativeSelectOption>
+                </option>
               ))}
-            </NativeSelect>
+            </SelectField>
           </Field>
         )}
         <Field>
           <FieldLabel htmlFor={`activity-${activityId}-timing-mode`}>
             {labels.timingMode}
           </FieldLabel>
-          <NativeSelect
+          <SelectField
             id={`activity-${activityId}-timing-mode`}
             name="timingMode"
             defaultValue="fixed"
           >
-            <NativeSelectOption value="fixed">
-              {labels.fixed}
-            </NativeSelectOption>
-            <NativeSelectOption value="flexible">
-              {labels.flexible}
-            </NativeSelectOption>
-          </NativeSelect>
+            <option value="fixed">{labels.fixed}</option>
+            <option value="flexible">{labels.flexible}</option>
+          </SelectField>
         </Field>
         <Field data-invalid={Boolean(errorMessage)}>
           <FieldLabel htmlFor={`activity-${activityId}-start-time`}>

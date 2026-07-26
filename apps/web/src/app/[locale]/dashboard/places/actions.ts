@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { type Locale } from "@calais/shared/i18n";
+import { type Locale } from "@infokit/shared/i18n";
 
 import { localizedPath } from "~/i18n/routing";
+import { parseStewardContact } from "~/lib/steward-contact";
 import { recordAudit } from "~/server/audit";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { db } from "~/server/db";
@@ -93,9 +94,11 @@ export const createPlace = protectedPermissionAction(
   "content.activity.manage",
   async (formData, locale) => {
     const parsed = parsePlaceFields(formData);
+    const steward = parseStewardContact(formData);
     const [place] = await db
       .insert(places)
       .values({
+        ...steward,
         organizationId: parsed.organizationId,
         cityId: parsed.cityId,
         cityAreaId: parsed.cityAreaId,
@@ -128,9 +131,11 @@ export const updatePlace = protectedPermissionAction(
   async (formData, locale) => {
     const placeId = z.string().uuid().parse(formData.get("placeId"));
     const parsed = parsePlaceFields(formData);
+    const steward = parseStewardContact(formData);
     await db
       .update(places)
       .set({
+        ...steward,
         organizationId: parsed.organizationId,
         cityId: parsed.cityId,
         cityAreaId: parsed.cityAreaId,

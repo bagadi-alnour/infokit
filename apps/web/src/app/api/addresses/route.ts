@@ -1,7 +1,7 @@
 import {
   addressSearchParamsSchema,
   type AddressSuggestion,
-} from "@calais/validation/address";
+} from "@infokit/validation/address";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 

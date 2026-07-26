@@ -1,6 +1,5 @@
 "use client";
 
-import { ActionButton, AuthTextField, Paragraph, YStack } from "@calais/ui";
 import { useState } from "react";
 
 import {
@@ -8,7 +7,9 @@ import {
   requestPasswordReset,
   signInWithPassword,
 } from "~/app/[locale]/login/actions";
+import { AuthTextField } from "~/components/auth/auth-text-field";
 import { SubmitButton } from "~/components/auth/submit-button";
+import { ActionButton } from "~/components/public/primitives";
 
 type Mode = "password" | "magic" | "reset";
 type Labels = Record<string, string>;
@@ -32,162 +33,134 @@ export function LoginForms({
 
   if (mode === "reset") {
     return (
-      <YStack gap="$calais5">
-        <YStack gap="$calais2">
-          <Paragraph
-            fontSize="$2"
-            fontWeight="700"
-            letterSpacing={0.6}
-            textTransform="uppercase"
-            color="$mutedText"
-          >
-            {l("auth.login.resetEyebrow")}
-          </Paragraph>
-          <Paragraph fontSize="$6" fontWeight="700">
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-2">
+          <p className="text-eyebrow">{l("auth.login.resetEyebrow")}</p>
+          <h2 className="font-display text-ink text-xl font-bold">
             {l("auth.login.resetHeading")}
-          </Paragraph>
-          <Paragraph fontSize="$3" color="$mutedText">
+          </h2>
+          <p className="text-copy-muted text-[0.95rem] leading-relaxed">
             {l("auth.login.resetDescription")}
-          </Paragraph>
-        </YStack>
-        <form action={requestPasswordReset}>
+          </p>
+        </div>
+        <form action={requestPasswordReset} className="flex flex-col gap-5">
           <input type="hidden" name="locale" value={locale} />
-          <YStack gap="$calais5">
-            <AuthTextField
-              id="reset-email"
-              label={l("auth.login.emailLabel")}
-              description={l("auth.login.privacy")}
-              inputProps={{
-                name: "email",
-                type: "email",
-                autoComplete: "email",
-                inputMode: "email",
-                required: true,
-                autoFocus: true,
-                placeholder: l("auth.login.emailPlaceholder"),
-              }}
-            />
-            <SubmitButton
-              label={l("auth.login.resetSubmit")}
-              pendingLabel={l("auth.login.resetSubmitting")}
-            />
-          </YStack>
+          <AuthTextField
+            id="reset-email"
+            label={l("auth.login.emailLabel")}
+            description={l("auth.login.privacy")}
+            name="email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            required
+            autoFocus
+            placeholder={l("auth.login.emailPlaceholder")}
+          />
+          <SubmitButton
+            label={l("auth.login.resetSubmit")}
+            pendingLabel={l("auth.login.resetSubmitting")}
+          />
         </form>
         <ActionButton
-          type="button"
-          tone="ghost"
-          width="100%"
-          onPress={() => {
+          tone="quiet"
+          size="block"
+          onClick={() => {
             setMode("password");
           }}
         >
           {l("auth.login.backToSignIn")}
         </ActionButton>
-      </YStack>
+      </div>
     );
   }
 
   if (mode === "magic") {
     return (
-      <YStack gap="$calais5">
-        <form action={requestMagicLink}>
+      <div className="flex flex-col gap-5">
+        <form action={requestMagicLink} className="flex flex-col gap-5">
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="returnTo" value={returnTo} />
-          <YStack gap="$calais5">
-            <AuthTextField
-              id="magic-link-email"
-              label={l("auth.login.emailLabel")}
-              description={l("auth.login.privacy")}
-              inputProps={{
-                name: "email",
-                type: "email",
-                autoComplete: "email",
-                inputMode: "email",
-                required: true,
-                autoFocus: true,
-                placeholder: l("auth.login.emailPlaceholder"),
-              }}
-            />
-            <SubmitButton
-              label={l("auth.login.magicLinkSubmit")}
-              pendingLabel={l("auth.login.magicLinkSubmitting")}
-            />
-          </YStack>
+          <AuthTextField
+            id="magic-link-email"
+            label={l("auth.login.emailLabel")}
+            description={l("auth.login.privacy")}
+            name="email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            required
+            autoFocus
+            placeholder={l("auth.login.emailPlaceholder")}
+          />
+          <SubmitButton
+            label={l("auth.login.magicLinkSubmit")}
+            pendingLabel={l("auth.login.magicLinkSubmitting")}
+          />
         </form>
         <ActionButton
-          type="button"
           tone="outline"
-          width="100%"
-          onPress={() => {
+          size="block"
+          onClick={() => {
             setMode("password");
           }}
         >
           {l("auth.login.switchToPassword")}
         </ActionButton>
-      </YStack>
+      </div>
     );
   }
 
   return (
-    <YStack gap="$calais5">
-      <form action={signInWithPassword}>
+    <div className="flex flex-col gap-5">
+      <form action={signInWithPassword} className="flex flex-col gap-5">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="returnTo" value={returnTo} />
-        <YStack gap="$calais5">
-          <AuthTextField
-            id="password-email"
-            label={l("auth.login.emailLabel")}
-            inputProps={{
-              name: "email",
-              type: "email",
-              autoComplete: "username",
-              inputMode: "email",
-              required: true,
-              autoFocus: true,
-              placeholder: l("auth.login.emailPlaceholder"),
-            }}
-          />
-          <AuthTextField
-            id="password"
-            label={l("auth.login.passwordLabel")}
-            labelAction={
-              <ActionButton
-                type="button"
-                tone="ghost"
-                minHeight={32}
-                paddingHorizontal="$calais2"
-                onPress={() => {
-                  setMode("reset");
-                }}
-              >
-                {l("auth.login.forgot")}
-              </ActionButton>
-            }
-            inputProps={{
-              name: "password",
-              type: "password",
-              autoComplete: "current-password",
-              required: true,
-            }}
-          />
-          <SubmitButton
-            label={l("auth.login.passwordSubmit")}
-            pendingLabel={l("auth.login.passwordSubmitting")}
-          />
-        </YStack>
+        <AuthTextField
+          id="password-email"
+          label={l("auth.login.emailLabel")}
+          name="email"
+          type="email"
+          autoComplete="username"
+          inputMode="email"
+          required
+          autoFocus
+          placeholder={l("auth.login.emailPlaceholder")}
+        />
+        <AuthTextField
+          id="password"
+          label={l("auth.login.passwordLabel")}
+          labelAction={
+            <ActionButton
+              tone="quiet"
+              size="compact"
+              className="-me-2 min-h-9 px-2"
+              onClick={() => {
+                setMode("reset");
+              }}
+            >
+              {l("auth.login.forgot")}
+            </ActionButton>
+          }
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+        />
+        <SubmitButton
+          label={l("auth.login.passwordSubmit")}
+          pendingLabel={l("auth.login.passwordSubmitting")}
+        />
       </form>
-      <YStack gap="$calais3" alignItems="center">
-        <ActionButton
-          type="button"
-          tone="outline"
-          width="100%"
-          onPress={() => {
-            setMode("magic");
-          }}
-        >
-          {l("auth.login.switchToMagic")}
-        </ActionButton>
-      </YStack>
-    </YStack>
+      <ActionButton
+        tone="outline"
+        size="block"
+        onClick={() => {
+          setMode("magic");
+        }}
+      >
+        {l("auth.login.switchToMagic")}
+      </ActionButton>
+    </div>
   );
 }

@@ -1,17 +1,15 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, desc, eq } from "drizzle-orm";
 import { CalendarClock, GitBranch, Plus, Search } from "lucide-react";
 import Link from "next/link";
 
 import { SimulatorRowActions } from "~/components/admin/simulator-row-actions";
+import { WorkspacePage } from "~/components/admin/workspace";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { requirePermission } from "~/server/auth/require";
@@ -154,7 +152,7 @@ export default async function SimulatorPage({
   });
 
   return (
-    <div className="px-4 py-7 md:px-7 lg:px-8">
+    <WorkspacePage>
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
           <p className="text-brand mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em]">
@@ -213,20 +211,18 @@ export default async function SimulatorPage({
               placeholder={t["list.searchPlaceholder"]}
               aria-label={t["list.searchPlaceholder"]}
             />
-            <NativeSelect
+            <SelectField
               name="status"
               defaultValue={requestedStatus}
               aria-label={t["list.filterState"]}
             >
-              <NativeSelectOption value="">
-                {t["list.allStates"]}
-              </NativeSelectOption>
+              <option value="">{t["list.allStates"]}</option>
               {listStates.map((state) => (
-                <NativeSelectOption key={state} value={state}>
+                <option key={state} value={state}>
                   {t[`status.${state}`]}
-                </NativeSelectOption>
+                </option>
               ))}
-            </NativeSelect>
+            </SelectField>
             <Button type="submit">
               <Search aria-hidden />
               {t["list.applyFilters"]}
@@ -351,6 +347,6 @@ export default async function SimulatorPage({
           </div>
         </section>
       )}
-    </div>
+    </WorkspacePage>
   );
 }

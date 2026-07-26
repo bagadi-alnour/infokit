@@ -1,4 +1,4 @@
-import { isLocale, type Locale } from "@calais/shared/i18n";
+import { isLocale, type Locale } from "@infokit/shared/i18n";
 
 import { localizedPath } from "~/i18n/routing";
 
@@ -12,8 +12,8 @@ export function safeReturnTo(value: unknown, locale: Locale): string {
     return fallback;
   }
 
-  const parsed = new URL(value, "https://calais-info.invalid");
-  if (parsed.origin !== "https://calais-info.invalid") return fallback;
+  const parsed = new URL(value, "https://infokit.invalid");
+  if (parsed.origin !== "https://infokit.invalid") return fallback;
 
   const segments = parsed.pathname.split("/").filter(Boolean);
   const pathSegments = isLocale(segments[0]) ? segments.slice(1) : segments;

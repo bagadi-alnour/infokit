@@ -10,12 +10,18 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useActionState,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { createActivity } from "~/app/[locale]/dashboard/activities/actions";
 import { createActivityImageUpload } from "~/app/[locale]/dashboard/activities/image-actions";
-import { ActivityTranslationsEditor } from "~/components/admin/activity-translations-editor";
 import {
   CoverImagePreview,
   useCoverImagePreview,
@@ -27,6 +33,9 @@ import {
 import { PlaceAddressFields } from "~/components/address/place-address-fields";
 import { PendingButton } from "~/components/pending-button";
 import { PublicationChoice } from "~/components/admin/publication-choice";
+import { SidebarFocusMode } from "~/components/admin/sidebar-focus-mode";
+import { TooltipHint } from "~/components/admin/tooltip-hint";
+import { TranslationWorkspace } from "~/components/admin/translation-workspace";
 import { TimePicker } from "~/components/shadcn-studio/date-picker/date-picker-09";
 import {
   Attachment,
@@ -51,12 +60,10 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { DatePicker } from "~/components/ui/date-picker";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 import { Separator } from "~/components/ui/separator";
 import { Textarea } from "~/components/ui/textarea";
+import { EDITOR_CONTACT_OPTION_ID } from "~/lib/editor-contact";
 
 /**
  * The source language an editor authors in first. Restricted to French and
@@ -113,6 +120,27 @@ function label(labels: Record<string, string>, key: string) {
   return labels[key] ?? key;
 }
 
+/**
+ * The contact preselected for a new activity.
+ *
+ * A reader who needs to ask something should reach the organisation running the
+ * activity, so the first contact it has published is preselected. When it has
+ * published none — which is most of them — the signed-in editor stands in.
+ * Editors can drop it or add another; the point is that the common case needs no
+ * decision, and that no activity is filed with nobody to ask.
+ */
+function defaultContactSelection(
+  contacts: ActivityFormOption[],
+  owner: string,
+) {
+  const owned = contacts.find((contact) => contact.organizationId === owner);
+  if (owned) return [owned.id];
+  const editor = contacts.find(
+    (contact) => contact.id === EDITOR_CONTACT_OPTION_ID,
+  );
+  return editor ? [editor.id] : [];
+}
+
 export function ActivityCreateForm({
   locale,
   activitiesPath,
@@ -126,6 +154,7 @@ export function ActivityCreateForm({
   contacts,
   labels,
   editorLabels,
+  aiEnabled,
 }: {
   locale: "fr" | "en" | "ar";
   activitiesPath: string;
@@ -139,10 +168,15 @@ export function ActivityCreateForm({
   contacts: ActivityFormOption[];
   labels: Record<string, string>;
   editorLabels: Record<string, string>;
+  /** False when no AI translation provider is configured for this deployment. */
+  aiEnabled: boolean;
 }) {
   const [organizationId, setOrganizationId] = useState(
     organizations[0]?.id ?? "",
   );
+  // Almost every activity belongs to one city; a nationwide helpline or an
+  // online service is the rare exception, so the city stays the default.
+  const [scope, setScope] = useState<"city" | "global">("city");
   const [cityId, setCityId] = useState(cities[0]?.id ?? "");
   const [sourceLanguage, setSourceLanguage] = useState<SourceLanguage>("fr");
   const [placeId, setPlaceId] = useState("");
@@ -157,13 +191,20 @@ export function ActivityCreateForm({
   const [scheduleType, setScheduleType] = useState<"recurring" | "one_off">(
     "recurring",
   );
+  // The first row is rendered on the server too, so its id has to survive the
+  // handover: a fresh UUID on each side makes every label and control inside
+  // the row hydrate as a mismatch. Rows the editor adds later are client-only,
+  // so those can keep using a random id.
+  const firstScheduleRowId = useId();
   const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>(() => [
-    newScheduleRow(1),
+    { ...newScheduleRow(1), id: firstScheduleRowId },
   ]);
   const [hasException, setHasException] = useState(false);
   const [partialException, setPartialException] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [selectedContacts, setSelectedContacts] = useState<string[]>(() =>
+    defaultContactSelection(contacts, organizations[0]?.id ?? ""),
+  );
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [creatorIds, setCreatorIds] = useState<string[]>(
     organizationId ? [organizationId] : [],
@@ -201,20 +242,27 @@ export function ActivityCreateForm({
   );
 
   const updateOrganization = (next: string) => {
+    /**
+     * The owner is always a creator and a provider, but it is *this* owner, not
+     * every organisation that has ever been selected in the dropdown: switching
+     * from A to B has to take A back out again, or a mistyped choice quietly
+     * credits an organisation that has nothing to do with the activity. Any
+     * other organisation an editor added by hand is left alone.
+     */
+    const replaceOwner = (current: string[]) => [
+      next,
+      ...current.filter((id) => id !== organizationId && id !== next),
+    ];
     setOrganizationId(next);
-    setCreatorIds((current) =>
-      current.includes(next) ? current : [next, ...current],
-    );
-    setProviderIds((current) =>
-      current.includes(next) ? current : [next, ...current],
-    );
+    setCreatorIds(replaceOwner);
+    setProviderIds(replaceOwner);
     setSelectedTags((current) =>
       current.filter((id) => {
         const tag = tags.find((item) => item.id === id);
         return tag?.organizationId === null || tag?.organizationId === next;
       }),
     );
-    setSelectedContacts([]);
+    setSelectedContacts(defaultContactSelection(contacts, next));
     setSelectedServices([]);
   };
 
@@ -284,6 +332,7 @@ export function ActivityCreateForm({
 
   return (
     <form action={createAction} className="grid gap-6">
+      <SidebarFocusMode />
       <input type="hidden" name="locale" value={locale} />
       <input type="hidden" name="coverAssetId" value={coverAssetId} />
       <input type="hidden" name="precision" value={precision} />
@@ -314,48 +363,55 @@ export function ActivityCreateForm({
         </div>
       </div>
 
+      {/* Content spans the full width: the source text and the translation rail
+       * need the room, and everything below it is short-field work that reads
+       * fine in two columns. */}
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>{label(labels, "activity.create.content")}</CardTitle>
+          <CardDescription>
+            {label(labels, "activity.create.contentHint")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-5">
+          <Field className="max-w-sm">
+            <FieldLabel htmlFor="activity-source-language">
+              {label(labels, "activity.create.sourceLanguage")}
+            </FieldLabel>
+            <SelectField
+              id="activity-source-language"
+              name="sourceLanguage"
+              value={sourceLanguage}
+              onValueChange={(next) => {
+                setSourceLanguage(next as SourceLanguage);
+              }}
+            >
+              {sourceLanguageOptions.map((language) => (
+                <option key={language} value={language}>
+                  {label(labels, `language.${language}`)}
+                </option>
+              ))}
+            </SelectField>
+            <FieldDescription>
+              {label(labels, "activity.create.sourceLanguageHint")}
+            </FieldDescription>
+          </Field>
+          <Separator />
+          <TranslationWorkspace
+            key={sourceLanguage}
+            entityKind="activity"
+            organizationId={organizationId || undefined}
+            interfaceLocale={locale}
+            sourceLanguage={sourceLanguage}
+            labels={editorLabels}
+            aiEnabled={aiEnabled}
+            imageAlt={{ source: coverAlt }}
+          />
+        </CardContent>
+      </Card>
+
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_23rem]">
         <div className="grid gap-6">
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle>{label(labels, "activity.create.content")}</CardTitle>
-              <CardDescription>
-                {label(labels, "activity.create.contentHint")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-5">
-              <Field className="max-w-sm">
-                <FieldLabel htmlFor="activity-source-language">
-                  {label(labels, "activity.create.sourceLanguage")}
-                </FieldLabel>
-                <NativeSelect
-                  id="activity-source-language"
-                  name="sourceLanguage"
-                  value={sourceLanguage}
-                  onChange={(event) => {
-                    setSourceLanguage(event.target.value as SourceLanguage);
-                  }}
-                >
-                  {sourceLanguageOptions.map((language) => (
-                    <NativeSelectOption key={language} value={language}>
-                      {label(labels, `language.${language}`)}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-                <FieldDescription>
-                  {label(labels, "activity.create.sourceLanguageHint")}
-                </FieldDescription>
-              </Field>
-              <Separator />
-              <ActivityTranslationsEditor
-                key={sourceLanguage}
-                interfaceLocale={locale}
-                sourceLanguage={sourceLanguage}
-                labels={editorLabels}
-              />
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader className="border-b">
               <CardTitle>{label(labels, "activity.create.schedule")}</CardTitle>
@@ -368,23 +424,21 @@ export function ActivityCreateForm({
                 <FieldLabel htmlFor="activity-schedule-type">
                   {label(labels, "activity.create.scheduleType")}
                 </FieldLabel>
-                <NativeSelect
+                <SelectField
                   id="activity-schedule-type"
                   name="scheduleType"
                   value={scheduleType}
-                  onChange={(event) => {
-                    setScheduleType(
-                      event.target.value as "recurring" | "one_off",
-                    );
+                  onValueChange={(next) => {
+                    setScheduleType(next as "recurring" | "one_off");
                   }}
                 >
-                  <NativeSelectOption value="recurring">
+                  <option value="recurring">
                     {label(labels, "activity.create.recurring")}
-                  </NativeSelectOption>
-                  <NativeSelectOption value="one_off">
+                  </option>
+                  <option value="one_off">
                     {label(labels, "activity.create.oneOff")}
-                  </NativeSelectOption>
-                </NativeSelect>
+                  </option>
+                </SelectField>
               </Field>
               {scheduleType === "one_off" ? (
                 <div className="grid gap-4 sm:grid-cols-3">
@@ -404,18 +458,18 @@ export function ActivityCreateForm({
                     <FieldLabel htmlFor="one-off-timing-mode">
                       {label(labels, "activity.create.timingMode")}
                     </FieldLabel>
-                    <NativeSelect
+                    <SelectField
                       id="one-off-timing-mode"
                       name="scheduleTimingMode"
                       defaultValue="fixed"
                     >
-                      <NativeSelectOption value="fixed">
+                      <option value="fixed">
                         {label(labels, "activity.create.fixedTime")}
-                      </NativeSelectOption>
-                      <NativeSelectOption value="flexible">
+                      </option>
+                      <option value="flexible">
                         {label(labels, "activity.create.flexibleTime")}
-                      </NativeSelectOption>
-                    </NativeSelect>
+                      </option>
+                    </SelectField>
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
                     <Field>
@@ -481,45 +535,44 @@ export function ActivityCreateForm({
                         <FieldLabel htmlFor={`schedule-weekday-${row.id}`}>
                           {label(labels, "activity.weekday")}
                         </FieldLabel>
-                        <NativeSelect
+                        <SelectField
                           id={`schedule-weekday-${row.id}`}
                           name="scheduleWeekday"
-                          value={row.weekday}
-                          onChange={(event) => {
+                          value={String(row.weekday)}
+                          onValueChange={(next) => {
                             updateScheduleRow(row.id, {
-                              weekday: Number(event.target.value),
+                              weekday: Number(next),
                             });
                           }}
                         >
                           {[1, 2, 3, 4, 5, 6, 7].map((weekday) => (
-                            <NativeSelectOption key={weekday} value={weekday}>
+                            <option key={weekday} value={String(weekday)}>
                               {label(labels, `weekday.${String(weekday)}`)}
-                            </NativeSelectOption>
+                            </option>
                           ))}
-                        </NativeSelect>
+                        </SelectField>
                       </Field>
                       <Field>
                         <FieldLabel htmlFor={`schedule-mode-${row.id}`}>
                           {label(labels, "activity.create.timingMode")}
                         </FieldLabel>
-                        <NativeSelect
+                        <SelectField
                           id={`schedule-mode-${row.id}`}
                           name="scheduleTimingMode"
                           value={row.timingMode}
-                          onChange={(event) => {
+                          onValueChange={(next) => {
                             updateScheduleRow(row.id, {
-                              timingMode: event.target
-                                .value as ScheduleRow["timingMode"],
+                              timingMode: next as ScheduleRow["timingMode"],
                             });
                           }}
                         >
-                          <NativeSelectOption value="fixed">
+                          <option value="fixed">
                             {label(labels, "activity.create.fixedTime")}
-                          </NativeSelectOption>
-                          <NativeSelectOption value="flexible">
+                          </option>
+                          <option value="flexible">
                             {label(labels, "activity.create.flexibleTime")}
-                          </NativeSelectOption>
-                        </NativeSelect>
+                          </option>
+                        </SelectField>
                       </Field>
                       <Field>
                         <FieldLabel>
@@ -551,20 +604,27 @@ export function ActivityCreateForm({
                           required
                         />
                       </Field>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={label(labels, "activity.create.removeDay")}
-                        disabled={scheduleRows.length === 1}
-                        onClick={() => {
-                          setScheduleRows((current) =>
-                            current.filter((item) => item.id !== row.id),
-                          );
-                        }}
+                      <TooltipHint
+                        label={label(labels, "activity.create.removeDay")}
                       >
-                        <X aria-hidden />
-                      </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={label(
+                            labels,
+                            "activity.create.removeDay",
+                          )}
+                          disabled={scheduleRows.length === 1}
+                          onClick={() => {
+                            setScheduleRows((current) =>
+                              current.filter((item) => item.id !== row.id),
+                            );
+                          }}
+                        >
+                          <X aria-hidden />
+                        </Button>
+                      </TooltipHint>
                       <span className="text-copy-muted text-xs sm:col-span-5">
                         {label(
                           labels,
@@ -621,24 +681,24 @@ export function ActivityCreateForm({
                     <FieldLabel htmlFor="activity-exception-kind">
                       {label(labels, "activity.create.exceptionKind")}
                     </FieldLabel>
-                    <NativeSelect
+                    <SelectField
                       id="activity-exception-kind"
                       name="exceptionKind"
                       defaultValue="closure"
                     >
-                      <NativeSelectOption value="closure">
+                      <option value="closure">
                         {label(labels, "activity.create.closure")}
-                      </NativeSelectOption>
-                      <NativeSelectOption value="cancellation">
+                      </option>
+                      <option value="cancellation">
                         {label(labels, "activity.create.cancellation")}
-                      </NativeSelectOption>
-                      <NativeSelectOption value="exceptional_opening">
+                      </option>
+                      <option value="exceptional_opening">
                         {label(labels, "activity.create.exceptionalOpening")}
-                      </NativeSelectOption>
-                      <NativeSelectOption value="uncertain">
+                      </option>
+                      <option value="uncertain">
                         {label(labels, "activity.create.uncertain")}
-                      </NativeSelectOption>
-                    </NativeSelect>
+                      </option>
+                    </SelectField>
                   </Field>
                   <label className="flex items-center gap-3 text-sm sm:col-span-2">
                     <Checkbox
@@ -689,53 +749,99 @@ export function ActivityCreateForm({
             <CardContent className="grid gap-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field>
-                  <FieldLabel>
-                    {label(labels, "activity.create.city")}
+                  <FieldLabel htmlFor="activity-scope">
+                    {label(labels, "activity.create.scope")}
                   </FieldLabel>
-                  <SearchableSelect
-                    name="cityId"
-                    options={cities.map((city) => ({
-                      value: city.id,
-                      label: city.label,
-                    }))}
-                    value={cityId}
-                    onValueChange={(nextCityId) => {
-                      setCityId(nextCityId);
-                      setPlaceId("");
-                    }}
-                    label={label(labels, "activity.create.city")}
-                    placeholder={label(labels, "activity.create.chooseCity")}
-                    emptyLabel={label(labels, "activity.create.noMatch")}
-                    required
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="activity-location-mode">
-                    {label(labels, "activity.create.locationType")}
-                  </FieldLabel>
-                  <NativeSelect
-                    id="activity-location-mode"
-                    name="locationMode"
-                    value={locationMode}
-                    onChange={(event) => {
-                      setLocationMode(
-                        event.target.value as typeof locationMode,
-                      );
+                  <SelectField
+                    id="activity-scope"
+                    name="scope"
+                    value={scope}
+                    onValueChange={(next) => {
+                      const nextScope = next as typeof scope;
+                      setScope(nextScope);
+                      // Nothing global sits at an address: a place belongs to a
+                      // city, so the only honest location is "no fixed place".
+                      if (nextScope === "global") {
+                        setLocationMode("mobile");
+                        setPlaceId("");
+                      }
                     }}
                   >
-                    <NativeSelectOption value="existing">
-                      {label(labels, "activity.create.existingPlace")}
-                    </NativeSelectOption>
-                    <NativeSelectOption value="new">
-                      {label(labels, "activity.create.newPlace")}
-                    </NativeSelectOption>
-                    <NativeSelectOption value="mobile">
-                      {label(labels, "activity.create.mobile")}
-                    </NativeSelectOption>
-                  </NativeSelect>
+                    <option value="city">
+                      {label(labels, "activity.create.scopeCity")}
+                    </option>
+                    <option value="global">
+                      {label(labels, "activity.create.scopeGlobal")}
+                    </option>
+                  </SelectField>
+                  <FieldDescription>
+                    {label(
+                      labels,
+                      scope === "global"
+                        ? "activity.create.scopeGlobalHint"
+                        : "activity.create.scopeCityHint",
+                    )}
+                  </FieldDescription>
                 </Field>
+                {scope === "city" ? (
+                  <>
+                    <Field>
+                      <FieldLabel>
+                        {label(labels, "activity.create.city")}
+                      </FieldLabel>
+                      <SearchableSelect
+                        name="cityId"
+                        options={cities.map((city) => ({
+                          value: city.id,
+                          label: city.label,
+                        }))}
+                        value={cityId}
+                        onValueChange={(nextCityId) => {
+                          setCityId(nextCityId);
+                          setPlaceId("");
+                        }}
+                        label={label(labels, "activity.create.city")}
+                        placeholder={label(
+                          labels,
+                          "activity.create.chooseCity",
+                        )}
+                        emptyLabel={label(labels, "activity.create.noMatch")}
+                        required
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="activity-location-mode">
+                        {label(labels, "activity.create.locationType")}
+                      </FieldLabel>
+                      <SelectField
+                        id="activity-location-mode"
+                        name="locationMode"
+                        value={locationMode}
+                        onValueChange={(next) => {
+                          setLocationMode(next as typeof locationMode);
+                        }}
+                      >
+                        <option value="existing">
+                          {label(labels, "activity.create.existingPlace")}
+                        </option>
+                        <option value="new">
+                          {label(labels, "activity.create.newPlace")}
+                        </option>
+                        <option value="mobile">
+                          {label(labels, "activity.create.mobile")}
+                        </option>
+                      </SelectField>
+                    </Field>
+                  </>
+                ) : (
+                  <input type="hidden" name="locationMode" value="mobile" />
+                )}
               </div>
-              {locationMode === "existing" ? (
+              {scope === "global" ? (
+                <p className="border-line bg-subtle rounded-lg border p-4 text-sm">
+                  {label(labels, "activity.create.globalLocationHint")}
+                </p>
+              ) : locationMode === "existing" ? (
                 <Field>
                   <FieldLabel>
                     {label(labels, "activity.create.place")}
@@ -793,23 +899,23 @@ export function ActivityCreateForm({
                     <FieldLabel htmlFor="activity-precision">
                       {label(labels, "field.precision")}
                     </FieldLabel>
-                    <NativeSelect
+                    <SelectField
                       id="activity-precision"
                       value={precision}
-                      onChange={(event) => {
-                        setPrecision(event.target.value as typeof precision);
+                      onValueChange={(next) => {
+                        setPrecision(next as typeof precision);
                       }}
                     >
-                      <NativeSelectOption value="exact">
+                      <option value="exact">
                         {label(labels, "precision.exact")}
-                      </NativeSelectOption>
-                      <NativeSelectOption value="area_only">
+                      </option>
+                      <option value="area_only">
                         {label(labels, "precision.area_only")}
-                      </NativeSelectOption>
-                      <NativeSelectOption value="contact_to_learn">
+                      </option>
+                      <option value="contact_to_learn">
                         {label(labels, "precision.contact_to_learn")}
-                      </NativeSelectOption>
-                    </NativeSelect>
+                      </option>
+                    </SelectField>
                     <FieldDescription>
                       {label(labels, "precision.hint")}
                     </FieldDescription>
@@ -891,15 +997,19 @@ export function ActivityCreateForm({
                   emptyLabel={label(labels, "activity.create.noMatch")}
                 />
               </Field>
-              <Field>
-                <FieldLabel htmlFor="activity-team-name">
-                  {label(labels, "activity.create.team")}
-                </FieldLabel>
-                <Input id="activity-team-name" name="teamName" />
-                <FieldDescription>
-                  {label(labels, "activity.create.teamHint")}
-                </FieldDescription>
-              </Field>
+              {/* Teams are organisation-and-city pairs, so a global activity
+               * has none to name. */}
+              {scope === "city" ? (
+                <Field>
+                  <FieldLabel htmlFor="activity-team-name">
+                    {label(labels, "activity.create.team")}
+                  </FieldLabel>
+                  <Input id="activity-team-name" name="teamName" />
+                  <FieldDescription>
+                    {label(labels, "activity.create.teamHint")}
+                  </FieldDescription>
+                </Field>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -1026,6 +1136,9 @@ export function ActivityCreateForm({
                   }}
                   maxLength={500}
                 />
+                <FieldDescription>
+                  {label(labels, "activity.create.image.altHint")}
+                </FieldDescription>
               </Field>
               <label className="flex items-start gap-3 text-sm">
                 <Checkbox

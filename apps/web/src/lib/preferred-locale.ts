@@ -1,4 +1,4 @@
-import { isPublicLocale, type PublicLocale } from "@calais/shared/i18n";
+import { isPublicLocale, type PublicLocale } from "@infokit/shared/i18n";
 
 /**
  * Resolves the browser's weighted Accept-Language list to a public locale.

@@ -44,7 +44,29 @@ export async function hasActualPlatformPermission(
   return (await platformPermissionsForUser(userId)).has(permissionCode);
 }
 
-async function organizationPermissionsForUser(
+/**
+ * Grants only the platform's own roles carry (server/db/seed.ts). Organisation
+ * roles can hold `organization.profile.manage` too, but for their own record
+ * only — `platformPermissionsForUser` reads platform-scoped roles alone, so
+ * asking it for these codes answers "is this a platform administrator?".
+ */
+export const platformAdminPermissions = [
+  superadminPermission,
+  "organization.verify",
+  "organization.profile.manage",
+] as const;
+
+/**
+ * Whether the actor administers the platform itself. The organisation
+ * directory is theirs: an association's own members see their record, not the
+ * list of every association (docs/PRODUCT.md §11.3).
+ */
+export async function isPlatformAdmin(userId: string): Promise<boolean> {
+  const actual = await platformPermissionsForUser(userId);
+  return platformAdminPermissions.some((code) => actual.has(code));
+}
+
+export async function organizationPermissionsForUser(
   userId: string,
   organizationId: string,
 ): Promise<Set<string>> {

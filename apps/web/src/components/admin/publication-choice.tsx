@@ -1,15 +1,12 @@
 "use client";
 
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import { useState } from "react";
 
+import { TimePicker } from "~/components/shadcn-studio/date-picker/date-picker-09";
 import { DatePicker } from "~/components/ui/date-picker";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
-import { Input } from "~/components/ui/input";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 
 export type PublicationMode = "draft" | "now" | "scheduled";
 
@@ -45,20 +42,18 @@ export function PublicationChoice({
     <div className="grid gap-4">
       <Field>
         <FieldLabel htmlFor="publication-mode">{labels.heading}</FieldLabel>
-        <NativeSelect
+        <SelectField
           id="publication-mode"
           name="publicationMode"
           value={mode}
-          onChange={(event) => {
-            setMode(event.target.value as PublicationMode);
+          onValueChange={(next) => {
+            setMode(next as PublicationMode);
           }}
         >
-          <NativeSelectOption value="draft">{labels.draft}</NativeSelectOption>
-          <NativeSelectOption value="now">{labels.now}</NativeSelectOption>
-          <NativeSelectOption value="scheduled">
-            {labels.scheduled}
-          </NativeSelectOption>
-        </NativeSelect>
+          <option value="draft">{labels.draft}</option>
+          <option value="now">{labels.now}</option>
+          <option value="scheduled">{labels.scheduled}</option>
+        </SelectField>
         <FieldDescription>{labels.hint}</FieldDescription>
       </Field>
       {mode === "scheduled" ? (
@@ -78,10 +73,9 @@ export function PublicationChoice({
           </Field>
           <Field>
             <FieldLabel htmlFor="publication-time">{labels.time}</FieldLabel>
-            <Input
+            <TimePicker
               id="publication-time"
               name="publicationTime"
-              type="time"
               value={publicationTime}
               required
               onChange={(event) => {

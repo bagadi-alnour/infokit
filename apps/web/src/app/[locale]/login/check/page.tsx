@@ -1,9 +1,8 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { ActionLinkSurface, Paragraph, Text, YStack } from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { AuthShell } from "~/components/auth/auth-shell";
+import { ActionLink } from "~/components/public/primitives";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { authPath } from "~/i18n/routing";
 import { localizedAuthMetadata } from "~/seo/site";
@@ -37,25 +36,18 @@ export default async function CheckEmailPage({ params }: CheckEmailPageProps) {
       description={messages["auth.check.description"]}
       messages={messages}
     >
-      <YStack gap="$calais5">
-        <YStack
-          backgroundColor="$subtle"
-          borderRadius="$control"
-          padding="$calais4"
-        >
-          <Paragraph color="$mutedText" fontSize="$3" lineHeight={20}>
-            {messages["auth.check.next"]}
-          </Paragraph>
-        </YStack>
-        <Link
+      <div className="flex flex-col gap-5">
+        <p className="bg-subtle border-line text-copy-muted rounded-control border p-4 text-[0.95rem] leading-relaxed">
+          {messages["auth.check.next"]}
+        </p>
+        <ActionLink
           href={authPath("login", locale)}
-          style={{ textDecoration: "none" }}
+          tone="outline"
+          size="block"
         >
-          <ActionLinkSurface tone="outline">
-            <Text fontWeight="600">{messages["auth.check.back"]}</Text>
-          </ActionLinkSurface>
-        </Link>
-      </YStack>
+          {messages["auth.check.back"]}
+        </ActionLink>
+      </div>
     </AuthShell>
   );
 }

@@ -269,24 +269,32 @@ function SidebarTrigger({
 }: React.ComponentProps<typeof Button> & { label: string }) {
   const { toggleSidebar } = useSidebar();
 
+  // A styled tooltip instead of the browser's `title`: the two would otherwise
+  // both appear, one of them unstyled and half a second late.
   return (
-    <Button
-      data-sidebar="trigger"
-      data-slot="sidebar-trigger"
-      variant="ghost"
-      size="icon-sm"
-      aria-label={label}
-      title={label}
-      className={cn(className)}
-      onClick={(event) => {
-        onClick?.(event);
-        toggleSidebar();
-      }}
-      {...props}
-    >
-      <PanelLeftIcon className="rtl:rotate-180" />
-      <span className="sr-only">{label}</span>
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            data-sidebar="trigger"
+            data-slot="sidebar-trigger"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={label}
+            className={cn(className)}
+            onClick={(event) => {
+              onClick?.(event);
+              toggleSidebar();
+            }}
+            {...props}
+          >
+            <PanelLeftIcon className="rtl:rotate-180" />
+            <span className="sr-only">{label}</span>
+          </Button>
+        }
+      />
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -558,7 +566,9 @@ function SidebarMenuButton({
     <Tooltip>
       {comp}
       <TooltipContent
-        side="right"
+        // Logical side: the label appears past the icon rail, which sits on the
+        // left in English and on the right in Arabic.
+        side="inline-end"
         align="center"
         hidden={state !== "collapsed" || isMobile}
         {...tooltip}

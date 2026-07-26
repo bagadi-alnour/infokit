@@ -1,12 +1,13 @@
 "use client";
 
-import type { Locale } from "@calais/shared/i18n";
+import type { Locale } from "@infokit/shared/i18n";
 import { CalendarClock } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import { PendingButton } from "~/components/pending-button";
+import { TimePicker } from "~/components/shadcn-studio/date-picker/date-picker-09";
 import { Button } from "~/components/ui/button";
 import { DatePicker } from "~/components/ui/date-picker";
 import {
@@ -20,7 +21,6 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { Field, FieldLabel } from "~/components/ui/field";
-import { Input } from "~/components/ui/input";
 
 type ScheduleAction = (formData: FormData) => Promise<void>;
 
@@ -109,10 +109,9 @@ export function SchedulePublicationDialog({
               <FieldLabel htmlFor={`publication-time-${fieldSuffix}`}>
                 {labels["publication.time"]}
               </FieldLabel>
-              <Input
+              <TimePicker
                 id={`publication-time-${fieldSuffix}`}
                 name="publicationTime"
-                type="time"
                 value={publicationTime}
                 required
                 onChange={(event) => {

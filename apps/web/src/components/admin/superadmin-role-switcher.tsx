@@ -10,10 +10,7 @@ import {
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import { SearchableMultiSelect } from "~/components/admin/searchable-select";
 import { Button } from "~/components/ui/button";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "~/components/ui/native-select";
+import { SelectField } from "~/components/ui/select-field";
 
 export function SuperadminRoleSwitcher({
   locale,
@@ -122,18 +119,18 @@ export function SuperadminRoleSwitcher({
             emptyLabel={labels.noMatch}
           />
         </div>
-        <NativeSelect
+        <SelectField
           name="organizationId"
           aria-label={labels.organization}
           defaultValue={activeOrganization?.id ?? organizations[0]?.id}
           disabled={!needsOrganization}
         >
           {organizations.map((organization) => (
-            <NativeSelectOption key={organization.id} value={organization.id}>
+            <option key={organization.id} value={organization.id}>
               {organization.name}
-            </NativeSelectOption>
+            </option>
           ))}
-        </NativeSelect>
+        </SelectField>
         <Button type="submit" variant="outline" size="sm" className="w-full">
           {labels.apply}
         </Button>

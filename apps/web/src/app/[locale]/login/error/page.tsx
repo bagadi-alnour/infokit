@@ -1,9 +1,8 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { ActionLinkSurface, Text } from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { AuthShell } from "~/components/auth/auth-shell";
+import { ActionLink } from "~/components/public/primitives";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { authPath } from "~/i18n/routing";
 import { localizedAuthMetadata } from "~/seo/site";
@@ -37,13 +36,9 @@ export default async function LoginErrorPage({ params }: LoginErrorPageProps) {
       description={messages["auth.error.description"]}
       messages={messages}
     >
-      <Link href={authPath("login", locale)} style={{ textDecoration: "none" }}>
-        <ActionLinkSurface>
-          <Text color="$accentContrast" fontWeight="600">
-            {messages["auth.error.retry"]}
-          </Text>
-        </ActionLinkSurface>
-      </Link>
+      <ActionLink href={authPath("login", locale)} size="block">
+        {messages["auth.error.retry"]}
+      </ActionLink>
     </AuthShell>
   );
 }

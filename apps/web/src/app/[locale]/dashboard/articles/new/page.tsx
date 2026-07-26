@@ -1,10 +1,11 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, asc, eq, isNull } from "drizzle-orm";
 
 import {
   ArticleCreateForm,
   type ArticleFormOption,
 } from "~/components/admin/article-create-form";
+import { WorkspacePage } from "~/components/admin/workspace";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { db } from "~/server/db";
@@ -110,7 +111,7 @@ export default async function NewArticlePage({
   }));
 
   return (
-    <div className="px-4 py-7 md:px-7 lg:px-8">
+    <WorkspacePage>
       <ArticleCreateForm
         locale={locale}
         articlesPath={localizedPath("/dashboard/articles", locale)}
@@ -125,6 +126,6 @@ export default async function NewArticlePage({
         canManageGlobalTags={canManageGlobalTags}
         labels={labels}
       />
-    </div>
+    </WorkspacePage>
   );
 }

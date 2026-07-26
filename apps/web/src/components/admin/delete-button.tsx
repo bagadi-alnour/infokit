@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 
+import { TooltipHint } from "~/components/admin/tooltip-hint";
 import { Button } from "~/components/admin/workspace";
 import {
   Popover,
@@ -40,13 +41,14 @@ export function DeleteButton({
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        aria-label={labels.delete}
-        title={labels.delete}
-        className="text-copy-muted hover:bg-danger-soft hover:text-danger focus-visible:ring-danger/50 inline-flex size-8 items-center justify-center rounded-md outline-none focus-visible:ring-2"
-      >
-        <Trash2 className="size-4" aria-hidden />
-      </PopoverTrigger>
+      <TooltipHint label={labels.delete}>
+        <PopoverTrigger
+          aria-label={labels.delete}
+          className="text-copy-muted hover:bg-danger-soft hover:text-danger focus-visible:ring-danger/50 inline-flex size-8 items-center justify-center rounded-md outline-none focus-visible:ring-2"
+        >
+          <Trash2 className="size-4" aria-hidden />
+        </PopoverTrigger>
+      </TooltipHint>
       <PopoverContent align="end" className="w-64 text-start">
         <p className="text-sm font-medium">{labels.confirm}</p>
         <p className="text-copy-muted text-xs">{labels.hint}</p>

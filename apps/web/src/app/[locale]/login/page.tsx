@@ -1,5 +1,4 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
-import { YStack } from "@calais/ui";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -58,7 +57,7 @@ export default async function LoginPage({
       description={messages["auth.login.description"]}
       messages={messages}
     >
-      <YStack gap="$calais6">
+      <div className="flex flex-col gap-6">
         <AuthStatus
           status={
             query.error === "reset"
@@ -76,7 +75,7 @@ export default async function LoginPage({
           }}
         />
         <LoginForms locale={locale} returnTo={returnTo} labels={messages} />
-      </YStack>
+      </div>
     </AuthShell>
   );
 }

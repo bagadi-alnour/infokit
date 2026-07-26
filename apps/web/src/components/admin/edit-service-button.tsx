@@ -4,12 +4,15 @@ import { useState } from "react";
 import { Pencil } from "lucide-react";
 
 import { IconPicker } from "~/components/admin/icon-picker";
+import { StewardContactFields } from "~/components/admin/steward-contact";
+import { TooltipHint } from "~/components/admin/tooltip-hint";
 import { Button, Field, Select, TextInput } from "~/components/admin/workspace";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import type { StewardContactValues } from "~/lib/steward-contact";
 
 export type EditServiceLabels = {
   edit: string;
@@ -37,6 +40,7 @@ export function EditServiceButton({
   categories,
   icons,
   labels,
+  steward,
 }: {
   action: (formData: FormData) => Promise<void>;
   locale: string;
@@ -48,17 +52,28 @@ export function EditServiceButton({
   categories: readonly { id: string; label: string }[];
   icons: readonly string[];
   labels: EditServiceLabels;
+  /**
+   * The workspace-only "who to ask about this row" contact. Omitted where the
+   * screen has not loaded it — the action then leaves the stored contact alone
+   * rather than clearing it.
+   */
+  steward?: {
+    values: StewardContactValues;
+    /** The shared console catalogue, so the wording matches every other type. */
+    labels: Record<string, string>;
+  };
 }) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        aria-label={labels.edit}
-        title={labels.edit}
-        className="text-copy-muted hover:bg-subtle hover:text-ink focus-visible:ring-brand/50 inline-flex size-8 items-center justify-center rounded-md outline-none focus-visible:ring-2"
-      >
-        <Pencil className="size-4" aria-hidden />
-      </PopoverTrigger>
+      <TooltipHint label={labels.edit}>
+        <PopoverTrigger
+          aria-label={labels.edit}
+          className="text-copy-muted hover:bg-subtle hover:text-ink focus-visible:ring-brand/50 inline-flex size-8 items-center justify-center rounded-md outline-none focus-visible:ring-2"
+        >
+          <Pencil className="size-4" aria-hidden />
+        </PopoverTrigger>
+      </TooltipHint>
       <PopoverContent align="end" className="w-80">
         <form action={action} className="grid gap-3 text-start">
           <input type="hidden" name="locale" value={locale} />
@@ -99,6 +114,22 @@ export function EditServiceButton({
               emptyLabel={labels.emptyIcons}
             />
           </Field>
+          {/* Folded away: a service is usually edited to fix its name, and the
+           * steward contact is a rarer, separate errand. */}
+          {steward ? (
+            <details className="text-sm">
+              <summary className="text-copy-muted cursor-pointer">
+                {steward.labels["steward.title"]}
+              </summary>
+              <div className="mt-3">
+                <StewardContactFields
+                  values={steward.values}
+                  labels={steward.labels}
+                  columns={false}
+                />
+              </div>
+            </details>
+          ) : null}
           <Button>{labels.save}</Button>
         </form>
       </PopoverContent>

@@ -24,6 +24,26 @@
   "catalogue.action.disable": "Disable",
   "catalogue.action.activate": "Activate",
   "catalogue.action.deactivate": "Deactivate",
+  "catalogue.actionError": "That change was not saved. Try again.",
+
+  "catalogue.tabs.label": "Catalogue sections",
+  "catalogue.stat.services": "Services",
+  "catalogue.stat.categories": "Categories",
+  "catalogue.stat.tags": "Tags",
+  "catalogue.stat.hidden": "Turned off",
+  "catalogue.stat.hiddenHint": "Rows editors can no longer pick.",
+  "catalogue.column.usage": "Used by",
+  "catalogue.column.services": "Services",
+  "catalogue.column.order": "Order",
+  "catalogue.column.actions": "Actions",
+  "catalogue.search.services": "Search services",
+  "catalogue.search.categories": "Search categories",
+  "catalogue.search.tags": "Search tags",
+  "catalogue.filter.anyCategory": "Any category",
+  "catalogue.filter.anyScope": "Any scope",
+  "catalogue.filter.anyState": "Any state",
+  "catalogue.filter.anyVisibility": "Any visibility",
+  "catalogue.filter.anyNamespace": "Any namespace",
 
   "catalogue.services.title": "Services",
   "catalogue.services.count": "{count} services",
@@ -41,6 +61,8 @@
   "catalogue.services.create": "Add service",
   "catalogue.services.edit": "Edit service",
   "catalogue.services.save": "Save changes",
+  "catalogue.services.newHint": "A service is what an activity offers — a shower, a meal, legal advice.",
+  "catalogue.services.created": "Service added.",
 
   "catalogue.categories.title": "Categories",
   "catalogue.categories.count": "{count} categories",
@@ -55,6 +77,8 @@
   "catalogue.categories.services": "{count} services",
   "catalogue.categories.create": "Add category",
   "catalogue.categories.edit": "Edit category",
+  "catalogue.categories.newHint": "A category groups services in the public filters. Shared platform-wide.",
+  "catalogue.categories.created": "Category added.",
 
   "catalogue.tags.title": "Tags",
   "catalogue.tags.count": "{count} tags",
@@ -73,5 +97,7 @@
   "catalogue.tags.visibility.workspace": "Workspace only",
   "catalogue.tags.scope": "Scope",
   "catalogue.tags.create": "Add tag",
-  "catalogue.tags.edit": "Edit tag"
+  "catalogue.tags.edit": "Edit tag",
+  "catalogue.tags.newHint": "A tag labels content for search and filters. It never grants access.",
+  "catalogue.tags.created": "Tag added."
 }

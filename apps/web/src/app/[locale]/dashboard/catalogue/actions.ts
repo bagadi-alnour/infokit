@@ -5,9 +5,10 @@ import { redirect } from "next/navigation";
 import { count, eq } from "drizzle-orm";
 import { type AnyPgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
-import { type Locale } from "@calais/shared/i18n";
+import { type Locale } from "@infokit/shared/i18n";
 
 import { getActionLocale } from "~/i18n/request-locale";
+import { stewardContactPatch } from "~/lib/steward-contact";
 import { localizedPath } from "~/i18n/routing";
 import { recordAudit } from "~/server/audit";
 import { requireEditor } from "~/server/auth/require";
@@ -236,7 +237,13 @@ export async function updateService(formData: FormData) {
     db.transaction(async (tx) => {
       await tx
         .update(services)
-        .set({ icon: parsed.icon, categoryId: parsed.categoryId })
+        .set({
+          icon: parsed.icon,
+          categoryId: parsed.categoryId,
+          // Only when the form carried the fieldset: a screen that edits a
+          // service without showing the steward contact must not erase it.
+          ...stewardContactPatch(formData),
+        })
         .where(eq(services.id, serviceId));
       await tx
         .insert(serviceTranslations)

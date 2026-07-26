@@ -1,8 +1,9 @@
-import { formatMessage } from "@calais/shared/i18n";
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { formatMessage } from "@infokit/shared/i18n";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, desc, eq } from "drizzle-orm";
 
 import { PlaceAddressFields } from "~/components/address/place-address-fields";
+import { StewardContactFields } from "~/components/admin/steward-contact";
 import {
   Button,
   Card,
@@ -12,8 +13,10 @@ import {
   PageHeader,
   Select,
   TextInput,
+  WorkspacePage,
 } from "~/components/admin/workspace";
 import { requireRouteLocale } from "~/i18n/route-locale";
+import { EMPTY_STEWARD_CONTACT } from "~/lib/steward-contact";
 import { db } from "~/server/db";
 import {
   cities,
@@ -30,7 +33,12 @@ export default async function PlacesPage({
   params: Promise<{ locale: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const messages = await loadPageCatalog(locale, "dashboard-places");
+  const [messages, shared] = await Promise.all([
+    loadPageCatalog(locale, "dashboard-places"),
+    // The steward contact reads from the shared console catalogue, so the
+    // wording is the same on every content type.
+    loadPageCatalog(locale, "dashboard-console"),
+  ]);
   const precisionLabel = {
     exact: messages["places.precision.exact"],
     area_only: messages["places.precision.areaOnly"],
@@ -75,7 +83,7 @@ export default async function PlacesPage({
     .orderBy(desc(places.createdAt));
 
   return (
-    <>
+    <WorkspacePage>
       <PageHeader
         title={messages["places.title"]}
         sub={messages["places.description"]}
@@ -170,6 +178,13 @@ export default async function PlacesPage({
               }}
               selectedLabel={messages["places.address.selected"]}
             />
+            {/* Who to ask when this place turns out to be wrong — workspace
+             * only, on every content type. */}
+            <StewardContactFields
+              values={EMPTY_STEWARD_CONTACT}
+              labels={shared}
+              columns={false}
+            />
             <Field
               label={messages["places.precision"]}
               hint={messages["places.precisionHint"]}
@@ -190,6 +205,6 @@ export default async function PlacesPage({
           </form>
         </Card>
       </div>
-    </>
+    </WorkspacePage>
   );
 }

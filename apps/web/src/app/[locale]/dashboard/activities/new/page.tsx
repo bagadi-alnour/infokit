@@ -1,12 +1,16 @@
-import { loadPageCatalog } from "@calais/shared/i18n/catalogs";
+import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, asc, eq } from "drizzle-orm";
 
 import {
   ActivityCreateForm,
   type ActivityFormOption,
 } from "~/components/admin/activity-create-form";
+import { WorkspacePage } from "~/components/admin/workspace";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
+import { EDITOR_CONTACT_OPTION_ID } from "~/lib/editor-contact";
+import { hasAiTranslationProvider } from "~/server/ai/provider";
+import { requireEditor } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
   audienceCategories,
@@ -32,7 +36,8 @@ export default async function NewActivityPage({
   params: Promise<{ locale: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const [labels, overviewLabels] = await Promise.all([
+  const [editor, labels, overviewLabels] = await Promise.all([
+    requireEditor(locale),
     loadPageCatalog(locale, "dashboard-console"),
     loadPageCatalog(locale, "dashboard-overview"),
   ]);
@@ -199,6 +204,28 @@ export default async function NewActivityPage({
     }
   }
 
+  /**
+   * The editor themselves, first in the contacts list.
+   *
+   * Most organisations here have published no contact at all, so the list is
+   * empty and an activity gets filed that no reader can ask about. The person
+   * entering it can always be asked; keeping the option publishes their sign-in
+   * address, which the description says plainly before they choose it.
+   */
+  const editorEmail = editor.email?.trim();
+  const editorName = editor.name?.trim() ?? "";
+  const editorContact: ActivityFormOption | null = editorEmail
+    ? {
+        id: EDITOR_CONTACT_OPTION_ID,
+        label: labels["activity.create.contactYou"].replace(
+          "{name}",
+          editorName.length > 0 ? editorName : editorEmail,
+        ),
+        description: `${editorEmail} · ${labels["activity.create.contactYouHint"]}`,
+        organizationId: null,
+      }
+    : null;
+
   const option = (row: {
     id: string;
     label: string | null;
@@ -211,7 +238,7 @@ export default async function NewActivityPage({
   });
 
   return (
-    <div className="px-4 py-7 md:px-7 lg:px-8">
+    <WorkspacePage>
       <ActivityCreateForm
         locale={locale}
         activitiesPath={localizedPath("/dashboard/activities", locale)}
@@ -247,15 +274,19 @@ export default async function NewActivityPage({
             : labels["scope.global"],
           organizationId: row.organizationId,
         }))}
-        contacts={contactRows.map((row) => ({
-          id: row.id,
-          label: row.label ?? row.value ?? row.kind,
-          description: row.value ?? row.kind,
-          organizationId: row.organizationId,
-        }))}
+        contacts={[
+          ...(editorContact ? [editorContact] : []),
+          ...contactRows.map((row) => ({
+            id: row.id,
+            label: row.label ?? row.value ?? row.kind,
+            description: row.value ?? row.kind,
+            organizationId: row.organizationId,
+          })),
+        ]}
         labels={labels}
         editorLabels={editorLabels}
+        aiEnabled={hasAiTranslationProvider()}
       />
-    </div>
+    </WorkspacePage>
   );
 }
