@@ -47,6 +47,19 @@ export function resolveLocale(value: string | null | undefined): Locale {
   return isLocale(base) ? base : "fr";
 }
 
+/**
+ * Best public locale for a language tag ("fa-IR" → "fa", "de" → "fr"). Used by
+ * the public API and by native clients reading the device language.
+ */
+export function resolvePublicLocale(
+  value: string | null | undefined,
+): PublicLocale {
+  const trimmed = value?.trim().toLowerCase();
+  if (isPublicLocale(trimmed)) return trimmed;
+  const base = trimmed?.split("-")[0];
+  return isPublicLocale(base) ? base : "fr";
+}
+
 export function formatMessage(
   message: string,
   values: Record<string, string> = {},

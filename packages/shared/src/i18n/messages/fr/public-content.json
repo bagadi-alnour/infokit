@@ -20,6 +20,7 @@
   "activities.eyebrow": "Trouver de l’aide",
   "activities.title": "Activités et services",
   "activities.description": "Filtrez les activités publiques vérifiées, comparez les informations essentielles ou utilisez la carte basse consommation pour voir les lieux dont la position exacte peut être publiée.",
+  "activities.freshnessNotice": "Les horaires changent vite. Chaque fiche indique sa date de dernière vérification — confirmez avant de vous déplacer.",
   "activities.search": "Rechercher par activité, besoin, lieu ou organisme",
   "activities.filter.category": "Besoin",
   "activities.allCategories": "Tous les besoins",

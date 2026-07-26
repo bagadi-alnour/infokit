@@ -20,6 +20,7 @@
   "activities.eyebrow": "Find help",
   "activities.title": "Activities and services",
   "activities.description": "Filter reviewed public activities, compare essential details, or use the low-data map to see where exact public locations are.",
+  "activities.freshnessNotice": "Times change quickly. Every card carries the date it was last verified — confirm before travelling.",
   "activities.search": "Search by activity, need, place or provider",
   "activities.filter.category": "Need",
   "activities.allCategories": "All needs",

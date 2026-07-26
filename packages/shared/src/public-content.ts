@@ -98,6 +98,37 @@ export interface PublicActivityLabels {
   instructions?: string;
 }
 
+/** Page-level chrome for an activities screen, localized by the server. */
+export interface PublicActivityPageLabels {
+  eyebrow: string;
+  title: string;
+  description: string;
+  /** Standing reminder that opening times move and cards carry a date. */
+  freshnessNotice: string;
+}
+
+/**
+ * What the public activities endpoint returns: the same payload the web page
+ * renders server-side, plus the labels that go with it, so a native client can
+ * draw the screen without carrying an interface catalogue of its own.
+ */
+export interface PublicActivityListPayload {
+  locale: string;
+  /** "rtl" for ar, fa, prs, ps, ckb — the client mirrors its own layout. */
+  direction: "ltr" | "rtl";
+  activities: PublicActivitySummary[];
+  labels: PublicActivityLabels;
+  page: PublicActivityPageLabels;
+}
+
+export interface PublicActivityDetailPayload {
+  locale: string;
+  direction: "ltr" | "rtl";
+  activity: PublicActivityDetail;
+  labels: PublicActivityLabels;
+  page: PublicActivityPageLabels;
+}
+
 export interface PublicArticleSummary {
   id: string;
   href: string;
