@@ -119,6 +119,11 @@ from the blue of border-police and government sites to not be mistaken for one.
   cursor is chrome competing with the answers printed on it, and rule 7 drops
   shadows before anything a reader needs. A card is a link target in full; the
   visible affordance is its title.
+  **The activity card is still.** It carries the answer itself — status, address,
+  hours, how old the check is — and a card a reader is mid-sentence in must not
+  move under the cursor that is tracking the line. It keeps the ring on focus,
+  which is the only pointer a keyboard reader has; the shelves that are routes
+  onward rather than answers (articles, the agenda, associations) keep the rise.
 - **Content families.** Each kind of card is built differently, so a reader
   recognises what they are holding before reading it. One shape and one hue per
   family, and no family may take more than the one element named here:
