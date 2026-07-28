@@ -1,8 +1,9 @@
 "use client";
 
 import { Archive, Pencil, Plus, RotateCcw, Save } from "lucide-react";
-import { useActionState, useEffect, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import {
   archiveReusableService,
@@ -12,14 +13,13 @@ import {
   updateReusableService,
 } from "~/app/[locale]/dashboard/activities/actions";
 import {
-  isPermissionDeniedError,
-  useActionErrorToast,
-} from "~/components/admin/admin-ui-provider";
-import {
-  SearchableMultiSelect,
-  SearchableSelect,
-  type SearchableOption,
-} from "~/components/admin/searchable-select";
+  FormSubmitButton,
+  SearchableMultiSelectFormField,
+  SearchableSelectFormField,
+  TextAreaFormField,
+  TextFormField,
+} from "~/components/admin/form-field";
+import type { SearchableOption } from "~/components/admin/searchable-select";
 import { PendingButton } from "~/components/pending-button";
 import { TaxonomyIcon } from "~/components/taxonomy-icon";
 import {
@@ -42,10 +42,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
-import { Input } from "~/components/ui/input";
-import { Textarea } from "~/components/ui/textarea";
+import { Field, FieldLabel } from "~/components/ui/field";
 import { SelectField } from "~/components/ui/select-field";
+import {
+  useFormMessages,
+  useServerFormAction,
+  useWorkspaceForm,
+  type ServerFormAction,
+} from "~/hooks/use-workspace-form";
+import { editorialTextDirection } from "~/lib/editorial-languages";
+import { readLabel, type FormMessages, type Labels } from "~/lib/form-messages";
 
 export type ManagedService = {
   id: string;
@@ -61,109 +67,212 @@ export type ManagedService = {
   displayName: string;
 };
 
-const languageSuffix = { fr: "Fr", en: "En", ar: "Ar" } as const;
+const editorialLanguages = ["fr", "en", "ar"] as const;
+type EditorialLanguage = (typeof editorialLanguages)[number];
 
-type AssignmentSaveState = {
-  result: "idle" | "success" | "error" | "forbidden";
-  revision: number;
-};
+/** Which services this activity offers. One hidden input per assignment. */
+const assignmentSchema = z.object({
+  serviceId: z.array(z.string().uuid()),
+});
 
-const initialAssignmentSaveState: AssignmentSaveState = {
-  result: "idle",
-  revision: 0,
-};
-
-async function saveActivityServices(
-  previousState: AssignmentSaveState,
-  formData: FormData,
-): Promise<AssignmentSaveState> {
-  try {
-    await replaceActivityServices(formData);
-    return { result: "success", revision: previousState.revision + 1 };
-  } catch (error) {
-    return {
-      result: isPermissionDeniedError(error) ? "forbidden" : "error",
-      revision: previousState.revision + 1,
-    };
-  }
+/**
+ * A reusable service, as its two forms hold it.
+ *
+ * Field names are the `FormData` keys the actions read, so the form and the post
+ * cannot drift apart. French is the editorial source language — a service with
+ * no French name has nothing to translate from — while the other two languages
+ * stay optional and are filled in as translators get to them.
+ */
+function serviceFormSchema(messages: FormMessages) {
+  const optional = z.string();
+  return z.object({
+    categoryId: z.string().uuid(messages.required),
+    icon: z.string().trim().min(1, messages.required).max(50, messages.tooLong),
+    nameFr: z.string().trim().min(2, messages.tooShort),
+    nameEn: optional,
+    nameAr: optional,
+    descriptionFr: optional,
+    descriptionEn: optional,
+    descriptionAr: optional,
+    sourceNote: optional,
+  });
 }
 
-function ServiceFields({
+type ServiceFormValues = z.infer<ReturnType<typeof serviceFormSchema>>;
+
+const languageFields = {
+  fr: { name: "nameFr", description: "descriptionFr" },
+  en: { name: "nameEn", description: "descriptionEn" },
+  ar: { name: "nameAr", description: "descriptionAr" },
+} as const satisfies Record<
+  EditorialLanguage,
+  { name: keyof ServiceFormValues; description: keyof ServiceFormValues }
+>;
+
+function serviceDefaults(
+  service: ManagedService | undefined,
+  categories: readonly SearchableOption[],
+): ServiceFormValues {
+  return {
+    categoryId: service?.categoryId ?? categories[0]?.value ?? "",
+    icon: service?.icon ?? "help",
+    nameFr: service?.names.fr ?? "",
+    nameEn: service?.names.en ?? "",
+    nameAr: service?.names.ar ?? "",
+    descriptionFr: service?.descriptions.fr ?? "",
+    descriptionEn: service?.descriptions.en ?? "",
+    descriptionAr: service?.descriptions.ar ?? "",
+    sourceNote: service?.sourceNote ?? "",
+  };
+}
+
+/**
+ * Create or edit a reusable service.
+ *
+ * Both actions read the same fields, so both dialogs render this: only the
+ * identifiers they post and their submit wording differ, and those arrive as
+ * `hidden` and `submitLabel`.
+ */
+function ReusableServiceForm({
+  action,
   service,
   categories,
   labels,
+  submitLabel,
+  hidden,
+  scopeControl,
 }: {
+  action: ServerFormAction<void>;
   service?: ManagedService;
   categories: readonly SearchableOption[];
-  labels: Record<string, string>;
+  labels: Labels;
+  submitLabel: string;
+  /** The identifiers this action needs, as the inputs it reads them from. */
+  hidden: ReactNode;
+  /** Creation only: which organisation ends up owning the new service. */
+  scopeControl?: ReactNode;
 }) {
-  const [categoryId, setCategoryId] = useState(
-    service?.categoryId ?? categories[0]?.value ?? "",
-  );
-  const copy = (key: string) => labels[key] ?? key;
+  const messages = useFormMessages(labels);
+  const schema = useMemo(() => serviceFormSchema(messages), [messages]);
+  const form = useWorkspaceForm({
+    schema,
+    defaultValues: serviceDefaults(service, categories),
+  });
+  const { formProps } = useServerFormAction({
+    form,
+    action,
+    errorMessage: messages.saveFailed,
+    // The dialog scrolls, so an invalid field can sit out of view.
+    invalidMessage: messages.reviewFields,
+  });
+  const copy = (key: string) => readLabel(labels, key);
 
   return (
-    <>
-      <Field className="sm:col-span-2">
-        <FieldLabel>{copy("category")}</FieldLabel>
-        <SearchableSelect
-          name="categoryId"
-          options={categories}
-          value={categoryId}
-          onValueChange={setCategoryId}
-          label={copy("category")}
-          placeholder={copy("categoryPlaceholder")}
-          emptyLabel={copy("noOptions")}
-          required
-        />
-      </Field>
-      <Field className="sm:col-span-2">
-        <FieldLabel htmlFor={`service-${service?.id ?? "new"}-icon`}>
-          {copy("icon")}
-        </FieldLabel>
-        <Input
-          id={`service-${service?.id ?? "new"}-icon`}
-          name="icon"
-          defaultValue={service?.icon ?? "help"}
-          maxLength={50}
-          required
-        />
-        <FieldDescription>{copy("iconHint")}</FieldDescription>
-      </Field>
-      {(["fr", "en", "ar"] as const).map((language) => (
+    <form {...formProps} className="grid gap-4 sm:grid-cols-2">
+      {hidden}
+      {scopeControl}
+      <SearchableSelectFormField
+        control={form.control}
+        name="categoryId"
+        label={copy("category")}
+        options={categories}
+        placeholder={copy("categoryPlaceholder")}
+        emptyLabel={copy("noOptions")}
+        className="sm:col-span-2"
+        required
+      />
+      <TextFormField
+        control={form.control}
+        name="icon"
+        label={copy("icon")}
+        description={copy("iconHint")}
+        maxLength={50}
+        className="sm:col-span-2"
+      />
+      {editorialLanguages.map((language) => (
         <div
           key={language}
           className="border-line grid gap-3 rounded-lg border p-3 sm:col-span-2 sm:grid-cols-2"
-          dir={language === "ar" ? "rtl" : "ltr"}
+          dir={editorialTextDirection(language)}
         >
-          <Field>
-            <FieldLabel htmlFor={`service-${service?.id ?? "new"}-${language}`}>
-              {copy(`name.${language}`)}
-            </FieldLabel>
-            <Input
-              id={`service-${service?.id ?? "new"}-${language}`}
-              name={`name${languageSuffix[language]}`}
-              defaultValue={service?.names[language] ?? ""}
-              required={language === "fr"}
-              minLength={language === "fr" ? 2 : undefined}
-            />
-          </Field>
-          <Field>
-            <FieldLabel>{copy(`description.${language}`)}</FieldLabel>
-            <Textarea
-              name={`description${languageSuffix[language]}`}
-              defaultValue={service?.descriptions[language] ?? ""}
-              rows={2}
-            />
-          </Field>
+          <TextFormField
+            control={form.control}
+            name={languageFields[language].name}
+            label={copy(`name.${language}`)}
+          />
+          <TextAreaFormField
+            control={form.control}
+            name={languageFields[language].description}
+            label={copy(`description.${language}`)}
+            rows={2}
+          />
         </div>
       ))}
-      <Field className="sm:col-span-2">
-        <FieldLabel>{copy("sourceNote")}</FieldLabel>
-        <Input name="sourceNote" defaultValue={service?.sourceNote ?? ""} />
-        <FieldDescription>{copy("sourceHint")}</FieldDescription>
-      </Field>
-    </>
+      <TextFormField
+        control={form.control}
+        name="sourceNote"
+        label={copy("sourceNote")}
+        description={copy("sourceHint")}
+        className="sm:col-span-2"
+      />
+      <FormSubmitButton
+        control={form.control}
+        className="sm:col-span-2 sm:justify-self-end"
+      >
+        {submitLabel}
+      </FormSubmitButton>
+    </form>
+  );
+}
+
+/** The picker that says which reusable services this activity offers. */
+function ServiceAssignmentForm({
+  activityId,
+  locale,
+  assignedIds,
+  options,
+  labels,
+}: {
+  activityId: string;
+  locale: string;
+  assignedIds: readonly string[];
+  options: readonly SearchableOption[];
+  labels: Labels;
+}) {
+  const form = useWorkspaceForm({
+    schema: assignmentSchema,
+    defaultValues: { serviceId: [...assignedIds] },
+  });
+  const { formProps } = useServerFormAction({
+    form,
+    action: replaceActivityServices,
+    errorMessage: readLabel(labels, "assignmentSaveError"),
+    onSuccess: () => {
+      toast.success(readLabel(labels, "assignmentSaved"));
+    },
+  });
+
+  return (
+    <form {...formProps} className="grid gap-3">
+      <input type="hidden" name="locale" value={locale} />
+      <input type="hidden" name="activityId" value={activityId} />
+      <SearchableMultiSelectFormField
+        control={form.control}
+        name="serviceId"
+        options={options}
+        label={readLabel(labels, "assignment")}
+        placeholder={readLabel(labels, "assignmentPlaceholder")}
+        emptyLabel={readLabel(labels, "empty")}
+      />
+      <FormSubmitButton
+        control={form.control}
+        variant="secondary"
+        className="justify-self-end"
+      >
+        <Save aria-hidden />
+        {readLabel(labels, "saveAssignment")}
+      </FormSubmitButton>
+    </form>
   );
 }
 
@@ -179,26 +288,21 @@ export function ActivityServiceManager({
   showCatalogue = true,
 }: {
   activityId: string;
-  organizationId: string;
+  /** Null when the platform holds the activity itself, rather than a custodian. */
+  organizationId: string | null;
   locale: string;
   assignedIds: string[];
   services: ManagedService[];
   categories: SearchableOption[];
-  labels: Record<string, string>;
+  labels: Labels;
   canManageGlobal?: boolean;
   /** Show the reusable-service catalogue management list below the picker. */
   showCatalogue?: boolean;
 }) {
-  const [selectedIds, setSelectedIds] = useState(assignedIds);
   const [createScope, setCreateScope] = useState<"organization" | "global">(
     "organization",
   );
-  const [saveState, saveAction] = useActionState(
-    saveActivityServices,
-    initialAssignmentSaveState,
-  );
-  const showActionError = useActionErrorToast();
-  const copy = (key: string) => labels[key] ?? key;
+  const copy = (key: string) => readLabel(labels, key);
   const activeServices = services.filter(
     (service) => service.active && !service.archived,
   );
@@ -210,46 +314,21 @@ export function ActivityServiceManager({
   }));
   const manageableServices = services.filter(
     (service) =>
-      service.organizationId === organizationId ||
+      // A platform-held activity has no organisation catalogue, so the shared
+      // entries are the only ones its editor could be managing here.
+      (organizationId !== null && service.organizationId === organizationId) ||
       (canManageGlobal && service.organizationId === null),
   );
 
-  useEffect(() => {
-    if (saveState.result === "success") {
-      toast.success(labels.assignmentSaved);
-    }
-    if (saveState.result === "error") {
-      toast.error(labels.assignmentSaveError);
-    }
-    if (saveState.result === "forbidden") {
-      showActionError(new Error("Forbidden"), labels.assignmentSaveError ?? "");
-    }
-  }, [
-    labels.assignmentSaveError,
-    labels.assignmentSaved,
-    saveState,
-    showActionError,
-  ]);
-
   return (
     <div className="grid gap-5">
-      <form action={saveAction} className="grid gap-3">
-        <input type="hidden" name="locale" value={locale} />
-        <input type="hidden" name="activityId" value={activityId} />
-        <SearchableMultiSelect
-          name="serviceId"
-          options={options}
-          value={selectedIds}
-          onValueChange={setSelectedIds}
-          label={copy("assignment")}
-          placeholder={copy("assignmentPlaceholder")}
-          emptyLabel={copy("empty")}
-        />
-        <PendingButton variant="secondary" className="justify-self-end">
-          <Save aria-hidden />
-          {copy("saveAssignment")}
-        </PendingButton>
-      </form>
+      <ServiceAssignmentForm
+        activityId={activityId}
+        locale={locale}
+        assignedIds={assignedIds}
+        options={options}
+        labels={labels}
+      />
 
       {showCatalogue ? (
         <div className="border-line border-t pt-4">
@@ -272,41 +351,50 @@ export function ActivityServiceManager({
                   <DialogTitle>{copy("createTitle")}</DialogTitle>
                   <DialogDescription>{copy("createHint")}</DialogDescription>
                 </DialogHeader>
-                <form
+                <ReusableServiceForm
                   action={createAndAssignService}
-                  className="grid gap-4 sm:grid-cols-2"
-                >
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="activityId" value={activityId} />
-                  <input
-                    type="hidden"
-                    name="organizationId"
-                    value={createScope === "global" ? "" : organizationId}
-                  />
-                  {canManageGlobal ? (
-                    <Field className="sm:col-span-2">
-                      <FieldLabel htmlFor="new-service-scope">
-                        {copy("scope")}
-                      </FieldLabel>
-                      <SelectField
-                        id="new-service-scope"
-                        value={createScope}
-                        onValueChange={(next) => {
-                          setCreateScope(next as typeof createScope);
-                        }}
-                      >
-                        <option value="organization">
-                          {copy("scopeOrganization")}
-                        </option>
-                        <option value="global">{copy("scopeGlobal")}</option>
-                      </SelectField>
-                    </Field>
-                  ) : null}
-                  <ServiceFields categories={categories} labels={labels} />
-                  <PendingButton className="sm:col-span-2 sm:justify-self-end">
-                    {copy("createAndAssign")}
-                  </PendingButton>
-                </form>
+                  categories={categories}
+                  labels={labels}
+                  submitLabel={copy("createAndAssign")}
+                  hidden={
+                    <>
+                      <input type="hidden" name="locale" value={locale} />
+                      <input
+                        type="hidden"
+                        name="activityId"
+                        value={activityId}
+                      />
+                      <input
+                        type="hidden"
+                        name="organizationId"
+                        value={
+                          createScope === "global" ? "" : (organizationId ?? "")
+                        }
+                      />
+                    </>
+                  }
+                  scopeControl={
+                    canManageGlobal ? (
+                      <Field className="sm:col-span-2">
+                        <FieldLabel htmlFor="new-service-scope">
+                          {copy("scope")}
+                        </FieldLabel>
+                        <SelectField
+                          id="new-service-scope"
+                          value={createScope}
+                          onValueChange={(next) => {
+                            setCreateScope(next as typeof createScope);
+                          }}
+                        >
+                          <option value="organization">
+                            {copy("scopeOrganization")}
+                          </option>
+                          <option value="global">{copy("scopeGlobal")}</option>
+                        </SelectField>
+                      </Field>
+                    ) : null
+                  }
+                />
               </DialogContent>
             </Dialog>
           </div>
@@ -374,30 +462,32 @@ export function ActivityServiceManager({
                               {copy("editHint")}
                             </DialogDescription>
                           </DialogHeader>
-                          <form
+                          <ReusableServiceForm
                             action={updateReusableService}
-                            className="grid gap-4 sm:grid-cols-2"
-                          >
-                            <input type="hidden" name="locale" value={locale} />
-                            <input
-                              type="hidden"
-                              name="organizationId"
-                              value={service.organizationId ?? ""}
-                            />
-                            <input
-                              type="hidden"
-                              name="serviceId"
-                              value={service.id}
-                            />
-                            <ServiceFields
-                              service={service}
-                              categories={categories}
-                              labels={labels}
-                            />
-                            <PendingButton className="sm:col-span-2 sm:justify-self-end">
-                              {copy("save")}
-                            </PendingButton>
-                          </form>
+                            service={service}
+                            categories={categories}
+                            labels={labels}
+                            submitLabel={copy("save")}
+                            hidden={
+                              <>
+                                <input
+                                  type="hidden"
+                                  name="locale"
+                                  value={locale}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="organizationId"
+                                  value={service.organizationId ?? ""}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="serviceId"
+                                  value={service.id}
+                                />
+                              </>
+                            }
+                          />
                         </DialogContent>
                       </Dialog>
 

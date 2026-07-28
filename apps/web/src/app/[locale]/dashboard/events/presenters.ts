@@ -4,7 +4,10 @@ import type { EventCalendarItem } from "~/components/events/month-calendar";
 import type { EventTableRow } from "~/components/events/events-table";
 import { localizedPath } from "~/i18n/routing";
 import { instantToZonedFields } from "~/lib/zoned-time";
-import type { CoordinationEventRecord } from "~/server/content/coordination-events";
+import type {
+  CoordinationEventListRecord,
+  CoordinationEventRecord,
+} from "~/server/content/coordination-events";
 import {
   eventDetailView,
   eventWhereLabel,
@@ -25,7 +28,7 @@ export function toTableRows({
   locale,
   labels,
 }: {
-  events: readonly CoordinationEventRecord[];
+  events: readonly CoordinationEventListRecord[];
   cityById: Map<string, CityView>;
   locale: PublicLocale;
   labels: { allDay: string };
@@ -42,6 +45,7 @@ export function toTableRows({
       href: localizedPath(`/dashboard/events/${event.id}`, locale),
       title: event.title,
       hostName: event.hostName,
+      createdBy: event.createdByName,
       visibility: event.visibility,
       cancelled: event.status === "cancelled",
       archived: event.archivedAt !== null,

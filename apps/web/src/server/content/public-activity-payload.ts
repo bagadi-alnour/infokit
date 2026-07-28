@@ -21,9 +21,13 @@ import type {
 
 import {
   fallbackLabel,
+  googleMapsHref,
   mapHref,
   nextOpeningLabel,
   organizationHref,
+  verificationFormatters,
+  verifiedAgoLabel,
+  type VerificationFormatters,
 } from "~/lib/activity-presentation";
 import { localizedPath } from "~/i18n/routing";
 import {
@@ -44,6 +48,63 @@ function scheduleLabel(
     timeZone: "UTC",
   }).format(new Date(Date.UTC(2024, 0, schedule.weekday)));
   return `${weekday} ${schedule.startTime.slice(0, 5)}–${schedule.endTime.slice(0, 5)}`;
+}
+
+/** Three days in a row read as a range; two are shorter written out. */
+const DAYS_WORTH_A_RANGE = 3;
+
+/**
+ * The week on one line: the days that share their hours are collapsed into a
+ * range — "Mon–Fri 13:00–17:00" — and the reader's own language joins what is
+ * left of them. It says exactly what the seven rows on the detail page say, in
+ * the space a card beside other cards has, and it needs no new words in eleven
+ * catalogues: `Intl` owns the short weekday names and the conjunction.
+ */
+function scheduleSummary(
+  schedules: PublishedActivity["schedules"],
+  locale: PublicLocale,
+) {
+  const weekdaysByHours = new Map<string, number[]>();
+  for (const schedule of schedules) {
+    const hours = `${schedule.startTime.slice(0, 5)}–${schedule.endTime.slice(0, 5)}`;
+    const weekdays = weekdaysByHours.get(hours);
+    if (weekdays) weekdays.push(schedule.weekday);
+    else weekdaysByHours.set(hours, [schedule.weekday]);
+  }
+
+  // Weekday 1 is Monday, and 1 January 2024 was a Monday.
+  const formatter = new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+  const weekdayName = (weekday: number) =>
+    formatter.format(new Date(Date.UTC(2024, 0, weekday)));
+  const list = new Intl.ListFormat(locale, {
+    style: "short",
+    type: "conjunction",
+  });
+
+  return Array.from(weekdaysByHours)
+    .map(([hours, weekdays]) => {
+      const runs: number[][] = [];
+      for (const weekday of Array.from(new Set(weekdays)).sort(
+        (a, b) => a - b,
+      )) {
+        const run = runs.at(-1);
+        if (run && weekday === (run.at(-1) ?? 0) + 1) run.push(weekday);
+        else runs.push([weekday]);
+      }
+      const spans = runs.flatMap((run) => {
+        const first = run.at(0);
+        const last = run.at(-1);
+        if (first === undefined || last === undefined) return [];
+        return run.length >= DAYS_WORTH_A_RANGE
+          ? [`${weekdayName(first)}–${weekdayName(last)}`]
+          : run.map(weekdayName);
+      });
+      return `${list.format(spans)} ${hours}`;
+    })
+    .join(" · ");
 }
 
 /** The label set the activity list and detail views need, in reading order. */
@@ -69,8 +130,11 @@ export function activityLabels(messages: Messages): PublicActivityLabels {
     place: messages["activities.place"],
     schedule: messages["activities.schedule"],
     lastVerified: messages["activities.lastVerified"],
-    fallback: messages["public.fallback"],
     open: messages["activities.open"],
+    share: messages["activities.share"],
+    shareCopied: messages["activities.shareCopied"],
+    downloadPdf: messages["activities.downloadPdf"],
+    openInGoogleMaps: messages["activities.openInGoogleMaps"],
     mapTitle: messages["activities.mapTitle"],
     mapHint: messages["activities.mapHint"],
     noMap: messages["activities.noMap"],
@@ -99,12 +163,12 @@ function summarize({
   activity,
   locale,
   messages,
-  dateFormatter,
+  verified,
 }: {
   activity: PublishedActivity;
   locale: PublicLocale;
   messages: Messages;
-  dateFormatter: Intl.DateTimeFormat;
+  verified: VerificationFormatters;
 }): PublicActivitySummary {
   return {
     id: activity.id,
@@ -117,7 +181,14 @@ function summarize({
     categoryIcon: activity.categoryIcon,
     audienceCode: activity.audienceCode,
     audienceLabel: activity.audienceLabel,
-    services: activity.services,
+    // Named field by field, not spread: the read model also carries each
+    // service's taxonomy code, and the payload is the contract the app reads —
+    // it ships what `PublicActivityService` declares and nothing more.
+    services: activity.services.map(({ id, label, icon }) => ({
+      id,
+      label,
+      icon,
+    })),
     providerNames: activity.providerNames,
     providers: activity.providers.map((provider) => ({
       name: provider.name,
@@ -151,22 +222,25 @@ function summarize({
       contentLanguage: activity.contentLanguage,
     }),
     lastVerifiedLabel: activity.lastVerifiedAt
-      ? dateFormatter.format(activity.lastVerifiedAt)
+      ? verifiedAgoLabel({
+          verifiedAt: activity.lastVerifiedAt,
+          format: verified.ago,
+        })
       : messages["public.notAvailable"],
+    lastVerifiedDateLabel: activity.lastVerifiedAt
+      ? verified.date.format(activity.lastVerifiedAt)
+      : messages["public.notAvailable"],
+    lastVerifiedIso: activity.lastVerifiedAt?.toISOString() ?? null,
     scheduleLabels:
       activity.schedules.length > 0
         ? activity.schedules.map((schedule) => scheduleLabel(schedule, locale))
         : [messages["activities.confirmSchedule"]],
+    scheduleSummary:
+      activity.schedules.length > 0
+        ? scheduleSummary(activity.schedules, locale)
+        : messages["activities.confirmSchedule"],
     coverImage: activity.coverImage,
   };
-}
-
-function dateFormatterFor(locale: PublicLocale) {
-  // Wall-clock Europe/Paris is the contract for every public date.
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeZone: "Europe/Paris",
-  });
 }
 
 export function activitySummaries({
@@ -178,9 +252,9 @@ export function activitySummaries({
   locale: PublicLocale;
   messages: Messages;
 }): PublicActivitySummary[] {
-  const dateFormatter = dateFormatterFor(locale);
+  const verified = verificationFormatters(locale);
   return activities.map((activity) =>
-    summarize({ activity, locale, messages, dateFormatter }),
+    summarize({ activity, locale, messages, verified }),
   );
 }
 
@@ -198,10 +272,15 @@ export function activityDetail({
       activity,
       locale,
       messages,
-      dateFormatter: dateFormatterFor(locale),
+      verified: verificationFormatters(locale),
     }),
     description: activity.description,
     instructions: activity.instructions,
+    googleMapsHref: googleMapsHref({
+      address: activity.address,
+      latitude: activity.latitude,
+      longitude: activity.longitude,
+    }),
   };
 }
 

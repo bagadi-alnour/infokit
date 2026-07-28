@@ -6,10 +6,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { EVENT_VISIBILITIES } from "~/components/events/visibility";
 import { localizedPath } from "~/i18n/routing";
 import { eventLanguages, type EventLanguage } from "~/lib/event-languages";
 import { parseStewardContact } from "~/lib/steward-contact";
 import { zonedWallTimeToInstant } from "~/lib/zoned-time";
+import { optionalText, optionalUuid } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
 import {
   requireEditor,
@@ -26,43 +28,26 @@ import {
   coordinationEventTranslations,
 } from "~/server/db/schema";
 
-const optional = z
-  .string()
-  .trim()
-  .transform((value) => (value === "" ? null : value));
-
-const optionalId = z
-  .string()
-  .trim()
-  .transform((value, ctx) => {
-    if (value === "") return null;
-    if (!z.string().uuid().safeParse(value).success) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Not an id" });
-      return z.NEVER;
-    }
-    return value;
-  });
-
 const eventFieldsSchema = z.object({
-  hostOrganizationId: optionalId,
+  hostOrganizationId: optionalUuid,
   cityId: z.string().uuid(),
-  visibility: z.enum(["organization", "inter_organization", "public"]),
-  placeId: optionalId,
-  locationLabel: optional,
-  contactLabel: optional,
-  contactValue: optional,
+  visibility: z.enum(EVENT_VISIBILITIES),
+  placeId: optionalUuid,
+  locationLabel: optionalText,
+  contactLabel: optionalText,
+  contactValue: optionalText,
   allDay: z.boolean(),
   startDate: z.string().trim().min(1),
   startTime: z.string().trim(),
   endDate: z.string().trim(),
   endTime: z.string().trim(),
   sourceLanguageCode: z.enum(eventLanguages),
-  titleFr: optional,
-  titleEn: optional,
-  titleAr: optional,
-  descriptionFr: optional,
-  descriptionEn: optional,
-  descriptionAr: optional,
+  titleFr: optionalText,
+  titleEn: optionalText,
+  titleAr: optionalText,
+  descriptionFr: optionalText,
+  descriptionEn: optionalText,
+  descriptionAr: optionalText,
 });
 
 function parseEventFields(formData: FormData) {

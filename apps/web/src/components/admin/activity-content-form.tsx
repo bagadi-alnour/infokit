@@ -1,16 +1,24 @@
 "use client";
 
 import { CheckCircle2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { updateActivityContent } from "~/app/[locale]/dashboard/activities/actions";
+import {
+  publishActivityLanguage,
+  unpublishActivityLanguage,
+  updateActivityContent,
+} from "~/app/[locale]/dashboard/activities/actions";
+import { requestActivityTranslation } from "~/app/[locale]/dashboard/activities/translation-actions";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
+import type { LanguageMenuAbilities } from "~/components/admin/language-actions-menu";
 import { SearchableMultiSelect } from "~/components/admin/searchable-select";
 import { SidebarFocusMode } from "~/components/admin/sidebar-focus-mode";
 import {
   TranslationWorkspace,
+  type WorkspaceLanguageWorkflow,
   type WorkspaceTranslation,
+  type WorkspaceWorkflow,
 } from "~/components/admin/translation-workspace";
 import { PendingButton } from "~/components/pending-button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
@@ -30,6 +38,10 @@ export function ActivityEditorForm({
   organizationId,
   sourceLanguage,
   initial,
+  languageStates,
+  abilities,
+  aiEnabled,
+  archived,
   canVerify,
   returnPath,
   categories,
@@ -38,14 +50,24 @@ export function ActivityEditorForm({
   initialCategoryId,
   initialAudienceId,
   initialTagIds,
+  media,
+  downloads,
   editorLabels,
   labels,
 }: {
   locale: string;
   activityId: string;
-  organizationId: string;
+  /** Null when the platform holds the activity itself, rather than a custodian. */
+  organizationId: string | null;
   sourceLanguage: EditorialLanguage;
   initial: Partial<Record<EditorialLanguage, WorkspaceTranslation>>;
+  /** Where every language stands on the server: published, scheduled, in review. */
+  languageStates: Partial<Record<EditorialLanguage, WorkspaceLanguageWorkflow>>;
+  abilities: Omit<LanguageMenuAbilities, "aiEnabled">;
+  /** False when the deployment has no translation provider configured. */
+  aiEnabled: boolean;
+  /** True on an archived activity: every per-language action would be refused. */
+  archived: boolean;
   canVerify: boolean;
   returnPath: string;
   categories: Option[];
@@ -54,6 +76,10 @@ export function ActivityEditorForm({
   initialCategoryId: string;
   initialAudienceId: string;
   initialTagIds: string[];
+  /** The photo, laid out below both editor columns. */
+  media?: React.ReactNode;
+  /** The downloadable documents, laid out beside the tags field. */
+  downloads?: React.ReactNode;
   editorLabels: Record<string, string>;
   labels: {
     save: string;
@@ -78,6 +104,26 @@ export function ActivityEditorForm({
       showActionError(error, labels.saveError);
     }
   };
+
+  /**
+   * What each language's own menu offers, and the three actions behind it.
+   * Every one re-checks on the server; this only decides what is worth showing.
+   */
+  const workflow = useMemo<WorkspaceWorkflow>(
+    () => ({
+      ownerField: "activityId",
+      languages: languageStates,
+      abilities,
+      actions: {
+        requestTranslation: requestActivityTranslation,
+        publish: publishActivityLanguage,
+        unpublish: unpublishActivityLanguage,
+      },
+      frozen: archived,
+    }),
+    [abilities, archived, languageStates],
+  );
+
   return (
     <form action={submit} className="grid gap-5">
       <SidebarFocusMode />
@@ -89,13 +135,16 @@ export function ActivityEditorForm({
       <TranslationWorkspace
         entityKind="activity"
         entityId={activityId}
-        organizationId={organizationId}
+        organizationId={organizationId ?? undefined}
         interfaceLocale={locale}
         sourceLanguage={sourceLanguage}
         initial={initial}
         labels={editorLabels}
         canVerify={canVerify}
+        aiEnabled={aiEnabled}
         returnPath={returnPath}
+        workflow={workflow}
+        media={media}
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
@@ -133,24 +182,34 @@ export function ActivityEditorForm({
             </SelectField>
           </Field>
         </div>
-        <Field>
-          <FieldLabel>{labels.tags}</FieldLabel>
-          {tags.length > 0 ? (
-            <SearchableMultiSelect
-              name="tagId"
-              maxSelections={3}
-              options={tags}
-              value={selectedTagIds}
-              onValueChange={setSelectedTagIds}
-              label={labels.tags}
-              placeholder={labels.tagsPlaceholder}
-              emptyLabel={labels.noMatch}
-            />
-          ) : (
-            <p className="text-copy-muted text-sm">{labels.tagsEmpty}</p>
-          )}
-          <FieldDescription>{labels.tagsHint}</FieldDescription>
-        </Field>
+        {/* Tags and the downloadable documents side by side: both are things
+         * attached to the activity rather than words in it, and each is short
+         * enough that stacking them only adds scrolling. The split is keyed to
+         * this row's own width — the column it sits in narrows when the
+         * translation rail appears beside it. */}
+        <div className="@container">
+          <div className="@xl:grid-cols-2 grid items-start gap-4">
+            <Field>
+              <FieldLabel>{labels.tags}</FieldLabel>
+              {tags.length > 0 ? (
+                <SearchableMultiSelect
+                  name="tagId"
+                  maxSelections={3}
+                  options={tags}
+                  value={selectedTagIds}
+                  onValueChange={setSelectedTagIds}
+                  label={labels.tags}
+                  placeholder={labels.tagsPlaceholder}
+                  emptyLabel={labels.noMatch}
+                />
+              ) : (
+                <p className="text-copy-muted text-sm">{labels.tagsEmpty}</p>
+              )}
+              <FieldDescription>{labels.tagsHint}</FieldDescription>
+            </Field>
+            {downloads}
+          </div>
+        </div>
       </TranslationWorkspace>
       <PendingButton className="justify-self-end">
         <CheckCircle2 aria-hidden />

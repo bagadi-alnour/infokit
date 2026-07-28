@@ -1,19 +1,29 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useActionState, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { z } from "zod";
 
+import { addActivitySchedule } from "~/app/[locale]/dashboard/activities/actions";
 import {
-  addActivitySchedule,
-  type AddActivityScheduleResult,
-} from "~/app/[locale]/dashboard/activities/actions";
-import { PendingButton } from "~/components/pending-button";
-import { TimePicker } from "~/components/shadcn-studio/date-picker/date-picker-09";
+  DateFormField,
+  FormSubmitButton,
+  SelectFormField,
+  TimeFormField,
+} from "~/components/admin/form-field";
 import { Button } from "~/components/ui/button";
-import { DatePicker } from "~/components/ui/date-picker";
-import { Field, FieldError, FieldLabel } from "~/components/ui/field";
-import { SelectField } from "~/components/ui/select-field";
-import { hasScheduleRuleOverlap } from "~/lib/schedule-overlap";
+import { FieldError } from "~/components/ui/field";
+import {
+  useServerFormAction,
+  useWorkspaceForm,
+} from "~/hooks/use-workspace-form";
+import {
+  scheduleRowsIssue,
+  scheduleTimingModeSchema,
+  scheduleTypeSchema,
+  timeOfDayPattern,
+  weekdayValueSchema,
+} from "~/lib/schedule-rules";
 
 type ScheduleRow = {
   weekday: number;
@@ -39,20 +49,92 @@ type ScheduleLabels = {
   endTime: string;
   addHours: string;
   cancel: string;
+  required: string;
   invalidRange: string;
   overlap: string;
   invalid: string;
   weekdays: Record<number, string>;
 };
 
-const initialState: AddActivityScheduleResult = { result: "idle" };
+/**
+ * The hours an activity keeps, validated before they are posted.
+ *
+ * Both rules the editor can break are checked here, against the hours this
+ * activity already has: an end before its start, and a window that collides
+ * with an existing one. The action checks them again on arrival — this pass
+ * exists so the answer arrives while the editor is still looking at the field
+ * rather than after a round trip.
+ *
+ * A rule scoped to a single date is a one-off, not a weekly pattern, so it is
+ * left out of the collision check: a closure on one Tuesday does not stop the
+ * activity from opening on other Tuesdays.
+ */
+function scheduleFormSchema(
+  labels: ScheduleLabels,
+  schedules: readonly ScheduleRow[],
+) {
+  const weeklyRules = schedules.filter(
+    (schedule) =>
+      !schedule.validFrom || schedule.validFrom !== schedule.validTo,
+  );
 
-async function submitSchedule(
-  _previousState: AddActivityScheduleResult,
-  formData: FormData,
-): Promise<AddActivityScheduleResult> {
-  return addActivitySchedule(formData);
+  return z
+    .object({
+      scheduleType: scheduleTypeSchema,
+      weekday: weekdayValueSchema,
+      occurrenceDate: z.string(),
+      timingMode: scheduleTimingModeSchema,
+      startTime: z.string().regex(timeOfDayPattern, labels.invalid),
+      endTime: z.string().regex(timeOfDayPattern, labels.invalid),
+    })
+    .superRefine((values, context) => {
+      if (values.scheduleType === "one_off" && !values.occurrenceDate) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["occurrenceDate"],
+          message: labels.required,
+        });
+        return;
+      }
+
+      const issue = scheduleRowsIssue(
+        values.scheduleType,
+        [
+          {
+            weekday: Number(values.weekday),
+            startTime: values.startTime,
+            endTime: values.endTime,
+          },
+        ],
+        weeklyRules,
+      );
+      if (issue === "invalidRange") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["endTime"],
+          message: labels.invalidRange,
+        });
+      }
+      if (issue === "overlap") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["startTime"],
+          message: labels.overlap,
+        });
+      }
+    });
 }
+
+type ScheduleFormValues = z.infer<ReturnType<typeof scheduleFormSchema>>;
+
+const emptySchedule: ScheduleFormValues = {
+  scheduleType: "recurring",
+  weekday: "1",
+  occurrenceDate: "",
+  timingMode: "fixed",
+  startTime: "09:00",
+  endTime: "17:00",
+};
 
 export function ActivityScheduleForm({
   activityId,
@@ -65,52 +147,41 @@ export function ActivityScheduleForm({
   schedules: readonly ScheduleRow[];
   labels: ScheduleLabels;
 }) {
-  const [state, formAction] = useActionState(submitSchedule, initialState);
   const [open, setOpen] = useState(false);
-  const [scheduleType, setScheduleType] = useState<"recurring" | "one_off">(
-    "recurring",
+  const schema = useMemo(
+    () => scheduleFormSchema(labels, schedules),
+    [labels, schedules],
   );
-  const [weekday, setWeekday] = useState("1");
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("17:00");
-  const errorId = `activity-${activityId}-schedule-error`;
+  const form = useWorkspaceForm({ schema, defaultValues: emptySchedule });
+  const { formProps } = useServerFormAction({
+    form,
+    action: addActivitySchedule,
+    errorMessage: labels.invalid,
+    onSuccess: (result) => {
+      if (result.result === "success") {
+        form.reset(emptySchedule);
+        setOpen(false);
+        return;
+      }
+      if (result.result === "error") {
+        // The action names the rule that failed; show it where the client
+        // checks would have shown the same rule.
+        const field =
+          result.error === "overlap"
+            ? "startTime"
+            : result.error === "invalidRange"
+              ? "endTime"
+              : "root";
+        form.setError(field, {
+          type: "server",
+          message: labels[result.error],
+        });
+      }
+    },
+  });
 
-  const candidate = {
-    weekday: Number(weekday),
-    startTime,
-    endTime,
-    endsNextDay: false,
-  };
-  const clientError =
-    startTime && endTime && startTime >= endTime
-      ? "invalidRange"
-      : scheduleType === "recurring" &&
-          startTime &&
-          endTime &&
-          hasScheduleRuleOverlap(
-            candidate,
-            schedules.filter(
-              (schedule) =>
-                !schedule.validFrom || schedule.validFrom !== schedule.validTo,
-            ),
-          )
-        ? "overlap"
-        : null;
-  const serverError =
-    state.result === "error" &&
-    (!state.values || state.values.scheduleType === scheduleType)
-      ? state.error
-      : null;
-  const errorKey = clientError ?? serverError;
-  const errorMessage = errorKey ? labels[errorKey] : null;
-
-  useEffect(() => {
-    if (state.result === "success") {
-      setStartTime("09:00");
-      setEndTime("17:00");
-      setOpen(false);
-    }
-  }, [state]);
+  const scheduleType = form.watch("scheduleType");
+  const formError = form.formState.errors.root?.message;
 
   // Keep the add form out of the way until the editor asks for it.
   if (!open) {
@@ -130,113 +201,66 @@ export function ActivityScheduleForm({
   }
 
   return (
-    <form
-      action={formAction}
-      className="grid gap-3"
-      onSubmit={(event) => {
-        if (clientError) event.preventDefault();
-      }}
-    >
+    <form {...formProps} className="grid gap-3">
       <input type="hidden" name="locale" value={locale} />
       <input type="hidden" name="activityId" value={activityId} />
-      <input type="hidden" name="scheduleType" value={scheduleType} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 xl:items-end">
-        <Field>
-          <FieldLabel htmlFor={`activity-${activityId}-schedule-type`}>
-            {labels.scheduleType}
-          </FieldLabel>
-          <SelectField
-            id={`activity-${activityId}-schedule-type`}
-            value={scheduleType}
-            onValueChange={(next) => {
-              setScheduleType(next as "recurring" | "one_off");
-            }}
-          >
-            <option value="recurring">{labels.recurring}</option>
-            <option value="one_off">{labels.oneOff}</option>
-          </SelectField>
-        </Field>
+        <SelectFormField
+          control={form.control}
+          name="scheduleType"
+          label={labels.scheduleType}
+        >
+          <option value="recurring">{labels.recurring}</option>
+          <option value="one_off">{labels.oneOff}</option>
+        </SelectFormField>
         {scheduleType === "one_off" ? (
-          <Field data-invalid={Boolean(errorMessage)}>
-            <FieldLabel>{labels.date}</FieldLabel>
-            <DatePicker
-              key={`activity-${activityId}-one-off-date`}
-              name="occurrenceDate"
-              locale={locale}
-              placeholder={labels.selectDate}
-              clearLabel={labels.clearDate}
-              required
-            />
-          </Field>
+          <DateFormField
+            control={form.control}
+            name="occurrenceDate"
+            label={labels.date}
+            locale={locale}
+            placeholder={labels.selectDate}
+            clearLabel={labels.clearDate}
+            required
+          />
         ) : (
-          <Field data-invalid={Boolean(errorMessage)}>
-            <FieldLabel htmlFor={`activity-${activityId}-weekday`}>
-              {labels.weekday}
-            </FieldLabel>
-            <SelectField
-              id={`activity-${activityId}-weekday`}
-              name="weekday"
-              value={weekday}
-              onValueChange={setWeekday}
-              aria-invalid={Boolean(errorMessage)}
-              aria-describedby={errorMessage ? errorId : undefined}
-            >
-              {Object.entries(labels.weekdays).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </SelectField>
-          </Field>
-        )}
-        <Field>
-          <FieldLabel htmlFor={`activity-${activityId}-timing-mode`}>
-            {labels.timingMode}
-          </FieldLabel>
-          <SelectField
-            id={`activity-${activityId}-timing-mode`}
-            name="timingMode"
-            defaultValue="fixed"
+          <SelectFormField
+            control={form.control}
+            name="weekday"
+            label={labels.weekday}
           >
-            <option value="fixed">{labels.fixed}</option>
-            <option value="flexible">{labels.flexible}</option>
-          </SelectField>
-        </Field>
-        <Field data-invalid={Boolean(errorMessage)}>
-          <FieldLabel htmlFor={`activity-${activityId}-start-time`}>
-            {labels.startTime}
-          </FieldLabel>
-          <TimePicker
-            id={`activity-${activityId}-start-time`}
-            name="startTime"
-            value={startTime}
-            onChange={(event) => {
-              setStartTime(event.target.value);
-            }}
-            required
-            aria-invalid={Boolean(errorMessage)}
-            aria-describedby={errorMessage ? errorId : undefined}
-          />
-        </Field>
-        <Field data-invalid={Boolean(errorMessage)}>
-          <FieldLabel htmlFor={`activity-${activityId}-end-time`}>
-            {labels.endTime}
-          </FieldLabel>
-          <TimePicker
-            id={`activity-${activityId}-end-time`}
-            name="endTime"
-            value={endTime}
-            onChange={(event) => {
-              setEndTime(event.target.value);
-            }}
-            required
-            aria-invalid={Boolean(errorMessage)}
-            aria-describedby={errorMessage ? errorId : undefined}
-          />
-        </Field>
+            {Object.entries(labels.weekdays).map(([value, weekdayLabel]) => (
+              <option key={value} value={value}>
+                {weekdayLabel}
+              </option>
+            ))}
+          </SelectFormField>
+        )}
+        <SelectFormField
+          control={form.control}
+          name="timingMode"
+          label={labels.timingMode}
+        >
+          <option value="fixed">{labels.fixed}</option>
+          <option value="flexible">{labels.flexible}</option>
+        </SelectFormField>
+        <TimeFormField
+          control={form.control}
+          name="startTime"
+          label={labels.startTime}
+          required
+        />
+        <TimeFormField
+          control={form.control}
+          name="endTime"
+          label={labels.endTime}
+          required
+        />
       </div>
       <div className="flex items-center gap-2">
-        <PendingButton>{labels.addHours}</PendingButton>
+        <FormSubmitButton control={form.control}>
+          {labels.addHours}
+        </FormSubmitButton>
         <Button
           type="button"
           variant="ghost"
@@ -247,9 +271,7 @@ export function ActivityScheduleForm({
           {labels.cancel}
         </Button>
       </div>
-      {errorMessage ? (
-        <FieldError id={errorId}>{errorMessage}</FieldError>
-      ) : null}
+      {formError ? <FieldError>{formError}</FieldError> : null}
     </form>
   );
 }

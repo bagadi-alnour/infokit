@@ -21,7 +21,11 @@ import { Badge } from "~/components/ui/badge";
 import { buttonVariants } from "~/components/ui/button";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
-import { freshnessOf, parisToday } from "~/lib/freshness";
+import {
+  attentionKindOf,
+  parisToday,
+  type AttentionKind,
+} from "~/lib/freshness";
 import { db } from "~/server/db";
 import {
   activities,
@@ -179,29 +183,41 @@ export default async function DashboardPage({
   const cityName =
     selectedCity?.name ?? selectedCity?.code ?? messages["scope.city"];
 
-  const scopedActivities =
-    selectedOrganization && selectedCity
-      ? await db
-          .select({
-            id: activities.id,
-            organizationId: activities.organizationId,
-            cityId: activities.cityId,
-            teamId: activities.teamId,
-            placeId: activities.placeId,
-            published: activities.published,
-            manualStatus: activities.manualStatus,
-            lastVerifiedAt: activities.lastVerifiedAt,
-            reviewDueAt: activities.reviewDueAt,
-          })
-          .from(activities)
-          .where(
-            and(
-              eq(activities.organizationId, selectedOrganization.id),
-              eq(activities.cityId, selectedCity.id),
-              isNull(activities.archivedAt),
-            ),
-          )
-      : [];
+  /**
+   * The day's work in the selected city. The organisation narrows it, but a
+   * platform-owned activity has no organisation and still opens its doors, so it
+   * belongs to whoever is on the runbook — the same rule the reusable services
+   * below follow. Matching on `organizationId` alone dropped those rows
+   * silently: `null = <uuid>` is never true, so they were scheduled, published,
+   * unconfirmed, and invisible.
+   */
+  const scopedActivities = selectedCity
+    ? await db
+        .select({
+          id: activities.id,
+          organizationId: activities.organizationId,
+          cityId: activities.cityId,
+          teamId: activities.teamId,
+          placeId: activities.placeId,
+          published: activities.published,
+          manualStatus: activities.manualStatus,
+          lastVerifiedAt: activities.lastVerifiedAt,
+          reviewDueAt: activities.reviewDueAt,
+        })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.cityId, selectedCity.id),
+            selectedOrganization
+              ? or(
+                  isNull(activities.organizationId),
+                  eq(activities.organizationId, selectedOrganization.id),
+                )
+              : isNull(activities.organizationId),
+            isNull(activities.archivedAt),
+          ),
+        )
+    : [];
   const activityIds = scopedActivities.map((activity) => activity.id);
   const placeIds = scopedActivities
     .map((activity) => activity.placeId)
@@ -436,6 +452,21 @@ export default async function DashboardPage({
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((a, b) => (a.windows[0] ?? "").localeCompare(b.windows[0] ?? ""));
 
+  /**
+   * Classified once, read twice: the calendar's attention dot and the attention
+   * rail below it were computing "needs attention" differently, so an activity
+   * that had never been verified showed a plain scheduled dot while the rail
+   * called it out by name.
+   */
+  const attentionByActivity = new Map<string, AttentionKind>();
+  for (const activity of scopedActivities) {
+    const kind = attentionKindOf({
+      ...activity,
+      hasSchedule: (rulesByActivity.get(activity.id) ?? []).length > 0,
+    });
+    if (kind) attentionByActivity.set(activity.id, kind);
+  }
+
   const eventDates: Record<
     string,
     ("scheduled" | "confirmed" | "attention" | "cancelled")[]
@@ -464,7 +495,7 @@ export default async function DashboardPage({
         states.add("confirmed");
       } else if (
         exceptions.has("uncertain") ||
-        (activity.reviewDueAt && activity.reviewDueAt.getTime() < Date.now())
+        attentionByActivity.has(activity.id)
       ) {
         states.add("attention");
       } else {
@@ -484,25 +515,10 @@ export default async function DashboardPage({
     occurrences.every(
       (occurrence) => occurrence.cancelled || Boolean(occurrence.confirmedAt),
     );
-  const attention = scopedActivities
-    .map((activity) => {
-      const noSchedule = (rulesByActivity.get(activity.id) ?? []).length === 0;
-      const freshness = freshnessOf(activity);
-      const kind =
-        activity.manualStatus === "uncertain"
-          ? "uncertain"
-          : noSchedule
-            ? "noSchedule"
-            : freshness === "never"
-              ? "never"
-              : freshness === "overdue"
-                ? "overdue"
-                : freshness === "due_soon"
-                  ? "dueSoon"
-                  : null;
-      return kind ? { activity, kind, name: activityName(activity.id) } : null;
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
+  const attention = scopedActivities.flatMap((activity) => {
+    const kind = attentionByActivity.get(activity.id);
+    return kind ? [{ activity, kind, name: activityName(activity.id) }] : [];
+  });
   const mainAttention = attention[0];
   const selectedDateLabel = formatDate(selectedDate, locale);
 

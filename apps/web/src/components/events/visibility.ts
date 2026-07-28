@@ -3,14 +3,14 @@
  * ever sees the last one — one vocabulary, so a label or a colour can never
  * drift between the two surfaces.
  */
-export type EventVisibilityValue =
-  "organization" | "inter_organization" | "public";
-
-export const EVENT_VISIBILITIES: readonly EventVisibilityValue[] = [
+/** The tiers, in the order they widen — also what both validators accept. */
+export const EVENT_VISIBILITIES = [
   "organization",
   "inter_organization",
   "public",
-];
+] as const;
+
+export type EventVisibilityValue = (typeof EVENT_VISIBILITIES)[number];
 
 /** Chip colours, in the order the tiers widen. */
 export const eventReachChipClass: Record<EventVisibilityValue, string> = {

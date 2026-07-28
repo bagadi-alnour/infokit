@@ -1,5 +1,4 @@
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
-import type { PublicArticleSummary } from "@infokit/shared/public-content";
 import type { Metadata } from "next";
 
 import { PublicArticleCollection } from "~/components/public/article-collection";
@@ -7,14 +6,32 @@ import {
   PublicPageHeader,
   PublicSiteShell,
 } from "~/components/public/public-site-shell";
+import { JsonLd } from "~/components/seo/json-ld";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
-import { languageAlternates, localizedPath } from "~/i18n/routing";
+import { publicMetadata } from "~/seo/metadata";
+import { collectionJsonLd } from "~/seo/structured-data";
+import {
+  articleLabels,
+  articlePageLabels,
+  articleSummaries,
+} from "~/server/content/public-article-payload";
 import { listPublishedArticles } from "~/server/content/public-content";
 
-export const metadata: Metadata = {
-  title: "Articles",
-  alternates: { languages: languageAlternates("/articles") },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const locale = requirePublicRouteLocale((await params).locale);
+  const messages = await loadPageCatalog(locale, "public-content");
+  const page = articlePageLabels(messages);
+  return publicMetadata({
+    path: "/articles",
+    locale,
+    title: page.title,
+    description: page.description,
+  });
+}
 
 export default async function ArticlesPage({
   params,
@@ -26,32 +43,7 @@ export default async function ArticlesPage({
     listPublishedArticles(locale),
     loadPageCatalog(locale, "public-content"),
   ]);
-  const dateFormatter = new Intl.DateTimeFormat(locale, {
-    dateStyle: "long",
-    timeZone: "Europe/Paris",
-  });
-  const today = new Date().toISOString().slice(0, 10);
-  const summaries: PublicArticleSummary[] = articles.map((article) => ({
-    id: article.id,
-    href: localizedPath(`/articles/${article.slug}`, locale),
-    title: article.title,
-    summary: article.summary,
-    articleDateLabel: article.articleDate
-      ? dateFormatter.format(new Date(`${article.articleDate}T12:00:00Z`))
-      : dateFormatter.format(article.publishedAt),
-    ownerNames:
-      article.ownerNames.length > 0
-        ? article.ownerNames
-        : [messages["public.platform"]],
-    lastReviewedLabel: article.lastReviewedAt
-      ? dateFormatter.format(article.lastReviewedAt)
-      : messages["public.notAvailable"],
-    fallbackUsed: article.fallbackUsed,
-    unreliable: Boolean(
-      article.unreliableFrom && article.unreliableFrom <= today,
-    ),
-    coverImage: article.coverImage,
-  }));
+  const page = articlePageLabels(messages);
 
   return (
     <PublicSiteShell
@@ -59,21 +51,26 @@ export default async function ArticlesPage({
       currentPath="/articles"
       messages={messages}
     >
+      <JsonLd
+        data={collectionJsonLd({
+          locale,
+          name: page.title,
+          description: page.description,
+          items: articles.map((article) => ({
+            name: article.title,
+            path: `/articles/${article.slug}`,
+          })),
+        })}
+      />
       <PublicPageHeader
-        eyebrow={messages["articles.eyebrow"]}
-        title={messages["articles.title"]}
-        description={messages["articles.description"]}
+        eyebrow={page.eyebrow}
+        title={page.title}
+        description={page.description}
+        family="article"
       />
       <PublicArticleCollection
-        articles={summaries}
-        labels={{
-          empty: messages["articles.empty"],
-          read: messages["articles.read"],
-          publishedBy: messages["articles.publishedBy"],
-          lastReviewed: messages["articles.lastReviewed"],
-          fallback: messages["public.fallback"],
-          unreliable: messages["articles.unreliable"],
-        }}
+        articles={articleSummaries({ articles, locale, messages })}
+        labels={articleLabels(messages)}
       />
     </PublicSiteShell>
   );

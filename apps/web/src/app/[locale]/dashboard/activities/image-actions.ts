@@ -8,7 +8,6 @@ import { localizedPath } from "~/i18n/routing";
 import { editorialLanguageCodes } from "~/lib/editorial-languages";
 import { recordAudit } from "~/server/audit";
 import { createAssetUploadUrl, verifyAssetUpload } from "~/server/assets/s3";
-import { auth } from "~/server/auth";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
@@ -40,7 +39,7 @@ const imageUploadSchema = z.object({
 
 export const createActivityImageUpload = protectedPermissionAction(
   "content.activity.manage",
-  async (formData) => {
+  async (formData, _locale, user) => {
     const parsed = imageUploadSchema.parse({
       mimeType: formData.get("mimeType"),
       byteSize: formData.get("byteSize"),
@@ -48,8 +47,6 @@ export const createActivityImageUpload = protectedPermissionAction(
       altText: formData.get("altText"),
       rightsConfirmed: formData.get("rightsConfirmed"),
     });
-    const session = await auth();
-    if (!session?.user.id) throw new Error("Authentication required");
 
     const assetId = crypto.randomUUID();
     const storageKey = `uploads/activities/${assetId}/original`;
@@ -62,7 +59,7 @@ export const createActivityImageUpload = protectedPermissionAction(
     await db.transaction(async (tx) => {
       await tx.insert(assets).values({
         id: assetId,
-        uploaderId: session.user.id,
+        uploaderId: user.id,
         languageCode: parsed.languageCode,
         storageKey,
         mimeType: parsed.mimeType,
@@ -93,14 +90,12 @@ const coverSchema = z.object({
 /** Attach (or replace) an activity's cover image from an uploaded asset. */
 export const setActivityCoverImage = protectedPermissionAction(
   "content.activity.manage",
-  async (formData) => {
+  async (formData, _locale, user) => {
     const parsed = coverSchema.parse({
       locale: formData.get("locale"),
       activityId: formData.get("activityId"),
       assetId: formData.get("assetId"),
     });
-    const session = await auth();
-    if (!session?.user.id) throw new Error("Authentication required");
 
     const [uploadedAsset] = await db
       .select({
@@ -112,7 +107,7 @@ export const setActivityCoverImage = protectedPermissionAction(
       .where(
         and(
           eq(assets.id, parsed.assetId),
-          eq(assets.uploaderId, session.user.id),
+          eq(assets.uploaderId, user.id),
           eq(assets.kind, "image"),
           eq(assets.rightsConfirmed, true),
           isNull(assets.archivedAt),
@@ -195,14 +190,12 @@ const documentUploadSchema = z.object({
 /** Signed upload for a downloadable PDF attached to an activity. */
 export const createActivityDocumentUpload = protectedPermissionAction(
   "content.activity.manage",
-  async (formData) => {
+  async (formData, _locale, user) => {
     const parsed = documentUploadSchema.parse({
       byteSize: formData.get("byteSize"),
       languageCode: formData.get("languageCode"),
       rightsConfirmed: formData.get("rightsConfirmed"),
     });
-    const session = await auth();
-    if (!session?.user.id) throw new Error("Authentication required");
 
     const assetId = crypto.randomUUID();
     const storageKey = `uploads/activities/${assetId}/document.pdf`;
@@ -214,7 +207,7 @@ export const createActivityDocumentUpload = protectedPermissionAction(
     });
     await db.insert(assets).values({
       id: assetId,
-      uploaderId: session.user.id,
+      uploaderId: user.id,
       languageCode: parsed.languageCode,
       storageKey,
       mimeType: "application/pdf",
@@ -239,7 +232,7 @@ const addDownloadSchema = z.object({
 /** Register an uploaded PDF as a public download attached to the activity. */
 export const addActivityDownload = protectedPermissionAction(
   "content.activity.manage",
-  async (formData) => {
+  async (formData, _locale, user) => {
     const parsed = addDownloadSchema.parse({
       locale: formData.get("locale"),
       activityId: formData.get("activityId"),
@@ -247,8 +240,6 @@ export const addActivityDownload = protectedPermissionAction(
       languageCode: formData.get("languageCode"),
       title: formData.get("title"),
     });
-    const session = await auth();
-    if (!session?.user.id) throw new Error("Authentication required");
 
     const [uploadedAsset] = await db
       .select({
@@ -260,7 +251,7 @@ export const addActivityDownload = protectedPermissionAction(
       .where(
         and(
           eq(assets.id, parsed.assetId),
-          eq(assets.uploaderId, session.user.id),
+          eq(assets.uploaderId, user.id),
           eq(assets.kind, "document"),
           eq(assets.rightsConfirmed, true),
           isNull(assets.archivedAt),

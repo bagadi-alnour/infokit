@@ -18,10 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-
-/** Why a record is waiting on an editor — the freshness mechanic, verbatim. */
-export type AttentionKind =
-  "never" | "overdue" | "uncertain" | "noSchedule" | "dueSoon";
+import type { AttentionKind } from "~/lib/freshness";
 
 export interface AttentionItem {
   id: string;

@@ -27,6 +27,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 
@@ -92,6 +93,97 @@ export type DataTableColumnMeta = {
     options?: readonly { value: string; label: string }[];
   };
 };
+
+/**
+ * The cell that names the record. A title is the longest thing in a row and the
+ * reason a table drifts wider than its screen, pushing the columns that qualify
+ * it — who owns it, what state it is in — off the edge. So it is capped and cut
+ * with an ellipsis: the whole of it stays on the pointer, and the record it
+ * opens is one click away.
+ */
+export function DataTableTitle({
+  href,
+  title,
+  marker,
+  sub,
+  note,
+}: {
+  href: string;
+  title: string;
+  /** A glyph qualifying the title itself, kept beside it as the text is cut. */
+  marker?: ReactNode;
+  /**
+   * The second line: what it belongs to, which revision, where it is. Text
+   * rather than markup, because it is cut the same way and has to be readable
+   * from the pointer once it is.
+   */
+  sub?: string;
+  /** Chips under it, for a state the row has to carry into the list. */
+  note?: ReactNode;
+}) {
+  return (
+    <div className="grid max-w-48 gap-0.5 lg:max-w-64">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Link
+          href={href}
+          title={title}
+          className="truncate font-medium hover:underline"
+        >
+          {title}
+        </Link>
+        {marker}
+      </span>
+      {sub ? (
+        <p className="text-copy-muted truncate text-xs" title={sub}>
+          {sub}
+        </p>
+      ) : null}
+      {note}
+    </div>
+  );
+}
+
+/**
+ * A set of values one row carries: the languages it is live in, the days it is
+ * open. Past the first few the set stops being read and starts being a column
+ * wide enough to push the rest of the row off the table, so what is left over is
+ * counted instead — and the count carries the names it is standing in for.
+ */
+export function DataTableChips({
+  items,
+  empty,
+  limit = 3,
+}: {
+  items: readonly string[];
+  /** What an empty set reads as — punctuation, not a sentence. */
+  empty: string;
+  limit?: number;
+}) {
+  if (items.length === 0) {
+    return <span className="text-copy-muted text-sm">{empty}</span>;
+  }
+  const rest = items.slice(limit);
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {items.slice(0, limit).map((item) => (
+        <span
+          key={item}
+          className="border-line text-copy-muted rounded border px-1.5 py-0.5 text-[0.7rem] font-medium"
+        >
+          {item}
+        </span>
+      ))}
+      {rest.length > 0 ? (
+        <span
+          title={rest.join(", ")}
+          className="border-line text-copy-muted rounded border border-dashed px-1.5 py-0.5 text-[0.7rem] font-medium tabular-nums"
+        >
+          +{rest.length}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 const PAGE_SIZES = [10, 25, 50, 100] as const;
 
@@ -235,9 +327,10 @@ export function DataTable<Row>({
   initialColumnVisibility = {},
   initialColumnFilters = [],
   filters,
+  rowActions,
   rowHref,
   rowId,
-  toolbarExtra,
+  createAction,
   totalCount,
 }: {
   columns: ColumnDef<Row>[];
@@ -251,9 +344,20 @@ export function DataTable<Row>({
   initialColumnFilters?: ColumnFiltersState;
   /** Rendered between the search box and the column menu. */
   filters?: ReactNode;
+  /**
+   * What a row can be operated on with, in its own column at the end. Every
+   * table puts the menu in the same place, so an editor never hunts for it.
+   */
+  rowActions?: { label: string; render: (row: Row) => ReactNode };
   rowHref?: (row: Row) => string;
   rowId: (row: Row) => string;
-  toolbarExtra?: ReactNode;
+  /**
+   * What adds a record to this list, at the end of the toolbar. It belongs to
+   * the table rather than the page header: the list is what an editor is looking
+   * at when they find the record they wanted is not there. Left out when the
+   * person may not create one — the button is the only place that decision shows.
+   */
+  createAction?: ReactNode;
   /**
    * How many records exist before the caller's own filters ran, so the count
    * under the table stays honest when `data` is already narrowed down.
@@ -281,9 +385,29 @@ export function DataTable<Row>({
     [columns],
   );
 
+  // The actions column is the table's own, not the caller's: one place at the
+  // end of every row, never sorted, never hidden, and never a filter — a menu
+  // button has no value to offer either of those.
+  const tableColumns = useMemo<ColumnDef<Row>[]>(() => {
+    if (!rowActions) return filterableColumns;
+    return [
+      ...filterableColumns,
+      {
+        id: "actions",
+        enableSorting: false,
+        enableHiding: false,
+        meta: { label: rowActions.label, align: "end" },
+        // The column's name is for the screen reader alone: spelled out over a
+        // row of menu buttons it is a word that says nothing.
+        header: () => <span className="sr-only">{rowActions.label}</span>,
+        cell: ({ row }) => rowActions.render(row.original),
+      },
+    ];
+  }, [filterableColumns, rowActions]);
+
   const table = useReactTable({
     data,
-    columns: filterableColumns,
+    columns: tableColumns,
     state: { sorting, columnVisibility, columnFilters, globalFilter: search },
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
@@ -378,7 +502,7 @@ export function DataTable<Row>({
               </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-          {toolbarExtra}
+          {createAction}
         </div>
       </div>
 
@@ -410,11 +534,16 @@ export function DataTable<Row>({
                             : undefined
                       }
                     >
+                      {/* Reversing the row reverses `justify` with it, so `end`
+                       * packs the label against the column's near edge and
+                       * leaves it hanging to the left of the numbers it names.
+                       * `start` is the reversed row's far side — the edge
+                       * `text-end` gives the cells, in either direction. */}
                       <span
                         className={cn(
                           "flex items-center gap-0.5",
                           meta?.align === "end" &&
-                            "flex-row-reverse justify-end",
+                            "flex-row-reverse justify-start",
                         )}
                       >
                         {header.column.getCanSort() ? (

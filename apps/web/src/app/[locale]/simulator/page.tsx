@@ -7,14 +7,27 @@ import {
   PublicPageHeader,
   PublicSiteShell,
 } from "~/components/public/public-site-shell";
+import { JsonLd } from "~/components/seo/json-ld";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
-import { languageAlternates, localizedPath } from "~/i18n/routing";
+import { localizedPath } from "~/i18n/routing";
+import { publicMetadata } from "~/seo/metadata";
+import { collectionJsonLd } from "~/seo/structured-data";
 import { listPublishedSimulators } from "~/server/content/public-simulator";
 
-export const metadata: Metadata = {
-  title: "Information simulator",
-  alternates: { languages: languageAlternates("/simulator") },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const locale = requirePublicRouteLocale((await params).locale);
+  const messages = await loadPageCatalog(locale, "public-content");
+  return publicMetadata({
+    path: "/simulator",
+    locale,
+    title: messages["simulator.title"],
+    description: messages["simulator.description"],
+  });
+}
 
 export default async function SimulatorsPage({
   params,
@@ -55,10 +68,22 @@ export default async function SimulatorsPage({
       currentPath="/simulator"
       messages={messages}
     >
+      <JsonLd
+        data={collectionJsonLd({
+          locale,
+          name: messages["simulator.title"],
+          description: messages["simulator.description"],
+          items: simulators.map(({ document }) => ({
+            name: document.title,
+            path: `/simulator/${document.slug}`,
+          })),
+        })}
+      />
       <PublicPageHeader
         eyebrow={messages["simulator.eyebrow"]}
         title={messages["simulator.title"]}
         description={messages["simulator.description"]}
+        family="guide"
       />
       <PublicSimulatorCollection
         simulators={summaries}

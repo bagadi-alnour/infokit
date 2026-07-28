@@ -122,7 +122,34 @@ Rules:
    Its calendar/create/attention rail can collapse to a narrow restore control, and the preference persists on that device. Narrow screens keep the information in normal document flow instead of hiding it.
 9. At the Phase 3 gate, activity members are assigned by organisation email and linked to the same stable membership when they authenticate later. Public attribution is a separately authored projection; the workspace never sends member rows or emails to a public query. Before that gate, this workflow is exercised only with labelled fictional local data.
 
-## 8. Adoption and verification
+## 8. Forms and client state
+
+Workspace state has three homes, and the boundary is what the state is _for_:
+
+| State                                      | Home                                                     | Example                                      |
+| ------------------------------------------ | -------------------------------------------------------- | -------------------------------------------- |
+| What the editor is about to save           | React Hook Form + zod, inside the form                   | an activity's schedule rows, an event's city |
+| What a pasted link should reproduce        | URL search params                                        | filters, pagination, the runbook's date      |
+| How this editor likes the console arranged | zustand (`apps/web/src/stores/workspace-preferences.ts`) | the runbook information rail's width         |
+
+A global store never holds either of the first two: the URL has to describe the screen a colleague opens, and the server has to validate what was typed. Preferences persist per device, never per account, and rehydrate after mount (`useHydrateWorkspacePreferences`, called once in `AdminUIProvider`) so the first client render still matches the server's markup.
+
+The forms layer:
+
+- `~/hooks/use-workspace-form` — `useWorkspaceForm` (React Hook Form with the console's `onTouched` mode and the zod resolver), `useServerFormAction` (submit gated on validity, then the existing server action), `useFormMessages`.
+- `~/components/admin/form-field` — one field row per control, wired through `Controller`: label, control, hint, error, with `data-invalid` on the row and `aria-invalid` on the control, which is the shadcn field pattern. Add a wrapper here rather than re-plumbing a control in a form.
+- `~/lib/form-messages` — the wording every form shares for the mistakes every form can make. Validation copy is user-facing copy: it comes from the catalog (`form.*` in `common.json`, all eleven locales), so a schema is a factory that takes the messages and never carries an English literal.
+
+**Server actions stay `FormData`-shaped.** Every workspace control already renders a named native input, so `useServerFormAction` reads the post straight off the form element and the action is untouched. Consequences worth knowing:
+
+1. A field's React Hook Form path is the key it posts under. Where an action reads one repeated key index-aligned (schedule rows), the row's control keeps its typed path and posts under `inputName`.
+2. The form sets `noValidate`, so HTML `required`/`minLength` no longer gate submit — the schema is the gate, and the action re-checks every rule when the post arrives. A rule that only the server can judge (uploaded asset ids, geocoded coordinates) stays a server-side check.
+3. A child that owns its own inputs keeps working without knowing a form library exists: the translation workspace, `CoverImageField`, the address suggestion, and the publication choice all post their own fields.
+4. Shared client/server vocabulary lives beside the action (`~/lib/activity-rules`, `~/lib/schedule-rules`), because a `use server` module may only export async functions. The form offers exactly the options the action accepts.
+
+The state-heavy authoring forms use this layer. Two kinds of form deliberately do not: a single-button form (delete, confirm, publish) stays a plain server-action post, and the public sign-in, password reset, and verification forms keep native posting so authentication works before JavaScript loads.
+
+## 9. Adoption and verification
 
 - Migrate existing hand-built dashboard primitives incrementally, preserving server actions and form behavior.
 - Verify `pnpm check:ci` after component generation or customization.

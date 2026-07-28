@@ -3,6 +3,13 @@
  * key; `uniqueSlug` appends a short random suffix so generated slugs never
  * collide on the unique column without a read-modify-write loop.
  */
+/**
+ * The characters a hand-written slug may use — the alphabet `slugify` produces,
+ * so a form can reject a slug before the server quietly rewrites it. Empty is
+ * allowed: an unset slug is generated from the title.
+ */
+export const slugPattern = /^[a-z0-9-]*$/;
+
 export function slugify(input: string): string {
   return input
     .normalize("NFKD")

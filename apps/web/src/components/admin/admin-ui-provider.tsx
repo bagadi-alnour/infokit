@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 import { DirectionProvider } from "~/components/ui/direction";
 import { TooltipProvider } from "~/components/ui/tooltip";
+import { useHydrateWorkspacePreferences } from "~/stores/workspace-preferences";
 
 const ActionFeedbackContext = createContext({
   permissionDenied: "Permission denied",
@@ -68,6 +69,10 @@ export function AdminUIProvider({
   direction: "ltr" | "rtl";
   permissionDenied: string;
 }) {
+  // Once for the whole workspace: the panels read the store, and only the shell
+  // knows when the client has taken over from the server's markup.
+  useHydrateWorkspacePreferences();
+
   return (
     <ActionFeedbackContext.Provider value={{ permissionDenied }}>
       <DirectionProvider direction={direction}>

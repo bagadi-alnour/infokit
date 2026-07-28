@@ -1,5 +1,9 @@
 "use client";
 
+// The flow canvas brings its own stylesheet, so it is asked for here rather than
+// from `globals.css`, where every public page paid for it.
+import "@xyflow/react/dist/style.css";
+
 import type { Locale } from "@infokit/shared/i18n";
 import {
   addEdge,
@@ -68,6 +72,7 @@ import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { SelectField } from "~/components/ui/select-field";
 import { Textarea } from "~/components/ui/textarea";
+import { editorialTextDirection } from "~/lib/editorial-languages";
 import {
   graphToScriptNodes,
   layoutFlow,
@@ -1454,7 +1459,7 @@ function NodeInspector({
           value={translation.prompt}
           disabled={readOnly}
           rows={3}
-          dir={language === "ar" ? "rtl" : "ltr"}
+          dir={editorialTextDirection(language)}
           onChange={(event) => {
             updateTranslation("prompt", event.target.value);
           }}
@@ -1470,7 +1475,7 @@ function NodeInspector({
           value={translation.explanation}
           disabled={readOnly}
           rows={3}
-          dir={language === "ar" ? "rtl" : "ltr"}
+          dir={editorialTextDirection(language)}
           onChange={(event) => {
             updateTranslation("explanation", event.target.value);
           }}
@@ -1507,7 +1512,7 @@ function NodeInspector({
               value={translation.resultBody}
               disabled={readOnly}
               rows={6}
-              dir={language === "ar" ? "rtl" : "ltr"}
+              dir={editorialTextDirection(language)}
               onChange={(event) => {
                 updateTranslation("resultBody", event.target.value);
               }}
@@ -1522,7 +1527,7 @@ function NodeInspector({
               value={translation.disclaimer}
               disabled={readOnly}
               rows={3}
-              dir={language === "ar" ? "rtl" : "ltr"}
+              dir={editorialTextDirection(language)}
               onChange={(event) => {
                 updateTranslation("disclaimer", event.target.value);
               }}
@@ -1576,7 +1581,7 @@ function NodeInspector({
                         disabled={readOnly}
                         aria-label={messages["node.choiceLabel"]}
                         placeholder={messages["node.choiceLabel"]}
-                        dir={language === "ar" ? "rtl" : "ltr"}
+                        dir={editorialTextDirection(language)}
                         onChange={(event) => {
                           onUpdate((data) => ({
                             ...data,

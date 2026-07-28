@@ -1,0 +1,11 @@
+{
+  "form.required": "ያስፈልጋል",
+  "form.invalid": "ያስገቡትን ዋጋ ያረጋግጡ።",
+  "form.saveFailed": "አልተቀመጠም። እንደገና ይሞክሩ።",
+  "form.tooLong": "ይህ ጽሑፍ ከሚፈቀደው ርዝመት በላይ ነው።",
+  "form.tooShort": "ይህ ጽሑፍ ከሚፈቀደው ርዝመት በታች ነው።",
+  "form.endBeforeStart": "መጨረሻው ከመጀመሪያው በኋላ መሆን አለበት።",
+  "form.invalidDate": "ትክክለኛ ቀን ያስገቡ።",
+  "form.invalidTime": "ትክክለኛ ሰዓት ያስገቡ።",
+  "form.reviewFields": "ከማስቀመጥ በፊት አንዳንድ ሳጥኖች ማስተካከል ያስፈልጋቸዋል።"
+}

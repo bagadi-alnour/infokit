@@ -1,15 +1,24 @@
 import { cn } from "~/lib/utils";
 
+const BRAND_NAME = "InfoKit";
+
 /**
- * A verified place: a pin with a check inside. Drawn in tokens so it follows
- * the theme, and hidden from assistive tech — the wordmark next to it carries
- * the name (docs/DESIGN-SYSTEM.md §5).
+ * The information mark: an "i" enclosed in a disc — the sign people already
+ * look for when they need to know something, which is the whole promise here.
+ * It stands in for the logo where there is no room to write the name — a
+ * collapsed sidebar, an app icon — and the wordmark carries the name on its own
+ * everywhere else. Drawn in tokens so it follows the theme, and hidden from
+ * assistive tech: wherever it appears, the name is carried as text beside it or
+ * by the link around it (docs/DESIGN-SYSTEM.md §5).
+ *
+ * `size` takes any CSS length: a number for a fixed pixel mark, or an `em`
+ * value to let it scale with the type around it.
  */
 export function BrandMark({
   size = 32,
   className,
 }: {
-  size?: number;
+  size?: number | string;
   className?: string;
 }) {
   return (
@@ -21,19 +30,43 @@ export function BrandMark({
       aria-hidden
       focusable="false"
     >
-      <rect width="32" height="32" rx="10" fill="var(--infokit-accent)" />
-      <path
-        d="M16 6.5c-3.7 0-6.8 3-6.8 6.7 0 4.8 5.5 10.4 6.4 11.3.2.2.6.2.8 0 .9-.9 6.4-6.5 6.4-11.3 0-3.7-3.1-6.7-6.8-6.7Z"
+      <circle cx="16" cy="16" r="16" fill="var(--infokit-accent)" />
+      {/* Tittle and stem are drawn rather than typeset, so the mark holds the
+       * same proportions at 17px in a wordmark as it does at 32px alone. The
+       * "i" sits a hair above centre because the gap under the tittle reads
+       * lighter than solid stem. */}
+      <circle cx="16" cy="9.4" r="2.35" fill="var(--infokit-accent-contrast)" />
+      <rect
+        x="13.8"
+        y="13.6"
+        width="4.4"
+        height="10"
+        rx="2.2"
         fill="var(--infokit-accent-contrast)"
       />
-      <path
-        d="m12.7 13.3 2.3 2.3 4.3-4.3"
-        fill="none"
-        stroke="var(--infokit-accent)"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
+  );
+}
+
+/**
+ * The logo: the name, set in the display face as real text. It inherits the
+ * type around it, stays crisp at any zoom, and is selectable, searchable and
+ * translatable-proof like any other word — nothing here is a picture, so
+ * assistive tech reads it as the word it is.
+ *
+ * Size it with a font-size class through `className`.
+ */
+export function BrandWordmark({ className }: { className?: string }) {
+  return (
+    <span
+      // A name is never mirrored: an RTL page keeps these letters in order.
+      dir="ltr"
+      className={cn(
+        "font-display inline-block whitespace-nowrap font-bold tracking-tight",
+        className,
+      )}
+    >
+      {BRAND_NAME}
+    </span>
   );
 }

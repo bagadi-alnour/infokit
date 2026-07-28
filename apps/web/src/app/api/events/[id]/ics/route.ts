@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { eventToIcs, icsFileName } from "~/lib/ics";
-import { auth } from "~/server/auth";
+import { readerUserId } from "~/server/auth/request-reader";
 import {
   coordinationViewer,
   findCoordinationEvent,
@@ -22,8 +22,10 @@ import {
  *
  * The visibility tiers are enforced here exactly as the agenda enforces them:
  * the public read model answers first, and only if it does not is the caller's
- * own session consulted. An id from the `organization` tier therefore returns
- * 404 to everyone outside that organisation, download link or not.
+ * own session consulted — a browser cookie or a phone's device session, since
+ * "add to calendar" has to work from the app too. An id from the `organization`
+ * tier therefore returns 404 to everyone outside that organisation, download
+ * link or not.
  */
 export async function GET(
   request: Request,
@@ -46,9 +48,9 @@ export async function GET(
     },
   );
   if (!found) {
-    const session = await auth();
-    if (!session?.user) return notFound();
-    const viewer = await coordinationViewer(session.user.id);
+    const userId = await readerUserId(request);
+    if (!userId) return notFound();
+    const viewer = await coordinationViewer(userId);
     found = await findCoordinationEvent({ eventId, viewer, locale });
   }
   if (!found) return notFound();

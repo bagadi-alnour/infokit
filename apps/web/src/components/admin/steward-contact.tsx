@@ -1,3 +1,5 @@
+import type { ChangeEvent } from "react";
+
 import { Card, Field, TextInput } from "~/components/admin/workspace";
 import { contactLink } from "~/lib/contact-link";
 import {
@@ -24,12 +26,30 @@ export function StewardContactFields({
   values,
   labels,
   columns = true,
+  onChange,
 }: {
   values: StewardContactValues;
   labels: Record<string, string>;
   /** Phone and email side by side; off in a narrow column. */
   columns?: boolean;
+  /**
+   * Set when something else on the page writes these fields too — a list of the
+   * organisation's members, say. Without it the inputs stay uncontrolled, which
+   * is what a plain server form wants.
+   */
+  onChange?: (patch: Partial<StewardContactValues>) => void;
 }) {
+  /** Controlled only when somebody else may set these values. */
+  const bind = (field: keyof StewardContactValues) =>
+    onChange
+      ? {
+          value: values[field] ?? "",
+          onChange: (event: ChangeEvent<HTMLInputElement>) => {
+            onChange({ [field]: event.target.value });
+          },
+        }
+      : { defaultValue: values[field] ?? "" };
+
   return (
     <div className="grid gap-4">
       <Field
@@ -38,7 +58,7 @@ export function StewardContactFields({
       >
         <TextInput
           name="stewardName"
-          defaultValue={values.stewardName ?? ""}
+          {...bind("stewardName")}
           maxLength={120}
           autoComplete="off"
         />
@@ -52,7 +72,7 @@ export function StewardContactFields({
             name="stewardPhone"
             type="tel"
             inputMode="tel"
-            defaultValue={values.stewardPhone ?? ""}
+            {...bind("stewardPhone")}
             maxLength={40}
             autoComplete="off"
           />
@@ -64,7 +84,7 @@ export function StewardContactFields({
           <TextInput
             name="stewardEmail"
             type="email"
-            defaultValue={values.stewardEmail ?? ""}
+            {...bind("stewardEmail")}
             maxLength={255}
             autoComplete="off"
           />

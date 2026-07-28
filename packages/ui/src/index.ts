@@ -13,6 +13,7 @@ export { Input, type InputProps } from "./components/input";
 export { Chip, StatusPill } from "./components/status";
 export { Text, TextClassContext, type TextProps } from "./components/text";
 export { cn } from "./lib/cn";
+export { directionProps, type ReadingDirection } from "./lib/direction";
 export {
   InfoKitThemeProvider,
   useInfoKitTheme,

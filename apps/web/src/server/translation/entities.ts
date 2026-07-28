@@ -1,12 +1,15 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import type { EditorialLanguage } from "~/lib/editorial-languages";
 import { db } from "~/server/db";
 import {
   activities,
   activityTranslations,
+  editorialCustodianships,
+  editorialRevisions,
+  editorialRevisionTranslations,
   organizationProfileTranslations,
   organizationProfiles,
   translationSourceVersions,
@@ -51,6 +54,15 @@ export interface TargetTranslation extends TranslationPayload {
 export interface SourceTranslation extends TranslationPayload {
   organizationId: string | null;
   sourceLanguageCode: EditorialLanguage;
+}
+
+/** Editorial bodies are stored as `{ html }`; every other kind stores a column. */
+function bodyHtmlOf(bodyJson: unknown): string | null {
+  if (bodyJson && typeof bodyJson === "object" && "html" in bodyJson) {
+    const html = (bodyJson as { html?: unknown }).html;
+    return typeof html === "string" ? html : null;
+  }
+  return null;
 }
 
 export interface TranslationEntityAdapter {
@@ -157,6 +169,130 @@ const activityAdapter: TranslationEntityAdapter = {
   },
 };
 
+/**
+ * Articles and the other editorial kinds.
+ *
+ * Everything here reads the latest revision. An article's text is versioned by
+ * revision, so "the current text" is always the newest one — an older revision
+ * may be sealed by a publication and must not be rewritten in place.
+ */
+const editorialEntryAdapter: TranslationEntityAdapter = {
+  kind: "editorial_entry",
+  managePermission: "content.article.write",
+  async loadSource(entityId) {
+    const [revision] = await db
+      .select({
+        id: editorialRevisions.id,
+        sourceLanguageCode: editorialRevisions.sourceLanguageCode,
+      })
+      .from(editorialRevisions)
+      .where(eq(editorialRevisions.entryId, entityId))
+      .orderBy(desc(editorialRevisions.revisionNumber))
+      .limit(1);
+    if (!revision) return null;
+    // Custody, not authorship, is what scopes the permission check: the
+    // organisation currently answering for the entry.
+    const [custodian] = await db
+      .select({ organizationId: editorialCustodianships.organizationId })
+      .from(editorialCustodianships)
+      .where(
+        and(
+          eq(editorialCustodianships.entryId, entityId),
+          isNull(editorialCustodianships.endedAt),
+        ),
+      )
+      .limit(1);
+    const [row] = await db
+      .select({
+        title: editorialRevisionTranslations.title,
+        bodyJson: editorialRevisionTranslations.bodyJson,
+        plainText: editorialRevisionTranslations.plainText,
+      })
+      .from(editorialRevisionTranslations)
+      .where(
+        and(
+          eq(editorialRevisionTranslations.revisionId, revision.id),
+          eq(
+            editorialRevisionTranslations.languageCode,
+            revision.sourceLanguageCode,
+          ),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    return {
+      organizationId: custodian?.organizationId ?? null,
+      sourceLanguageCode: revision.sourceLanguageCode as EditorialLanguage,
+      title: row.title,
+      bodyHtml: bodyHtmlOf(row.bodyJson),
+      plainText: row.plainText,
+    };
+  },
+  async loadTarget(entityId, languageCode) {
+    const [row] = await db
+      .select({
+        languageCode: editorialRevisionTranslations.languageCode,
+        title: editorialRevisionTranslations.title,
+        bodyJson: editorialRevisionTranslations.bodyJson,
+        plainText: editorialRevisionTranslations.plainText,
+        state: editorialRevisionTranslations.state,
+        method: editorialRevisionTranslations.method,
+        providerCode: editorialRevisionTranslations.providerCode,
+        sourceVersionId: editorialRevisionTranslations.sourceVersionId,
+        verifiedAt: editorialRevisionTranslations.verifiedAt,
+      })
+      .from(editorialRevisionTranslations)
+      .innerJoin(
+        editorialRevisions,
+        eq(editorialRevisions.id, editorialRevisionTranslations.revisionId),
+      )
+      .where(
+        and(
+          eq(editorialRevisions.entryId, entityId),
+          eq(editorialRevisionTranslations.languageCode, languageCode),
+        ),
+      )
+      .orderBy(desc(editorialRevisions.revisionNumber))
+      .limit(1);
+    if (!row) return null;
+    return {
+      ...row,
+      languageCode: row.languageCode as EditorialLanguage,
+      bodyHtml: bodyHtmlOf(row.bodyJson),
+      // An article records carry-forward against the revision it came from
+      // rather than a source version, so there is nothing to report here.
+      carriedForwardFromSourceVersionId: null,
+      verifiedByName: null,
+    };
+  },
+  async markVerified({ entityId, languageCode, userId, sourceVersionId }) {
+    const [revision] = await db
+      .select({ id: editorialRevisions.id })
+      .from(editorialRevisions)
+      .where(eq(editorialRevisions.entryId, entityId))
+      .orderBy(desc(editorialRevisions.revisionNumber))
+      .limit(1);
+    if (!revision) return false;
+    const updated = await db
+      .update(editorialRevisionTranslations)
+      .set({
+        state: "verified",
+        verifiedById: userId,
+        verifiedAt: new Date(),
+        carriedForwardFromRevisionId: null,
+        sourceVersionId,
+      })
+      .where(
+        and(
+          eq(editorialRevisionTranslations.revisionId, revision.id),
+          eq(editorialRevisionTranslations.languageCode, languageCode),
+        ),
+      )
+      .returning({ languageCode: editorialRevisionTranslations.languageCode });
+    return updated.length > 0;
+  },
+};
+
 const organizationProfileAdapter: TranslationEntityAdapter = {
   kind: "organization_profile",
   managePermission: "organization.profile.manage",
@@ -253,6 +389,7 @@ const adapters: Partial<
   Record<TranslationEntityKind, TranslationEntityAdapter>
 > = {
   activity: activityAdapter,
+  editorial_entry: editorialEntryAdapter,
   organization_profile: organizationProfileAdapter,
 };
 

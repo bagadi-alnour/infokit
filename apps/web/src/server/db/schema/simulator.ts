@@ -40,6 +40,14 @@ export const flows = simulator.table("flows", {
     () => organizations.id,
   ),
   cityId: uuid("city_id").references(() => cities.id),
+  /**
+   * Who built this path. The owning organisation answers for the facts; this is
+   * the person to ask what a branch meant, and the one who may change it. Null
+   * for a seeded path, or once that account is gone.
+   */
+  createdById: varchar("created_by_id", { length: 255 }).references(
+    () => users.id,
+  ),
   ...stewardContact,
   ...archival,
   ...timestamps,

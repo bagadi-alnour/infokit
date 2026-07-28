@@ -35,7 +35,11 @@ export function LoginForms({
     return (
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
-          <p className="text-eyebrow">{l("auth.login.resetEyebrow")}</p>
+          {/* Sign-in belongs to no content family, so its eyebrow takes the
+              neutral metadata colour rather than a family tint (§5). */}
+          <p className="text-eyebrow text-copy-muted">
+            {l("auth.login.resetEyebrow")}
+          </p>
           <h2 className="font-display text-ink text-xl font-bold">
             {l("auth.login.resetHeading")}
           </h2>

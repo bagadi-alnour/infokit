@@ -13,14 +13,14 @@ import {
 import { Field, Notice, TextInput } from "~/components/admin/workspace";
 import { TaxonomyIcon, taxonomyIconNames } from "~/components/taxonomy-icon";
 
+import { actionsColumn, stateColumn } from "./catalogue-columns";
+import { CatalogueCreateDialog, StateFilter } from "./catalogue-row-controls";
 import {
-  ActiveToggle,
-  CatalogueCreateDialog,
-  StateFilter,
-} from "./catalogue-row-controls";
-import type { CatalogueCategoryRow, CatalogueLabels } from "./catalogue-rows";
+  matchesState,
+  type CatalogueCategoryRow,
+  type CatalogueLabels,
+} from "./catalogue-rows";
 import { DataTable } from "./data-table";
-import { DeleteButton } from "./delete-button";
 import { EditCategoryButton } from "./edit-category-button";
 import { IconPicker } from "./icon-picker";
 
@@ -43,27 +43,12 @@ export function CatalogueCategoriesPanel({
   const [state, setState] = useState("");
 
   const filtered = useMemo(
-    () => rows.filter((row) => state === "" || String(row.enabled) === state),
+    () => rows.filter((row) => matchesState(state, row.enabled)),
     [rows, state],
   );
 
-  const columns = useMemo<ColumnDef<CatalogueCategoryRow>[]>(() => {
-    const editLabels = {
-      edit: labels["catalogue.categories.edit"],
-      name: labels["catalogue.categories.labelFr"],
-      icon: labels["catalogue.categories.icon"],
-      save: labels["catalogue.save"],
-      searchIcons: labels["catalogue.icon.search"],
-      emptyIcons: labels["catalogue.icon.empty"],
-    };
-    const deleteLabels = {
-      delete: labels["catalogue.delete"],
-      confirm: labels["catalogue.deleteConfirm"],
-      hint: labels["catalogue.deleteHint"],
-      cancel: labels["catalogue.cancel"],
-    };
-
-    return [
+  const columns = useMemo<ColumnDef<CatalogueCategoryRow>[]>(
+    () => [
       {
         id: "name",
         accessorFn: (row) => row.label,
@@ -92,60 +77,33 @@ export function CatalogueCategoriesPanel({
         header: () => labels["catalogue.column.order"],
         meta: { label: labels["catalogue.column.order"], align: "end" },
       },
-      {
-        id: "state",
-        accessorFn: (row) => (row.enabled ? 0 : 1),
-        header: () => labels["catalogue.status.enabled"],
-        meta: { label: labels["catalogue.status.enabled"] },
-        cell: ({ row }) => (
-          <ActiveToggle
-            action={setCategoryEnabled}
-            idName="categoryId"
-            id={row.original.id}
-            active={row.original.enabled}
-            activeField="enabled"
-            organizationId={null}
-            canEdit={row.original.canEdit}
+      stateColumn<CatalogueCategoryRow>({
+        labels,
+        locale,
+        action: setCategoryEnabled,
+        idName: "categoryId",
+        value: (row) => row.enabled,
+        kind: "enabled",
+      }),
+      actionsColumn<CatalogueCategoryRow>({
+        labels,
+        locale,
+        action: deleteCategory,
+        idName: "categoryId",
+        edit: (row) => (
+          <EditCategoryButton
+            action={updateCategory}
             locale={locale}
+            categoryId={row.id}
+            name={row.label}
+            icon={row.icon}
             labels={labels}
-            onLabel={labels["catalogue.status.enabled"]}
-            offLabel={labels["catalogue.status.disabled"]}
           />
         ),
-      },
-      {
-        id: "actions",
-        header: () => labels["catalogue.column.actions"],
-        meta: { label: labels["catalogue.column.actions"], align: "end" },
-        enableSorting: false,
-        enableHiding: false,
-        cell: ({ row }) =>
-          row.original.canEdit ? (
-            <span className="inline-flex items-center justify-end gap-1">
-              <EditCategoryButton
-                action={updateCategory}
-                locale={locale}
-                categoryId={row.original.id}
-                name={row.original.label}
-                icon={row.original.icon}
-                icons={taxonomyIconNames}
-                labels={editLabels}
-              />
-              {row.original.canDelete ? (
-                <DeleteButton
-                  action={deleteCategory}
-                  idName="categoryId"
-                  id={row.original.id}
-                  organizationId={null}
-                  locale={locale}
-                  labels={deleteLabels}
-                />
-              ) : null}
-            </span>
-          ) : null,
-      },
-    ];
-  }, [labels, locale]);
+      }),
+    ],
+    [labels, locale],
+  );
 
   return (
     <div className="grid gap-4">
@@ -170,11 +128,10 @@ export function CatalogueCategoriesPanel({
             state={state}
             onChange={setState}
             labels={labels}
-            onLabel={labels["catalogue.status.enabled"]}
-            offLabel={labels["catalogue.status.disabled"]}
+            kind="enabled"
           />
         }
-        toolbarExtra={
+        createAction={
           canManage ? (
             <CatalogueCreateDialog
               action={createCategory}

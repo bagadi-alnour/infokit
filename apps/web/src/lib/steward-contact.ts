@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { optionalTextUpTo } from "~/lib/form-fields";
+
 /**
  * The workspace-only "who to ask about this record" contact, shared by every
  * content type (docs/DATABASE-SCHEMA.md §2). It answers one question an editor
@@ -16,6 +18,19 @@ export interface StewardContactValues {
   stewardEmail: string | null;
 }
 
+/**
+ * Somebody the record's own organisation already knows, offered as the contact
+ * before the free-text fields. A membership record carries no phone number, so
+ * choosing one of these fills a name and an address and no more.
+ */
+export interface StewardCandidate {
+  id: string;
+  name: string;
+  email: string | null;
+  /** Their role in the organisation, when one was recorded. */
+  title: string | null;
+}
+
 /** A record that has no steward yet — what a create form starts from. */
 export const EMPTY_STEWARD_CONTACT: StewardContactValues = {
   stewardName: null,
@@ -30,24 +45,17 @@ export const STEWARD_FIELDS = [
   "stewardEmail",
 ] as const;
 
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .transform((value) => (value === "" ? null : value));
-
 /** Loose on purpose: numbers are written many ways, and any of them can dial. */
 const phoneShape = /^[+(]?[\d\s().\-/]{5,}$/;
 const emailShape = /^[^\s@]+@[^\s@.]+\.[^\s@]+$/;
 
 export const stewardContactSchema = z.object({
-  stewardName: optionalText(120),
-  stewardPhone: optionalText(40).refine(
+  stewardName: optionalTextUpTo(120),
+  stewardPhone: optionalTextUpTo(40).refine(
     (value) => value === null || phoneShape.test(value),
     "Write the contact phone number as digits, spaces and + only",
   ),
-  stewardEmail: optionalText(255).refine(
+  stewardEmail: optionalTextUpTo(255).refine(
     (value) => value === null || emailShape.test(value),
     "Write the contact email as an address, name@example.org",
   ),

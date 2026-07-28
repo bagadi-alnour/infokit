@@ -64,12 +64,19 @@ export default async function AccountLayout({
         title={messages["account.title"]}
         sub={messages["account.description"]}
       />
-      <div className="grid gap-5 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-6">
-        <AccountSettingsNav
-          ariaLabel={messages["account.nav.label"]}
-          items={sections}
-        />
-        <div className="min-w-0">{children}</div>
+      {/* The window is the wrong thing to measure here: the console's sidebar
+       * takes 16rem off the front of it, so a 1000px window leaves this section
+       * the room of a 700px one and the column would fold away with space to
+       * spare. Asking the section how wide it is answers that, and keeps the
+       * answer right when the sidebar is collapsed to icons. */}
+      <div className="@container">
+        <div className="@2xl:grid-cols-[15rem_minmax(0,1fr)] @2xl:gap-6 grid gap-5">
+          <AccountSettingsNav
+            ariaLabel={messages["account.nav.label"]}
+            items={sections}
+          />
+          <div className="min-w-0">{children}</div>
+        </div>
       </div>
     </WorkspacePage>
   );

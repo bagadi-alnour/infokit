@@ -11,7 +11,7 @@ import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import {
-  isRtlEditorialLanguage,
+  editorialTextDirection,
   type EditorialLanguage,
 } from "~/lib/editorial-languages";
 import { db } from "~/server/db";
@@ -126,11 +126,9 @@ export default async function TranslationAssignmentPage({
     assignment.state === "requested" || assignment.state === "draft";
   /** The organisation narrative has its own three fields, not title/summary/body. */
   const isOrganization = assignment.entityKind === "organization_profile";
-  const targetDir = isRtlEditorialLanguage(
+  const targetDir = editorialTextDirection(
     assignment.targetLanguage as EditorialLanguage,
-  )
-    ? "rtl"
-    : "ltr";
+  );
 
   if (assignment.entityKind === "simulator_flow") {
     return (
@@ -186,13 +184,9 @@ export default async function TranslationAssignmentPage({
           <CardContent
             className="grid gap-5"
             lang={assignment.sourceLanguage}
-            dir={
-              isRtlEditorialLanguage(
-                assignment.sourceLanguage as EditorialLanguage,
-              )
-                ? "rtl"
-                : "ltr"
-            }
+            dir={editorialTextDirection(
+              assignment.sourceLanguage as EditorialLanguage,
+            )}
           >
             {isOrganization ? (
               <>
@@ -342,13 +336,9 @@ export default async function TranslationAssignmentPage({
                     defaultValue={
                       typeof target?.title === "string" ? target.title : ""
                     }
-                    dir={
-                      isRtlEditorialLanguage(
-                        assignment.targetLanguage as EditorialLanguage,
-                      )
-                        ? "rtl"
-                        : "ltr"
-                    }
+                    dir={editorialTextDirection(
+                      assignment.targetLanguage as EditorialLanguage,
+                    )}
                     maxLength={200}
                   />
                 </Field>
@@ -362,13 +352,9 @@ export default async function TranslationAssignmentPage({
                     defaultValue={
                       typeof target?.summary === "string" ? target.summary : ""
                     }
-                    dir={
-                      isRtlEditorialLanguage(
-                        assignment.targetLanguage as EditorialLanguage,
-                      )
-                        ? "rtl"
-                        : "ltr"
-                    }
+                    dir={editorialTextDirection(
+                      assignment.targetLanguage as EditorialLanguage,
+                    )}
                     rows={4}
                     maxLength={2000}
                   />
@@ -385,13 +371,9 @@ export default async function TranslationAssignmentPage({
                         ? target.plainText
                         : ""
                     }
-                    dir={
-                      isRtlEditorialLanguage(
-                        assignment.targetLanguage as EditorialLanguage,
-                      )
-                        ? "rtl"
-                        : "ltr"
-                    }
+                    dir={editorialTextDirection(
+                      assignment.targetLanguage as EditorialLanguage,
+                    )}
                     rows={14}
                     maxLength={40_000}
                   />

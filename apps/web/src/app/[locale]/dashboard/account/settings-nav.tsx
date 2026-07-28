@@ -20,9 +20,11 @@ export interface AccountSettingsNavItem {
  * form. Every entry is a route, which keeps the current section in the URL —
  * bookmarkable, linkable from an email, and restored by a page reload.
  *
- * Wide windows get the column beside the section (the sidebar side follows the
- * reading direction, since the layout grid is laid out with logical
- * properties); a narrow one gets a single scrolling row above it.
+ * The column sits beside the section wherever the section has the room for it —
+ * a container query, not the window, since the console's own sidebar has
+ * already taken its share (the sidebar side follows the reading direction, as
+ * the layout grid is laid out with logical properties). Anything narrower gets
+ * a single scrolling row above the section instead.
  */
 export function AccountSettingsNav({
   ariaLabel,
@@ -35,16 +37,16 @@ export function AccountSettingsNav({
 
   return (
     <nav aria-label={ariaLabel} className="min-w-0">
-      <ul className="border-line bg-surface rounded-card flex gap-1 overflow-x-auto border p-1.5 lg:flex-col lg:overflow-visible">
+      <ul className="border-line bg-surface rounded-card @2xl:flex-col @2xl:overflow-visible flex gap-1 overflow-x-auto border p-1.5">
         {items.map((item) => {
           const active = pathname === item.href;
           return (
-            <li key={item.href} className="lg:min-w-0">
+            <li key={item.href} className="@2xl:min-w-0">
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "group/section focus-visible:ring-brand/50 flex min-h-9 items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[0.9rem] font-medium outline-none focus-visible:ring-2 lg:whitespace-normal",
+                  "group/section focus-visible:ring-brand/50 @2xl:whitespace-normal flex min-h-9 items-center gap-2.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[0.9rem] font-medium outline-none focus-visible:ring-2",
                   active
                     ? "bg-brand-soft text-brand-soft-ink font-semibold"
                     : "text-copy-muted hover:bg-canvas hover:text-ink",
@@ -62,9 +64,10 @@ export function AccountSettingsNav({
                 />
                 <span className="min-w-0">
                   <span className="block truncate">{item.label}</span>
-                  {/* The hint is the reason to click; on a phone the row is
-                   * already scrolling sideways, so it stays behind lg. */}
-                  <span className="text-copy-muted hidden truncate text-xs font-normal lg:block">
+                  {/* The hint is the reason to click; while the row is still
+                   * scrolling sideways it would only make it longer, so it
+                   * waits for the column. */}
+                  <span className="text-copy-muted @2xl:block hidden truncate text-xs font-normal">
                     {item.hint}
                   </span>
                 </span>

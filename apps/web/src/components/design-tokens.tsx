@@ -52,6 +52,11 @@ const css = [
   `:root,:root[data-theme="light"]{${lightVars}}`,
   `:root[data-theme="dark"]{${darkVars}}`,
   `@media (prefers-color-scheme: dark){:root:not([data-theme]),:root[data-theme="system"]{${darkVars}}}`,
+  // Paper takes ink, whatever the screen was wearing: a reader who saves an
+  // activity page while reading in the dark would otherwise get pale text on a
+  // white sheet, because a printer drops backgrounds and keeps colours. Last,
+  // and at the specificity of the rules above, so it wins both of them.
+  `@media print{:root:not([data-theme]),:root[data-theme]{${lightVars}}}`,
 ].join("");
 
 export function DesignTokenStyles() {

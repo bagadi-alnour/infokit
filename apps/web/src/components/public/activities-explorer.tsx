@@ -54,20 +54,36 @@ function FilterField({
   );
 }
 
+/**
+ * The filters a link may arrive with. The home page's basic-information tiles
+ * are such links: a tile is a route into these results, so it must be able to
+ * name the one it opens. Only the starting point comes from the URL — from then
+ * on the reader owns the filters, which is why nothing is written back to it.
+ */
+export interface ActivityFilterEntry {
+  category?: string;
+  service?: string;
+  status?: string;
+  /** Words the reader already typed — the home page's search box sends them. */
+  q?: string;
+}
+
 export function PublicActivitiesExplorer({
   activities,
   labels,
   mapLabels,
+  entry,
 }: {
   activities: PublicActivitySummary[];
   labels: PublicActivityLabels;
   mapLabels: ActivityMapLabels;
+  entry?: ActivityFilterEntry;
 }) {
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("");
+  const [query, setQuery] = useState(entry?.q ?? "");
+  const [category, setCategory] = useState(entry?.category ?? "");
   const [audience, setAudience] = useState("");
-  const [service, setService] = useState("");
-  const [status, setStatus] = useState("");
+  const [service, setService] = useState(entry?.service ?? "");
+  const [status, setStatus] = useState(entry?.status ?? "");
   const [view, setView] = useState<"list" | "map">("list");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const searchId = useId();
@@ -264,9 +280,17 @@ export function PublicActivitiesExplorer({
 
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p role="status" className="text-ink text-[0.95rem] font-semibold">
-            {labels.results.replace("{count}", String(filtered.length))}
-          </p>
+          {/* The count names the results as well as announcing changes to them.
+              It has to be a heading: the cards below are `h3`, and the filters
+              `h2` is the only other one — inside a panel that collapses on a
+              narrow screen, so the outline skipped a level on exactly the phone
+              most readers arrive on. `role` stays on the wrapper, since putting
+              it on the heading would replace the role that fixes this. */}
+          <div role="status">
+            <h2 className="text-ink text-[0.95rem] font-semibold">
+              {labels.results.replace("{count}", String(filtered.length))}
+            </h2>
+          </div>
           <div
             role="group"
             aria-label={`${labels.listView} / ${labels.mapView}`}
@@ -310,6 +334,7 @@ export function PublicActivitiesExplorer({
                 key={activity.id}
                 activity={activity}
                 labels={labels}
+                layout="wide"
               />
             ))}
           </ul>

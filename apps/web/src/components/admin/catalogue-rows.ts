@@ -5,7 +5,8 @@ import type { StewardContactValues } from "~/lib/steward-contact";
 import type { DataTableLabels } from "./data-table";
 
 /**
- * The catalogue's row shapes and its label bundle.
+ * The catalogue's row shapes, its label bundle, and the handful of readings the
+ * three tables share.
  *
  * The page reads the database and hands each tab a flat list: labels are
  * already resolved to the reader's language there, so a table never has to
@@ -86,3 +87,66 @@ export type CatalogueRights = {
   scopeOrgId: string | null;
   scopeOrgName: string;
 };
+
+/** The colours a tag may be shown in, offered wherever a tag is written. */
+export const tagColorTokens = [
+  "neutral",
+  "accent",
+  "ok",
+  "warn",
+  "danger",
+] as const;
+
+/** "Public" or "Workspace only" — the words a reader sees for a stored value. */
+export function visibilityText(
+  labels: CatalogueLabels,
+  value: CatalogueTagRow["visibility"],
+) {
+  return value === "public"
+    ? labels["catalogue.tags.visibility.public"]
+    : labels["catalogue.tags.visibility.workspace"];
+}
+
+/**
+ * Which pair of words a row's on/off state is told in. A category is enabled or
+ * disabled and every other catalogue row is active or inactive; the same value
+ * also names the form field the switch posts, so the words and the field cannot
+ * drift apart.
+ */
+export type StateKind = "active" | "enabled";
+
+export function stateWords(labels: CatalogueLabels, kind: StateKind) {
+  return kind === "enabled"
+    ? {
+        on: labels["catalogue.status.enabled"],
+        off: labels["catalogue.status.disabled"],
+      }
+    : {
+        on: labels["catalogue.status.active"],
+        off: labels["catalogue.status.inactive"],
+      };
+}
+
+/**
+ * Whether a list holds both platform rows and an association's own. With only
+ * one kind present, a scope filter would ask a question with a single answer.
+ */
+export function hasMixedScopes(
+  rows: readonly { organizationId: string | null }[],
+) {
+  return (
+    rows.some((row) => row.organizationId === null) &&
+    rows.some((row) => row.organizationId !== null)
+  );
+}
+
+/** The scope dropdown as a predicate. An unset filter keeps every row. */
+export function matchesScope(scope: string, organizationId: string | null) {
+  if (scope === "") return true;
+  return scope === "global" ? organizationId === null : organizationId !== null;
+}
+
+/** The state dropdown as a predicate. An unset filter keeps every row. */
+export function matchesState(state: string, on: boolean) {
+  return state === "" || String(on) === state;
+}

@@ -1,16 +1,23 @@
 "use server";
 
 import type { Locale } from "@infokit/shared/i18n";
-import { and, desc, eq, inArray, isNull, lte, max, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, max, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { localizedPath } from "~/i18n/routing";
+import { articleScopes } from "~/lib/article-scope";
+import type { EditorialLanguage } from "~/lib/editorial-languages";
+import { optionalText } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
 import { verifyAssetUpload } from "~/server/assets/s3";
-import { auth } from "~/server/auth";
 import {
+  hasActualPlatformPermission,
+  superadminPermission,
+} from "~/server/auth/authorization";
+import {
+  hasPermission,
   protectedPermissionAction,
   requirePermission,
 } from "~/server/auth/require";
@@ -22,9 +29,19 @@ import {
   type LocalizedContent,
   type SourceContent,
 } from "~/server/content/editorial";
-import { parseScheduledPublication } from "~/server/content/publication-schedule";
+import {
+  clearedLanguageReview,
+  platformCleared,
+  platformVerifyPermission,
+} from "~/server/content/language-review";
+import {
+  parseScheduledPublication,
+  publishesOnSave,
+  requestedReviewStage,
+} from "~/server/content/publication-schedule";
 import { sanitizeRichText } from "~/server/content/sanitize-rich-text";
 import { db } from "~/server/db";
+import { classifyTranslation } from "~/server/translation/provenance";
 import {
   articleDetails,
   assets,
@@ -45,13 +62,14 @@ import {
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-const optional = z
-  .string()
-  .trim()
-  .transform((value) => (value === "" ? null : value));
-
 const languageSchema = z.enum(editorialLanguages);
-const publicationModeSchema = z.enum(["draft", "now", "scheduled"]);
+const publicationModeSchema = z.enum([
+  "draft",
+  "team",
+  "platform",
+  "now",
+  "scheduled",
+]);
 
 function refresh(locale: Locale) {
   revalidatePath(localizedPath("/dashboard", locale));
@@ -68,6 +86,30 @@ interface AuthoredTranslation {
   summary: string | null;
   bodyHtml: string | null;
   plainText: string | null;
+  /**
+   * The signature a machine draft came back with, when this language was
+   * generated in the browser during this editing session. Never trusted as a
+   * claim — `writeTranslations` re-derives the hash and compares.
+   */
+  signature: string | null;
+}
+
+/**
+ * What provenance is decided over: the two fields the generator signs. The
+ * summary is deliberately out, because the generator does not produce one —
+ * including it would report every machine draft as edited by a human.
+ */
+function provenancePayload(translation: AuthoredTranslation) {
+  return { title: translation.title, bodyHtml: translation.bodyHtml };
+}
+
+/** The `{ html }` shape body text is stored in, back out as a string. */
+function storedBodyHtml(bodyJson: unknown): string | null {
+  if (bodyJson && typeof bodyJson === "object" && "html" in bodyJson) {
+    const html = (bodyJson as { html?: unknown }).html;
+    return typeof html === "string" ? html : null;
+  }
+  return null;
 }
 
 /** Read one text field as a trimmed string, ignoring File entries. */
@@ -85,12 +127,14 @@ function readTranslations(formData: FormData): AuthoredTranslation[] {
     if (!title) continue;
     const summary = field(formData, `summary${upper}`);
     const body = sanitizeRichText(field(formData, `body${upper}Html`));
+    const signature = field(formData, `translation_proposal_${language}`);
     result.push({
       languageCode: language,
       title: title.slice(0, 200),
       summary: summary === "" ? null : summary,
       bodyHtml: body.html,
       plainText: body.text,
+      signature: signature === "" ? null : signature,
     });
   }
   return result;
@@ -192,14 +236,68 @@ async function writeSourceVersion(
   return created.id;
 }
 
-/** Write (upsert) the per-language translation rows for one revision. */
+/**
+ * Write (upsert) the per-language translation rows for one revision.
+ *
+ * A language whose text actually moved loses whatever approvals it had: an
+ * approval is about words somebody read, and these are no longer those words
+ * (server/content/language-review.ts). Saving the form without touching a
+ * language leaves its review where it was, so an unrelated edit elsewhere on the
+ * page does not send everything back to the start of the queue.
+ *
+ * `state` and `method` are decided here too, and never read from the form: the
+ * source language is authored, and a target language is machine output, edited
+ * machine output, or somebody's own writing depending on whether the submitted
+ * text still hashes to what the generator signed (server/translation/provenance).
+ */
 async function writeTranslations(
   tx: Tx,
   revisionId: string,
   sourceVersionId: string,
   translations: AuthoredTranslation[],
+  sourceLanguageCode: string,
 ) {
+  const stored = await tx
+    .select({
+      languageCode: editorialRevisionTranslations.languageCode,
+      contentHash: editorialRevisionTranslations.contentHash,
+      title: editorialRevisionTranslations.title,
+      bodyJson: editorialRevisionTranslations.bodyJson,
+      state: editorialRevisionTranslations.state,
+      method: editorialRevisionTranslations.method,
+      providerCode: editorialRevisionTranslations.providerCode,
+    })
+    .from(editorialRevisionTranslations)
+    .where(eq(editorialRevisionTranslations.revisionId, revisionId));
+  const storedByLanguage = new Map(
+    stored.map((row) => [row.languageCode, row]),
+  );
+
   for (const translation of translations) {
+    const contentHash = localizedContentHash(
+      translation.languageCode,
+      toLocalized(translation),
+    );
+    const previous = storedByLanguage.get(translation.languageCode);
+    const unchanged = previous?.contentHash === contentHash;
+    const provenance = classifyTranslation({
+      entityKind: "editorial_entry",
+      targetLanguageCode: translation.languageCode as EditorialLanguage,
+      payload: provenancePayload(translation),
+      signature: translation.signature,
+      existing: previous
+        ? {
+            method: previous.method,
+            state: previous.state,
+            providerCode: previous.providerCode,
+            payload: {
+              title: previous.title,
+              bodyHtml: storedBodyHtml(previous.bodyJson),
+            },
+          }
+        : null,
+      isSource: translation.languageCode === sourceLanguageCode,
+    });
     await tx
       .insert(editorialRevisionTranslations)
       .values({
@@ -209,13 +307,11 @@ async function writeTranslations(
         summary: translation.summary,
         bodyJson: translation.bodyHtml ? { html: translation.bodyHtml } : null,
         plainText: translation.plainText,
-        state: "draft",
-        method: "human",
+        state: provenance.state,
+        method: provenance.method,
+        providerCode: provenance.providerCode,
         sourceVersionId,
-        contentHash: localizedContentHash(
-          translation.languageCode,
-          toLocalized(translation),
-        ),
+        contentHash,
       })
       .onConflictDoUpdate({
         target: [
@@ -229,11 +325,12 @@ async function writeTranslations(
             ? { html: translation.bodyHtml }
             : null,
           plainText: translation.plainText,
+          state: provenance.state,
+          method: provenance.method,
+          providerCode: provenance.providerCode,
           sourceVersionId,
-          contentHash: localizedContentHash(
-            translation.languageCode,
-            toLocalized(translation),
-          ),
+          contentHash,
+          ...(unchanged ? {} : clearedLanguageReview),
         },
       });
   }
@@ -244,14 +341,14 @@ async function writeTranslations(
 /* ---------------------------------------------------------------- */
 
 const createSchema = z.object({
-  organizationId: optional.pipe(z.string().uuid().nullable()),
-  scope: z.enum(["global", "city"]),
-  cityId: optional.pipe(z.string().uuid().nullable()),
-  slug: optional,
+  organizationId: optionalText.pipe(z.string().uuid().nullable()),
+  scope: z.enum(articleScopes),
+  cityId: optionalText.pipe(z.string().uuid().nullable()),
+  slug: optionalText,
   tagIds: z.array(z.string().uuid()).max(3),
-  coverAssetId: optional.pipe(z.string().uuid().nullable()),
+  coverAssetId: optionalText.pipe(z.string().uuid().nullable()),
   sourceLanguage: languageSchema,
-  articleDate: optional,
+  articleDate: optionalText,
   featured: z
     .string()
     .optional()
@@ -260,10 +357,10 @@ const createSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === "on" || value === "true"),
-  unreliableFrom: optional,
-  sourceSummary: optional,
+  unreliableFrom: optionalText,
+  sourceSummary: optionalText,
   publicationMode: publicationModeSchema.default("draft"),
-  publishAt: optional,
+  publishAt: optionalText,
 });
 
 async function uniqueSlug(tx: Tx, desired: string): Promise<string> {
@@ -338,7 +435,7 @@ async function validateArticleTags(
 
 export const createArticle = protectedPermissionAction(
   "content.article.write",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = createSchema.parse({
       organizationId: formData.get("organizationId") ?? "",
       scope: formData.get("scope"),
@@ -359,6 +456,8 @@ export const createArticle = protectedPermissionAction(
       parsed.publicationMode,
       parsed.publishAt,
     );
+    const publishes = publishesOnSave(parsed.publicationMode);
+    const requestedStage = requestedReviewStage(parsed.publicationMode);
     const translations = readTranslations(formData);
     const sourceTranslation = translations.find(
       (translation) => translation.languageCode === parsed.sourceLanguage,
@@ -372,15 +471,17 @@ export const createArticle = protectedPermissionAction(
     if (parsed.scope === "city" && !parsed.cityId) {
       throw new Error("A city-scoped article requires a city");
     }
-    const session = await auth();
-    const authorId = session?.user.id;
-    if (!authorId) throw new Error("A signed-in author is required");
-    if (parsed.publicationMode !== "draft") {
+    if (publishes) {
       await requirePermission(
         "content.article.publish",
         locale,
         parsed.organizationId ?? undefined,
       );
+      // Nothing on a form that has never been saved has been reviewed by
+      // anyone, so going public straight from it belongs to whoever holds the
+      // platform's own check (server/content/language-review.ts). Everyone else
+      // saves a draft and sends it up the chain from the language panel.
+      await requirePermission(platformVerifyPermission, locale);
     }
 
     if (parsed.coverAssetId) {
@@ -394,7 +495,7 @@ export const createArticle = protectedPermissionAction(
         .where(
           and(
             eq(assets.id, parsed.coverAssetId),
-            eq(assets.uploaderId, authorId),
+            eq(assets.uploaderId, user.id),
             eq(assets.kind, "image"),
             eq(assets.rightsConfirmed, true),
             isNull(assets.archivedAt),
@@ -440,7 +541,7 @@ export const createArticle = protectedPermissionAction(
         .values({
           entryId: createdEntry.id,
           revisionNumber: 1,
-          authorId,
+          authorId: user.id,
           sourceLanguageCode: parsed.sourceLanguage,
           canBecomeOutdated: parsed.canBecomeOutdated,
           unreliableFrom: parsed.canBecomeOutdated
@@ -458,17 +559,23 @@ export const createArticle = protectedPermissionAction(
         sourceLanguageCode: parsed.sourceLanguage,
         articleDate: parsed.articleDate,
         translations,
-        createdById: authorId,
+        createdById: user.id,
         isNewRevision: false,
         previousVersionId: null,
       });
-      await writeTranslations(tx, revision.id, sourceVersionId, translations);
+      await writeTranslations(
+        tx,
+        revision.id,
+        sourceVersionId,
+        translations,
+        parsed.sourceLanguage,
+      );
 
       await tx.insert(editorialCustodianships).values({
         entryId: createdEntry.id,
         custodianKind: parsed.organizationId ? "organization" : "platform",
         organizationId: parsed.organizationId,
-        actorUserId: authorId,
+        actorUserId: user.id,
       });
 
       const tagIds = await validateArticleTags(
@@ -493,7 +600,7 @@ export const createArticle = protectedPermissionAction(
           .where(
             and(
               eq(assets.id, parsed.coverAssetId),
-              eq(assets.uploaderId, authorId),
+              eq(assets.uploaderId, user.id),
               eq(assets.kind, "image"),
               eq(assets.rightsConfirmed, true),
               isNull(assets.archivedAt),
@@ -508,7 +615,21 @@ export const createArticle = protectedPermissionAction(
         });
       }
 
-      if (parsed.publicationMode !== "draft") {
+      // Asking for a read is per language, and the ask covers everything the
+      // form actually carried text for — a reviewer opening this record is
+      // meant to read it, not just the language it was drafted in.
+      if (requestedStage) {
+        await tx
+          .update(editorialRevisionTranslations)
+          .set({
+            reviewStage: requestedStage,
+            reviewRequestedById: user.id,
+            reviewRequestedAt: new Date(),
+          })
+          .where(eq(editorialRevisionTranslations.revisionId, revision.id));
+      }
+
+      if (publishes) {
         await tx.insert(editorialPublications).values({
           entryId: createdEntry.id,
           languageCode: parsed.sourceLanguage,
@@ -518,14 +639,18 @@ export const createArticle = protectedPermissionAction(
             parsed.sourceLanguage,
             toLocalized(sourceTranslation),
           ),
-          publishedById: authorId,
+          publishedById: user.id,
           scheduledFor,
         });
         await tx
           .update(editorialRevisionTranslations)
           .set({
             state: "verified",
-            verifiedById: authorId,
+            // Reaching here means the platform's own check was required above,
+            // so the chain records what actually happened rather than leaving a
+            // published language looking as though nobody had seen it.
+            reviewStage: "platform_verified",
+            verifiedById: user.id,
             verifiedAt: new Date(),
           })
           .where(
@@ -565,7 +690,21 @@ export const createArticle = protectedPermissionAction(
         scheduledFor: scheduledFor?.toISOString() ?? null,
       },
     });
-    if (parsed.publicationMode !== "draft") {
+    if (requestedStage) {
+      await recordAudit({
+        action: "translation.review_requested",
+        subjectType: "editorial_entry",
+        subjectId: entry.id,
+        organizationId: parsed.organizationId,
+        metadata: {
+          stage: requestedStage,
+          languages: translations
+            .map((translation) => translation.languageCode)
+            .join(","),
+        },
+      });
+    }
+    if (publishes) {
       await recordAudit({
         action: scheduledFor
           ? "article.language_scheduled"
@@ -592,7 +731,7 @@ export const createArticle = protectedPermissionAction(
 
 const saveSchema = z.object({
   entryId: z.string().uuid(),
-  articleDate: optional,
+  articleDate: optionalText,
   tagIds: z.array(z.string().uuid()).max(3),
   featured: z
     .string()
@@ -602,7 +741,7 @@ const saveSchema = z.object({
 
 export const saveArticleContent = protectedPermissionAction(
   "content.article.write",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = saveSchema.parse({
       entryId: formData.get("entryId"),
       articleDate: formData.get("articleDate") ?? "",
@@ -613,8 +752,6 @@ export const saveArticleContent = protectedPermissionAction(
     if (translations.length === 0) {
       throw new Error("At least the source language must keep a title");
     }
-    const session = await auth();
-    const authorId = session?.user.id ?? null;
 
     await db.transaction(async (tx) => {
       const [entry] = await tx
@@ -661,7 +798,7 @@ export const saveArticleContent = protectedPermissionAction(
           .values({
             entryId: parsed.entryId,
             revisionNumber: latest.revisionNumber + 1,
-            authorId,
+            authorId: user.id,
             sourceLanguageCode: latest.sourceLanguageCode,
             canBecomeOutdated: latest.canBecomeOutdated,
             unreliableFrom: latest.unreliableFrom,
@@ -680,11 +817,17 @@ export const saveArticleContent = protectedPermissionAction(
         sourceLanguageCode: latest.sourceLanguageCode,
         articleDate: parsed.articleDate,
         translations,
-        createdById: authorId,
+        createdById: user.id,
         isNewRevision,
         previousVersionId: previousSourceVersionId,
       });
-      await writeTranslations(tx, revisionId, sourceVersionId, translations);
+      await writeTranslations(
+        tx,
+        revisionId,
+        sourceVersionId,
+        translations,
+        latest.sourceLanguageCode,
+      );
 
       for (const translation of translations) {
         const [route] = await tx
@@ -758,8 +901,8 @@ const freshnessSchema = z.object({
     .string()
     .optional()
     .transform((value) => value === "on" || value === "true"),
-  unreliableFrom: optional,
-  sourceSummary: optional,
+  unreliableFrom: optionalText,
+  sourceSummary: optionalText,
 });
 
 export const updateArticleFreshness = protectedPermissionAction(
@@ -830,12 +973,12 @@ export const submitArticleForReview = protectedPermissionAction(
 const publishSchema = z.object({
   entryId: z.string().uuid(),
   languageCode: languageSchema,
-  publishAt: optional,
+  publishAt: optionalText,
 });
 
 export const publishArticleLanguage = protectedPermissionAction(
   "content.article.publish",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = publishSchema.parse({
       entryId: formData.get("entryId"),
       languageCode: formData.get("languageCode"),
@@ -844,9 +987,12 @@ export const publishArticleLanguage = protectedPermissionAction(
     const scheduledFor = parsed.publishAt
       ? parseScheduledPublication("scheduled", parsed.publishAt)
       : null;
-    const session = await auth();
-    const publisherId = session?.user.id;
-    if (!publisherId) throw new Error("A signed-in publisher is required");
+    /**
+     * The platform's own check is the last gate before a visitor reads this
+     * (server/content/language-review.ts). Whoever holds that grant *is* the
+     * check, so they are not asked to send the text to themselves first.
+     */
+    const asPlatformVerifier = await hasPermission(platformVerifyPermission);
 
     await db.transaction(async (tx) => {
       const [enabledLanguage] = await tx
@@ -889,6 +1035,16 @@ export const publishArticleLanguage = protectedPermissionAction(
       if (!translation.contentHash) {
         throw new Error("This translation has no content hash");
       }
+      if (
+        !platformCleared({
+          stage: translation.reviewStage,
+          bypass: asPlatformVerifier,
+        })
+      ) {
+        throw new Error(
+          "The platform must verify this language before it is published",
+        );
+      }
 
       const attachedAssets = await tx
         .select({
@@ -912,7 +1068,7 @@ export const publishArticleLanguage = protectedPermissionAction(
       // Retire an existing active publication so the partial unique holds.
       await tx
         .update(editorialPublications)
-        .set({ unpublishedAt: new Date(), unpublishedById: publisherId })
+        .set({ unpublishedAt: new Date(), unpublishedById: user.id })
         .where(
           and(
             eq(editorialPublications.entryId, parsed.entryId),
@@ -927,7 +1083,7 @@ export const publishArticleLanguage = protectedPermissionAction(
         revisionId: latest.id,
         sourceVersionId: translation.sourceVersionId,
         translationContentHash: translation.contentHash,
-        publishedById: publisherId,
+        publishedById: user.id,
         scheduledFor,
       });
 
@@ -935,7 +1091,8 @@ export const publishArticleLanguage = protectedPermissionAction(
         .update(editorialRevisionTranslations)
         .set({
           state: "verified",
-          verifiedById: publisherId,
+          reviewStage: "platform_verified",
+          verifiedById: user.id,
           verifiedAt: new Date(),
         })
         .where(
@@ -983,19 +1140,16 @@ export const publishArticleLanguage = protectedPermissionAction(
 
 export const unpublishArticleLanguage = protectedPermissionAction(
   "content.article.publish",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = publishSchema.parse({
       entryId: formData.get("entryId"),
       languageCode: formData.get("languageCode"),
     });
-    const session = await auth();
-    const publisherId = session?.user.id;
-    if (!publisherId) throw new Error("A signed-in publisher is required");
 
     await db.transaction(async (tx) => {
       await tx
         .update(editorialPublications)
-        .set({ unpublishedAt: new Date(), unpublishedById: publisherId })
+        .set({ unpublishedAt: new Date(), unpublishedById: user.id })
         .where(
           and(
             eq(editorialPublications.entryId, parsed.entryId),
@@ -1035,27 +1189,69 @@ export const unpublishArticleLanguage = protectedPermissionAction(
   },
 );
 
+/**
+ * Take an article out of the workspace. Two conditions, both checked here and
+ * not only in the menu that offers it:
+ *
+ * - Nothing of it may be published. What the public has been told stays true
+ *   until someone takes each language down deliberately, so archiving cannot be
+ *   the thing that quietly unpublishes it. A language waiting for its date is a
+ *   promise too.
+ * - Whoever wrote its first revision, or a platform administrator, is who may do
+ *   it — the second because an article outlives the account that wrote it, and a
+ *   seeded article was written by nobody at all.
+ */
 export const archiveArticle = protectedPermissionAction(
   "content.article.publish",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = entrySchema.parse({ entryId: formData.get("entryId") });
-    const session = await auth();
-    const publisherId = session?.user.id ?? null;
-    await db.transaction(async (tx) => {
-      await tx
-        .update(editorialPublications)
-        .set({ unpublishedAt: new Date(), unpublishedById: publisherId })
-        .where(
-          and(
-            eq(editorialPublications.entryId, parsed.entryId),
-            isNull(editorialPublications.unpublishedAt),
-          ),
-        );
-      await tx
-        .update(editorialEntries)
-        .set({ workflowState: "archived", archivedAt: new Date() })
-        .where(eq(editorialEntries.id, parsed.entryId));
-    });
+    const [entry] = await db
+      .select({ id: editorialEntries.id })
+      .from(editorialEntries)
+      .where(
+        and(
+          eq(editorialEntries.id, parsed.entryId),
+          isNull(editorialEntries.archivedAt),
+        ),
+      )
+      .limit(1);
+    if (!entry) throw new Error("Unknown article");
+
+    // The first revision is the article's authorship: later ones are edits.
+    const [origin] = await db
+      .select({ authorId: editorialRevisions.authorId })
+      .from(editorialRevisions)
+      .where(eq(editorialRevisions.entryId, parsed.entryId))
+      .orderBy(asc(editorialRevisions.revisionNumber))
+      .limit(1);
+    const isPlatformAdministrator = await hasActualPlatformPermission(
+      user.id,
+      superadminPermission,
+    );
+    if (origin?.authorId !== user.id && !isPlatformAdministrator) {
+      throw new Error("Forbidden");
+    }
+
+    const [live] = await db
+      .select({ id: editorialPublications.id })
+      .from(editorialPublications)
+      .where(
+        and(
+          eq(editorialPublications.entryId, parsed.entryId),
+          isNull(editorialPublications.unpublishedAt),
+        ),
+      )
+      .limit(1);
+    if (live) throw new Error("Unpublish every language first");
+
+    await db
+      .update(editorialEntries)
+      .set({
+        workflowState: "archived",
+        archivedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(editorialEntries.id, parsed.entryId));
     await recordAudit({
       action: "article.archived",
       subjectType: "editorial_entry",
@@ -1089,9 +1285,9 @@ export const restoreArticle = protectedPermissionAction(
 const addSourceSchema = z.object({
   entryId: z.string().uuid(),
   title: z.string().trim().min(2).max(255),
-  publisher: optional,
-  url: optional.pipe(z.string().url().nullable()),
-  sourceDate: optional,
+  publisher: optionalText,
+  url: optionalText.pipe(z.string().url().nullable()),
+  sourceDate: optionalText,
 });
 
 export const addArticleSource = protectedPermissionAction(

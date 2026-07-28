@@ -8,6 +8,36 @@
       "port": 3030
     },
     {
+      "name": "web-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@infokit/web",
+        "exec",
+        "next",
+        "dev",
+        "--turbo",
+        "--port",
+        "3040"
+      ],
+      "port": 3040
+    },
+    {
+      "name": "web-chrome",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@infokit/web",
+        "exec",
+        "next",
+        "dev",
+        "--turbo",
+        "--port",
+        "3050"
+      ],
+      "port": 3050
+    },
+    {
       "name": "mobile-web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": [
@@ -21,6 +51,21 @@
         "8081"
       ],
       "port": 8081
+    },
+    {
+      "name": "mobile-web-alt",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@infokit/mobile",
+        "exec",
+        "expo",
+        "start",
+        "--web",
+        "--port",
+        "8092"
+      ],
+      "port": 8092
     }
   ]
 }

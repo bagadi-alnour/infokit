@@ -14,21 +14,27 @@ import { Field, Select, TextInput } from "~/components/admin/workspace";
 import { TaxonomyIcon, taxonomyIconNames } from "~/components/taxonomy-icon";
 
 import {
-  ActiveToggle,
+  actionsColumn,
+  scopeColumn,
+  stateColumn,
+  usageColumn,
+} from "./catalogue-columns";
+import {
   CatalogueCreateDialog,
   NewRowScopeFields,
-  ScopeChip,
   ScopeFilter,
   StateFilter,
 } from "./catalogue-row-controls";
-import type {
-  CatalogueCategoryOption,
-  CatalogueLabels,
-  CatalogueRights,
-  CatalogueServiceRow,
+import {
+  hasMixedScopes,
+  matchesScope,
+  matchesState,
+  type CatalogueCategoryOption,
+  type CatalogueLabels,
+  type CatalogueRights,
+  type CatalogueServiceRow,
 } from "./catalogue-rows";
 import { DataTable } from "./data-table";
-import { DeleteButton } from "./delete-button";
 import { EditServiceButton } from "./edit-service-button";
 import { IconPicker } from "./icon-picker";
 import { SelectControl } from "./select-control";
@@ -59,42 +65,21 @@ export function CatalogueServicesPanel({
   const [scope, setScope] = useState("");
   const [state, setState] = useState("");
 
-  const mixedScopes =
-    rows.some((row) => row.organizationId === null) &&
-    rows.some((row) => row.organizationId !== null);
+  const mixedScopes = hasMixedScopes(rows);
 
   const filtered = useMemo(
     () =>
       rows.filter(
         (row) =>
           (category === "" || row.categoryId === category) &&
-          (scope === "" ||
-            (scope === "global"
-              ? row.organizationId === null
-              : row.organizationId !== null)) &&
-          (state === "" || String(row.active) === state),
+          matchesScope(scope, row.organizationId) &&
+          matchesState(state, row.active),
       ),
     [category, rows, scope, state],
   );
 
-  const columns = useMemo<ColumnDef<CatalogueServiceRow>[]>(() => {
-    const editLabels = {
-      edit: labels["catalogue.services.edit"],
-      name: labels["catalogue.services.nameFr"],
-      category: labels["catalogue.services.category"],
-      icon: labels["catalogue.services.icon"],
-      save: labels["catalogue.services.save"],
-      searchIcons: labels["catalogue.icon.search"],
-      emptyIcons: labels["catalogue.icon.empty"],
-    };
-    const deleteLabels = {
-      delete: labels["catalogue.delete"],
-      confirm: labels["catalogue.deleteConfirm"],
-      hint: labels["catalogue.deleteHint"],
-      cancel: labels["catalogue.cancel"],
-    };
-
-    return [
+  const columns = useMemo<ColumnDef<CatalogueServiceRow>[]>(
+    () => [
       {
         id: "name",
         accessorFn: (row) => row.name,
@@ -126,84 +111,41 @@ export function CatalogueServicesPanel({
           </span>
         ),
       },
-      {
-        id: "scope",
-        accessorFn: (row) => (row.organizationId === null ? 0 : 1),
-        header: () => labels["catalogue.services.scope"],
-        meta: { label: labels["catalogue.services.scope"] },
-        cell: ({ row }) => (
-          <ScopeChip
-            organizationId={row.original.organizationId}
-            labels={labels}
-          />
-        ),
-      },
-      {
-        id: "usage",
-        accessorFn: (row) => row.usageCount,
-        header: () => labels["catalogue.column.usage"],
-        meta: { label: labels["catalogue.column.usage"], align: "end" },
-      },
-      {
-        id: "state",
-        accessorFn: (row) => (row.active ? 0 : 1),
-        header: () => labels["catalogue.status.active"],
-        meta: { label: labels["catalogue.status.active"] },
-        cell: ({ row }) => (
-          <ActiveToggle
-            action={setServiceActive}
-            idName="serviceId"
-            id={row.original.id}
-            active={row.original.active}
-            organizationId={row.original.organizationId}
-            canEdit={row.original.canEdit}
+      scopeColumn<CatalogueServiceRow>(
+        labels,
+        labels["catalogue.services.scope"],
+      ),
+      usageColumn<CatalogueServiceRow>(labels),
+      stateColumn<CatalogueServiceRow>({
+        labels,
+        locale,
+        action: setServiceActive,
+        idName: "serviceId",
+        value: (row) => row.active,
+      }),
+      actionsColumn<CatalogueServiceRow>({
+        labels,
+        locale,
+        action: deleteService,
+        idName: "serviceId",
+        edit: (row) => (
+          <EditServiceButton
+            action={updateService}
             locale={locale}
+            serviceId={row.id}
+            organizationId={row.organizationId}
+            name={row.nameFr}
+            icon={row.icon}
+            categoryId={row.categoryId}
+            categories={categories}
             labels={labels}
-            onLabel={labels["catalogue.status.active"]}
-            offLabel={labels["catalogue.status.inactive"]}
+            steward={row.steward}
           />
         ),
-      },
-      {
-        id: "actions",
-        header: () => labels["catalogue.column.actions"],
-        meta: { label: labels["catalogue.column.actions"], align: "end" },
-        enableSorting: false,
-        enableHiding: false,
-        cell: ({ row }) =>
-          row.original.canEdit ? (
-            <span className="inline-flex items-center justify-end gap-1">
-              <EditServiceButton
-                action={updateService}
-                locale={locale}
-                serviceId={row.original.id}
-                organizationId={row.original.organizationId}
-                name={row.original.nameFr}
-                icon={row.original.icon}
-                categoryId={row.original.categoryId}
-                categories={categories}
-                icons={taxonomyIconNames}
-                labels={editLabels}
-                steward={{
-                  values: row.original.steward,
-                  labels: labels.shared,
-                }}
-              />
-              {row.original.canDelete ? (
-                <DeleteButton
-                  action={deleteService}
-                  idName="serviceId"
-                  id={row.original.id}
-                  organizationId={row.original.organizationId}
-                  locale={locale}
-                  labels={deleteLabels}
-                />
-              ) : null}
-            </span>
-          ) : null,
-      },
-    ];
-  }, [categories, labels, locale]);
+      }),
+    ],
+    [categories, labels, locale],
+  );
 
   return (
     <DataTable
@@ -237,16 +179,10 @@ export function CatalogueServicesPanel({
           {mixedScopes ? (
             <ScopeFilter scope={scope} onChange={setScope} labels={labels} />
           ) : null}
-          <StateFilter
-            state={state}
-            onChange={setState}
-            labels={labels}
-            onLabel={labels["catalogue.status.active"]}
-            offLabel={labels["catalogue.status.inactive"]}
-          />
+          <StateFilter state={state} onChange={setState} labels={labels} />
         </>
       }
-      toolbarExtra={
+      createAction={
         rights.canManageGlobal || rights.canManageOrg ? (
           <CatalogueCreateDialog
             action={createService}

@@ -112,6 +112,7 @@ export default async function EventsPage({
     by: t["events.column.by"],
     host: t["events.column.host"],
     reach: t["events.column.reach"],
+    createdBy: t["events.column.createdBy"],
     hostPlatform: t["events.hostPlatform"],
     cancelled: t["events.cancelled"],
     archived: t["events.archived"],
@@ -150,24 +151,26 @@ export default async function EventsPage({
   const viewHref = (target: "list" | "calendar") =>
     `${localizedPath("/dashboard/events", locale)}?view=${target}`;
 
+  // Adding an event belongs to the list's own toolbar, beside the controls that
+  // shape the list. The header keeps it while there is no list to put it in —
+  // an empty agenda, or the month view.
+  const createEvent = canManage ? (
+    <Button
+      nativeButton={false}
+      render={<Link href={localizedPath("/dashboard/events/new", locale)} />}
+    >
+      <Plus aria-hidden />
+      {t["events.new"]}
+    </Button>
+  ) : null;
+  const listCarriesCreate = !calendarView && events.length > 0;
+
   return (
     <WorkspacePage>
       <PageHeader
         title={t["events.title"]}
         sub={t["events.subtitle"]}
-        action={
-          canManage ? (
-            <Button
-              nativeButton={false}
-              render={
-                <Link href={localizedPath("/dashboard/events/new", locale)} />
-              }
-            >
-              <Plus aria-hidden />
-              {t["events.new"]}
-            </Button>
-          ) : null
-        }
+        action={listCarriesCreate ? null : createEvent}
       />
 
       <StatGrid>
@@ -241,6 +244,7 @@ export default async function EventsPage({
           rows={rows}
           labels={tableLabels}
           nowIso={now.toISOString()}
+          createAction={createEvent}
         />
       )}
     </WorkspacePage>

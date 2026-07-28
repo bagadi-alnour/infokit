@@ -8,18 +8,28 @@ import { DatePicker } from "~/components/ui/date-picker";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { SelectField } from "~/components/ui/select-field";
 
-export type PublicationMode = "draft" | "now" | "scheduled";
+/**
+ * What saving does, in the order the work actually happens: park it, hand it to
+ * a colleague to read, hand it to the platform to clear — and only then the two
+ * ways it goes public. The middle two are the review chain: a team read is
+ * optional, the platform's is not.
+ */
+export type PublicationMode =
+  "draft" | "team" | "platform" | "now" | "scheduled";
 
 export function PublicationChoice({
   locale,
   labels,
   defaultMode = "draft",
+  canPublish = true,
 }: {
   locale: Locale;
   labels: {
     heading: string;
     hint: string;
     draft: string;
+    team: string;
+    platform: string;
     now: string;
     scheduled: string;
     date: string;
@@ -29,6 +39,12 @@ export function PublicationChoice({
     dateHint: string;
   };
   defaultMode?: PublicationMode;
+  /**
+   * Whether this author may put the text in front of readers themselves. Where
+   * they may not, the two publishing choices are absent rather than refused:
+   * the platform clears content, and that is the whole of it.
+   */
+  canPublish?: boolean;
 }) {
   const [mode, setMode] = useState<PublicationMode>(defaultMode);
   const [publicationDate, setPublicationDate] = useState("");
@@ -51,8 +67,12 @@ export function PublicationChoice({
           }}
         >
           <option value="draft">{labels.draft}</option>
-          <option value="now">{labels.now}</option>
-          <option value="scheduled">{labels.scheduled}</option>
+          <option value="team">{labels.team}</option>
+          <option value="platform">{labels.platform}</option>
+          {canPublish ? <option value="now">{labels.now}</option> : null}
+          {canPublish ? (
+            <option value="scheduled">{labels.scheduled}</option>
+          ) : null}
         </SelectField>
         <FieldDescription>{labels.hint}</FieldDescription>
       </Field>

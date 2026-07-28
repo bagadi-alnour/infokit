@@ -108,6 +108,25 @@ export const translationMethod = pgEnum("translation_method", [
   "ai",
   "ai_then_human_review",
 ]);
+/**
+ * Who one language is still waiting on before it may face the public.
+ *
+ * Two stages, deliberately unequal. A colleague reading the text through is
+ * optional — useful, often the fastest way to catch a mistranslation, but the
+ * editors decide among themselves whether to ask. The platform's own check is
+ * not: nothing reaches a visitor in a language nobody at the platform has
+ * confirmed. `changes_requested` is either reviewer sending it back, which is
+ * why it is one value rather than one per stage — what matters to the editor is
+ * that it is theirs again.
+ */
+export const translationReviewStage = pgEnum("translation_review_stage", [
+  "none",
+  "team_requested",
+  "team_validated",
+  "platform_requested",
+  "platform_verified",
+  "changes_requested",
+]);
 /** Effect of one source version on translations tied to its predecessor. */
 export const translationImpact = pgEnum("translation_impact", [
   "initial",

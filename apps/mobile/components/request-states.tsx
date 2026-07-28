@@ -1,14 +1,14 @@
 import { Button, Callout, Text } from "@infokit/ui";
 import { ActivityIndicator, View } from "react-native";
 
-import type { ConnectionStrings } from "~/lib/client";
+import type { AppStrings } from "~/lib/app-strings";
 
 /**
  * What a reader sees when there is no content yet. Both are worded as facts,
  * never as reassurance: someone deciding whether to walk across town needs to
  * know the app is showing nothing, not that something is "almost ready".
  */
-export function LoadingState({ strings }: { strings: ConnectionStrings }) {
+export function LoadingState({ strings }: { strings: AppStrings }) {
   return (
     <View className="items-center gap-3 py-10" accessibilityRole="progressbar">
       <ActivityIndicator />
@@ -22,7 +22,7 @@ export function ErrorState({
   unreachable,
   onRetry,
 }: {
-  strings: ConnectionStrings;
+  strings: AppStrings;
   unreachable: boolean;
   onRetry: () => void;
 }) {

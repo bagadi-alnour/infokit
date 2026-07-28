@@ -1,25 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Pencil } from "lucide-react";
-
 import { IconPicker } from "~/components/admin/icon-picker";
-import { TooltipHint } from "~/components/admin/tooltip-hint";
-import { Button, Field, TextInput } from "~/components/admin/workspace";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Field, TextInput } from "~/components/admin/workspace";
+import { taxonomyIconNames } from "~/components/taxonomy-icon";
 
-export type EditCategoryLabels = {
-  edit: string;
-  name: string;
-  icon: string;
-  save: string;
-  searchIcons: string;
-  emptyIcons: string;
-};
+import { RowEditPopover } from "./catalogue-row-controls";
+import type { CatalogueLabels } from "./catalogue-rows";
 
 /** Inline editor for a platform category's name and icon (platform-only). */
 export function EditCategoryButton({
@@ -28,7 +14,6 @@ export function EditCategoryButton({
   categoryId,
   name,
   icon,
-  icons,
   labels,
 }: {
   action: (formData: FormData) => Promise<void>;
@@ -36,46 +21,31 @@ export function EditCategoryButton({
   categoryId: string;
   name: string;
   icon: string;
-  icons: readonly string[];
-  labels: EditCategoryLabels;
+  labels: CatalogueLabels;
 }) {
-  const [open, setOpen] = useState(false);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <TooltipHint label={labels.edit}>
-        <PopoverTrigger
-          aria-label={labels.edit}
-          className="text-copy-muted hover:bg-subtle hover:text-ink focus-visible:ring-brand/50 inline-flex size-8 items-center justify-center rounded-md outline-none focus-visible:ring-2"
-        >
-          <Pencil className="size-4" aria-hidden />
-        </PopoverTrigger>
-      </TooltipHint>
-      <PopoverContent align="end" className="w-80">
-        <form action={action} className="grid gap-3 text-start">
-          <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="categoryId" value={categoryId} />
-          <Field label={labels.name}>
-            <TextInput
-              name="labelFr"
-              defaultValue={name}
-              required
-              minLength={2}
-            />
-          </Field>
-          <Field label={labels.icon}>
-            <IconPicker
-              name="icon"
-              icons={icons}
-              defaultValue={icon}
-              variant="grid"
-              ariaLabel={labels.icon}
-              searchLabel={labels.searchIcons}
-              emptyLabel={labels.emptyIcons}
-            />
-          </Field>
-          <Button>{labels.save}</Button>
-        </form>
-      </PopoverContent>
-    </Popover>
+    <RowEditPopover
+      action={action}
+      label={labels["catalogue.categories.edit"]}
+      save={labels["catalogue.save"]}
+      locale={locale}
+      idName="categoryId"
+      id={categoryId}
+    >
+      <Field label={labels["catalogue.categories.labelFr"]}>
+        <TextInput name="labelFr" defaultValue={name} required minLength={2} />
+      </Field>
+      <Field label={labels["catalogue.categories.icon"]}>
+        <IconPicker
+          name="icon"
+          icons={taxonomyIconNames}
+          defaultValue={icon}
+          variant="grid"
+          ariaLabel={labels["catalogue.categories.icon"]}
+          searchLabel={labels["catalogue.icon.search"]}
+          emptyLabel={labels["catalogue.icon.empty"]}
+        />
+      </Field>
+    </RowEditPopover>
   );
 }

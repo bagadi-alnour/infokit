@@ -37,7 +37,7 @@ export function PublicArticleCollection({
         <SurfaceCard
           as="li"
           key={article.id}
-          className="focus-within:border-brand hover:border-brand hover:shadow-lift group relative flex flex-col overflow-hidden transition-shadow"
+          className="focus-within:border-brand hover:border-brand group relative flex flex-col overflow-hidden transition-colors"
         >
           {article.coverImage ? (
             // eslint-disable-next-line @next/next/no-img-element -- remote editorial media, no known intrinsic size
@@ -64,6 +64,10 @@ export function PublicArticleCollection({
                 {article.title}
               </a>
             </h2>
+            {/* Nothing is filled on an article card — it is a piece of reading,
+                so the family is a short rule under the title and no more
+                (docs/DESIGN-SYSTEM.md §5). */}
+            <span className="bg-article h-0.5 w-10 rounded-full" aria-hidden />
 
             <p className="text-copy-muted text-[0.95rem] leading-relaxed">
               {article.summary}
@@ -80,7 +84,7 @@ export function PublicArticleCollection({
             {article.fallbackUsed ? (
               <p className="text-copy-muted inline-flex items-start gap-1.5 text-sm">
                 <Languages className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {labels.fallback}
+                {article.fallbackLabel}
               </p>
             ) : null}
 
@@ -96,7 +100,7 @@ export function PublicArticleCollection({
                 value={article.lastReviewedLabel}
                 tone={article.unreliable ? "warn" : "ok"}
               />
-              <span className="text-brand-deep inline-flex items-center gap-1.5 text-sm font-semibold">
+              <span className="text-article inline-flex items-center gap-1.5 text-sm font-semibold">
                 {labels.read}
                 <ArrowRight
                   className="size-4 transition-transform group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1"

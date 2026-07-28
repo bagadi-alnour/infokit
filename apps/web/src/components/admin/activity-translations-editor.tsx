@@ -1,5 +1,9 @@
 "use client";
 
+// The editor's own chrome, asked for wherever the editor is mounted rather than
+// from `globals.css` — no public page has a toolbar to style.
+import "@inkpilot/editor/styles.css";
+
 import type { EditorContent, TranslationStrings } from "@inkpilot/editor";
 import { LoaderCircle, Sparkles } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -13,7 +17,7 @@ import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   editorialLanguageCodes,
-  isRtlEditorialLanguage,
+  editorialTextDirection,
   type EditorialLanguage,
 } from "~/lib/editorial-languages";
 
@@ -176,11 +180,9 @@ export function ActivityTranslationsEditor({
         );
         editor.setAttribute(
           "dir",
-          isRtlEditorialLanguage(
+          editorialTextDirection(
             editorRegion.dataset.richTextLanguage as EditorialLanguage,
-          )
-            ? "rtl"
-            : "ltr",
+          ),
         );
       }
     };
@@ -261,7 +263,7 @@ export function ActivityTranslationsEditor({
                 <Input
                   id={`activity-title-${language}`}
                   name={`name_${language}`}
-                  dir={isRtlEditorialLanguage(language) ? "rtl" : "ltr"}
+                  dir={editorialTextDirection(language)}
                   value={names[language]}
                   onChange={(event) => {
                     setNames((current) => ({

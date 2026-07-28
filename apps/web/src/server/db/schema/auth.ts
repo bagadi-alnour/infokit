@@ -166,6 +166,41 @@ export const secondFactorChallengesRelations = relations(
   }),
 );
 
+/**
+ * One-time codes that hand a finished browser sign-in to the phone app.
+ *
+ * The app never sees an email link or an SMS code: it opens the ordinary web
+ * sign-in in the system browser, and once that session exists (second factor
+ * included) the browser mints a grant here. The app trades the code over POST
+ * for its own revocable session row, so the long-lived secret never travels in
+ * a redirect URL. Only the HMAC of the code is stored, and a grant lives two
+ * minutes and is consumed once.
+ */
+export const deviceGrants = authSchema.table(
+  "device_grants",
+  {
+    id: uuid("id").defaultRandom().notNull().primaryKey(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    codeHash: varchar("code_hash", { length: 64 }).notNull().unique(),
+    /** Whether the browser session that minted it had passed the SMS step. */
+    secondFactorVerified: boolean("second_factor_verified")
+      .notNull()
+      .default(false),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("device_grants_user_created_idx").on(t.userId, t.createdAt)],
+);
+
+export const deviceGrantsRelations = relations(deviceGrants, ({ one }) => ({
+  user: one(users, { fields: [deviceGrants.userId], references: [users.id] }),
+}));
+
 export const verificationTokens = authSchema.table(
   "verification_tokens",
   {

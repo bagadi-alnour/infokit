@@ -39,6 +39,7 @@ import {
   stewardContact,
   timestamps,
   translationMethod,
+  translationReviewStage,
   translationState,
   verification,
 } from "./schemas";
@@ -219,6 +220,19 @@ export const activityTranslations = content.table(
     carriedForwardFromSourceVersionId: uuid(
       "carried_forward_from_source_version_id",
     ),
+    /** The review chain this language is in the middle of — see editorial.ts. */
+    reviewStage: translationReviewStage("review_stage")
+      .notNull()
+      .default("none"),
+    reviewRequestedById: varchar("review_requested_by_id", {
+      length: 255,
+    }).references(() => users.id),
+    reviewRequestedAt: timestamp("review_requested_at", { withTimezone: true }),
+    teamValidatedById: varchar("team_validated_by_id", {
+      length: 255,
+    }).references(() => users.id),
+    teamValidatedAt: timestamp("team_validated_at", { withTimezone: true }),
+    reviewNote: text("review_note"),
     verifiedById: varchar("verified_by_id", { length: 255 }).references(
       () => users.id,
     ),

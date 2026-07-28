@@ -3,7 +3,7 @@ import type { CommonCatalog } from "@infokit/shared/i18n/catalogs";
 import type { ReactNode } from "react";
 
 import { LanguageSwitcher } from "~/components/auth/language-switcher";
-import { BrandMark } from "~/components/public/brand-mark";
+import { BrandWordmark } from "~/components/public/brand-mark";
 import { Eyebrow, SurfaceCard } from "~/components/public/primitives";
 import { ThemeChanger } from "~/components/theme/theme-changer";
 
@@ -46,10 +46,7 @@ export function AuthShell({
       <div className="flex w-full max-w-4xl flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <BrandMark size={30} />
-            <span className="font-display text-ink text-base font-bold">
-              {messages["auth.brand"]}
-            </span>
+            <BrandWordmark className="text-ink text-xl" />
             <span className="text-copy-muted hidden text-sm font-semibold sm:inline">
               {messages["auth.privateInstrument"]}
             </span>

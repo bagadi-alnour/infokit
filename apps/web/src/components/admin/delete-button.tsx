@@ -3,13 +3,10 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 
-import { TooltipHint } from "~/components/admin/tooltip-hint";
 import { Button } from "~/components/admin/workspace";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent } from "~/components/ui/popover";
+
+import { RowActionTrigger, RowScopeFields } from "./catalogue-row-controls";
 
 export type DeleteLabels = {
   delete: string;
@@ -41,14 +38,7 @@ export function DeleteButton({
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <TooltipHint label={labels.delete}>
-        <PopoverTrigger
-          aria-label={labels.delete}
-          className="text-copy-muted hover:bg-danger-soft hover:text-danger focus-visible:ring-danger/50 inline-flex size-8 items-center justify-center rounded-md outline-none focus-visible:ring-2"
-        >
-          <Trash2 className="size-4" aria-hidden />
-        </PopoverTrigger>
-      </TooltipHint>
+      <RowActionTrigger label={labels.delete} icon={Trash2} tone="danger" />
       <PopoverContent align="end" className="w-64 text-start">
         <p className="text-sm font-medium">{labels.confirm}</p>
         <p className="text-copy-muted text-xs">{labels.hint}</p>
@@ -63,20 +53,8 @@ export function DeleteButton({
             {labels.cancel}
           </Button>
           <form action={action}>
-            <input type="hidden" name="locale" value={locale} />
+            <RowScopeFields locale={locale} organizationId={organizationId} />
             <input type="hidden" name={idName} value={id} />
-            <input
-              type="hidden"
-              name="scope"
-              value={organizationId === null ? "global" : "org"}
-            />
-            {organizationId ? (
-              <input
-                type="hidden"
-                name="organizationId"
-                value={organizationId}
-              />
-            ) : null}
             <Button variant="danger">{labels.delete}</Button>
           </form>
         </div>

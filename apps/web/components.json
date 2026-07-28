@@ -23,6 +23,7 @@
   },
   "registries": {
     "@abui": "https://abui.io/r/{name}.json",
-    "@ss-components": "https://shadcnstudio.com/r/components/{style}/{name}.json"
+    "@ss-components": "https://shadcnstudio.com/r/components/{style}/{name}.json",
+    "@diceui": "https://diceui.com/r/{style}/{name}.json"
   }
 }

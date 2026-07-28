@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { localizedPath } from "~/i18n/routing";
+import { optionalUuid } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
-import { auth } from "~/server/auth";
 import { hasActualPlatformPermission } from "~/server/auth/authorization";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { catalogueScopeKey } from "~/server/content/catalogue-scope";
@@ -16,9 +16,7 @@ import { organizations, tags, tagTranslations } from "~/server/db/schema";
 
 const tagSchema = z.object({
   label: z.string().trim().min(1).max(120),
-  organizationId: z
-    .union([z.literal(""), z.string().uuid()])
-    .transform((value) => value || null),
+  organizationId: optionalUuid,
 });
 
 function tagCode(label: string) {
@@ -33,27 +31,27 @@ function tagCode(label: string) {
   return normalized || `tag-${hashContent(label).slice(0, 10)}`;
 }
 
-async function requireGlobalTagManager() {
-  const actor = await auth();
-  if (
-    !actor?.user.id ||
-    !(await hasActualPlatformPermission(actor.user.id, "support.superadmin"))
-  ) {
+/**
+ * A tag with no owning organisation is platform-wide. Only an actual superadmin
+ * grant may touch one — a role test that merely selected the role may not.
+ */
+async function requireGlobalTagManager(actorId: string) {
+  if (!(await hasActualPlatformPermission(actorId, "support.superadmin"))) {
     throw new Error("Only a superadmin can manage global tags");
   }
-  return actor.user.id;
+  return actorId;
 }
 
 export const createArticleTag = protectedPermissionAction(
   "content.article.write",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = tagSchema.parse({
       label: formData.get("label"),
       organizationId: formData.get("organizationId") ?? "",
     });
 
     if (!parsed.organizationId) {
-      await requireGlobalTagManager();
+      await requireGlobalTagManager(user.id);
     }
 
     if (parsed.organizationId) {
@@ -151,8 +149,8 @@ const globalTagUpdateSchema = z.object({
 
 export const updateGlobalTag = protectedPermissionAction(
   "content.article.write",
-  async (formData, locale) => {
-    await requireGlobalTagManager();
+  async (formData, locale, user) => {
+    await requireGlobalTagManager(user.id);
     const parsed = globalTagUpdateSchema.parse({
       tagId: formData.get("tagId"),
       label: formData.get("label"),
@@ -192,8 +190,8 @@ const globalTagLifecycleSchema = z.object({
 
 export const setGlobalTagActive = protectedPermissionAction(
   "content.article.write",
-  async (formData, locale) => {
-    await requireGlobalTagManager();
+  async (formData, locale, user) => {
+    await requireGlobalTagManager(user.id);
     const parsed = globalTagLifecycleSchema.parse({
       tagId: formData.get("tagId"),
       active: formData.get("active"),

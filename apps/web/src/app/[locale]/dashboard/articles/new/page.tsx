@@ -8,9 +8,13 @@ import {
 import { WorkspacePage } from "~/components/admin/workspace";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
+import { buildWorkspaceLabels } from "~/lib/workspace-labels";
 import { db } from "~/server/db";
+import { hasAiTranslationProvider } from "~/server/ai/provider";
 import { auth } from "~/server/auth";
 import { hasActualPlatformPermission } from "~/server/auth/authorization";
+import { hasPermission } from "~/server/auth/require";
+import { platformVerifyPermission } from "~/server/content/language-review";
 import {
   cities,
   cityTranslations,
@@ -25,12 +29,26 @@ export default async function NewArticlePage({
   params: Promise<{ locale: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const labels = await loadPageCatalog(locale, "dashboard-articles");
-  const session = await auth();
+  const [labels, overviewLabels, session] = await Promise.all([
+    loadPageCatalog(locale, "dashboard-articles"),
+    loadPageCatalog(locale, "dashboard-overview"),
+    auth(),
+  ]);
+  const editorLabels = buildWorkspaceLabels(overviewLabels, labels);
   const canManageGlobalTags = Boolean(
     session?.user.id &&
     (await hasActualPlatformPermission(session.user.id, "support.superadmin")),
   );
+  /**
+   * Whether the two publishing choices are offered at all.
+   *
+   * Nothing on a form that has never been saved has been read by anyone, so
+   * publishing from it is the platform's own check being applied by the person
+   * who holds it — the create action asks for exactly this grant. Everyone else
+   * sends the text up the review chain instead, and is not shown a choice the
+   * server would refuse.
+   */
+  const canPublish = await hasPermission(platformVerifyPermission);
 
   const [organizationRows, cityRows, tagRows, globalTagRows] =
     await Promise.all([
@@ -125,6 +143,9 @@ export default async function NewArticlePage({
         }))}
         canManageGlobalTags={canManageGlobalTags}
         labels={labels}
+        editorLabels={editorLabels}
+        aiEnabled={hasAiTranslationProvider()}
+        canPublish={canPublish}
       />
     </WorkspacePage>
   );

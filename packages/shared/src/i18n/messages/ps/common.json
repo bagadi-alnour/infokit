@@ -1,0 +1,11 @@
+{
+  "form.required": "لازمی",
+  "form.invalid": "دا ارزښت وګورئ.",
+  "form.saveFailed": "خوندي نه شو. بېرته هڅه وکړئ.",
+  "form.tooLong": "دا متن د دې خانې له اجازې څخه اوږد دی.",
+  "form.tooShort": "دا متن د دې خانې له اجازې څخه لنډ دی.",
+  "form.endBeforeStart": "پای باید له پیل وروسته وي.",
+  "form.invalidDate": "سمه نېټه ولیکئ.",
+  "form.invalidTime": "سم وخت ولیکئ.",
+  "form.reviewFields": "ځینې خانې د خوندي کولو دمخه سمون ته اړتیا لري."
+}

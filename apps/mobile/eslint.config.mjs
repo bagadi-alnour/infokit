@@ -10,6 +10,14 @@ export default tseslint.config(
       ...tseslint.configs.strictTypeChecked,
       ...tseslint.configs.stylisticTypeChecked,
     ],
+    rules: {
+      // Same leading-underscore convention as the web app (apps/web/eslint.config.js):
+      // a prop that exists only to be kept off a spread is named, not used.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
     languageOptions: {
       parserOptions: {
         projectService: true,

@@ -95,24 +95,25 @@ export function PublicEventList({
                 </Link>
               </h2>
               <div className="flex flex-wrap gap-2">
-                {/* The date is the thing a reader wants to keep, so it is the
-                 * control that keeps it: one tap and it is in their own
-                 * calendar, hour and timezone included. */}
+                {/* An event is a date first, so the date gets the one washed
+                 * block on the card, in the family hue of the agenda
+                 * (docs/DESIGN-SYSTEM.md §5) — and it is also the control that
+                 * keeps it: one tap and it is in the reader's own calendar,
+                 * hour and timezone included. */}
                 <a
                   href={event.icsHref}
-                  aria-label={`${labels.addToCalendar} — ${event.dateLabel}`}
-                  className="rounded-chip focus-visible:outline-brand focus-visible:outline-2 focus-visible:outline-offset-2"
+                  aria-label={`${labels.addToCalendar} — ${event.dateLabel} ${event.timeLabel}`}
+                  className="rounded-control focus-visible:outline-brand bg-event-wash text-event hover:shadow-ring inline-flex items-center gap-2 px-3 py-1.5 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
-                  <Chip
-                    icon={<CalendarDays className="size-4" aria-hidden />}
-                    className="hover:border-brand hover:text-brand-deep underline decoration-1 underline-offset-2"
-                  >
+                  <CalendarDays className="size-4 shrink-0" aria-hidden />
+                  <span className="underline decoration-1 underline-offset-2">
                     {event.dateLabel}
-                  </Chip>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <Clock className="size-4 shrink-0" aria-hidden />
+                    {event.timeLabel}
+                  </span>
                 </a>
-                <Chip icon={<Clock className="size-4" aria-hidden />}>
-                  {event.timeLabel}
-                </Chip>
                 {event.mapHref ? (
                   <a
                     href={event.mapHref}
@@ -169,7 +170,12 @@ export function PublicEventList({
                 <CalendarPlus className="size-5" aria-hidden />
                 {labels.addToCalendar}
               </ActionAnchor>
-              <ActionLink href={event.href} tone="outline" size="compact">
+              <ActionLink
+                href={event.href}
+                tone="outline"
+                size="compact"
+                className="text-event hover:text-event"
+              >
                 {labels.details}
               </ActionLink>
             </div>

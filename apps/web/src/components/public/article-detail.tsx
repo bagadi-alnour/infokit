@@ -44,10 +44,13 @@ export function PublicArticleDetailView({
   return (
     <article className="flex flex-col gap-8">
       <header className="flex flex-col gap-4">
-        <Eyebrow>{eyebrow}</Eyebrow>
+        <Eyebrow family="article">{eyebrow}</Eyebrow>
         <h1 className="text-ink text-3xl font-bold leading-tight tracking-tight md:text-4xl">
           {article.title}
         </h1>
+        {/* The same plum rule the card carries, so the piece is recognisably
+            the thing that was clicked. */}
+        <span className="bg-article h-0.5 w-12 rounded-full" aria-hidden />
         <p className="text-copy-muted max-w-prose text-lg leading-relaxed">
           {article.summary}
         </p>
@@ -68,7 +71,7 @@ export function PublicArticleDetailView({
         <Callout tone="info" role="status">
           <span className="inline-flex items-start gap-2">
             <Languages className="mt-0.5 size-4 shrink-0" aria-hidden />
-            {labels.fallback}
+            {article.fallbackLabel}
           </span>
         </Callout>
       ) : null}

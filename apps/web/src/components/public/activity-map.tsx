@@ -1,10 +1,16 @@
 "use client";
 
+// Leaflet's stylesheet belongs to the map, not to the site. Imported by the
+// root layout it was a render-blocking request on every page — the home page,
+// every article — none of which draw a map.
+import "leaflet/dist/leaflet.css";
+
 import type { PublicActivitySummary } from "@infokit/shared/public-content";
 import type { CircleMarker, Map as LeafletMap } from "leaflet";
 import { LocateFixed, MapPin } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { OSM_MAX_ZOOM, OSM_TILE_URL } from "~/components/public/map-tiles";
 import {
   ActionButton,
   Callout,
@@ -86,8 +92,8 @@ export function ActivityLeafletMap({
       const accent = theme.getPropertyValue("--infokit-accent").trim();
       const surface = theme.getPropertyValue("--infokit-surface").trim();
       leaflet
-        .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19,
+        .tileLayer(OSM_TILE_URL, {
+          maxZoom: OSM_MAX_ZOOM,
           attribution: labels.mapAttribution,
         })
         .addTo(createdMap);

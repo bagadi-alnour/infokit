@@ -1,4 +1,7 @@
-import type { PublicLocale } from "@infokit/shared/i18n";
+import {
+  publicSupportedLocales,
+  type PublicLocale,
+} from "@infokit/shared/i18n";
 import { taxonomyLabel } from "@infokit/shared/i18n/taxonomy";
 import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 
@@ -51,7 +54,12 @@ export interface PublishedActivity {
   categoryIcon: string;
   audienceCode: string;
   audienceLabel: string;
-  services: Array<{ id: string; label: string; icon: string }>;
+  /**
+   * `id` is this deployment's row, which is what the list filters on; `code` is
+   * the taxonomy's own name for the service, which is what code may recognise —
+   * a presenter looking for drinking water asks for the code, never the row.
+   */
+  services: Array<{ id: string; code: string; label: string; icon: string }>;
   providerNames: string[];
   providers: Array<{ name: string; slug: string }>;
   placeName: string;
@@ -115,6 +123,8 @@ export async function listPublishedActivities(
     .select({
       activityId: activities.id,
       slug: activities.slug,
+      /** Null when the platform holds the activity itself; see below. */
+      organizationId: activities.organizationId,
       sourceLanguage: activities.sourceLanguageCode,
       languageCode: activityPublications.languageCode,
       categoryId: activities.categoryId,
@@ -339,7 +349,15 @@ export async function listPublishedActivities(
     const providers = providerRows
       .filter((row) => row.activityId === publication.activityId)
       .map((row) => ({ name: row.name, slug: row.slug }));
-    if (providers.length === 0) return [];
+    /**
+     * An organisation's activity is published on its providers' account, so it
+     * leaves the public read the moment none of them is still confirmed and
+     * verified — a suspension takes their content down with them. An activity
+     * the platform holds has no provider by design and the platform answers for
+     * it, so nothing here withholds it.
+     */
+    if (providers.length === 0 && publication.organizationId !== null)
+      return [];
     const providerNames = providers.map((provider) => provider.name);
     const localized =
       translationRows.find(
@@ -369,6 +387,7 @@ export async function listPublishedActivities(
       return [
         {
           id: row.serviceId,
+          code: row.code ?? "",
           label: taxonomyLabel("services", row.code ?? "", locale),
           icon: row.icon,
         },
@@ -647,6 +666,159 @@ export async function loadPublishedArticle(
       (article) => article.id === route.entryId,
     ) ?? null
   );
+}
+
+export interface PublishedArticleRoutes {
+  entryId: string;
+  /** The slug a reader in each locale is served, keyed by locale. */
+  slugs: Record<PublicLocale, string>;
+  lastModified: Date;
+}
+
+/**
+ * Where each published article lives in every public language.
+ *
+ * An article's slug is generated from its own title per language, so the same
+ * read sits at a different path in each locale. Both the sitemap and a detail
+ * page's hreflang need that whole map — and the language actually served for a
+ * locale is resolved with the same precedence `listPublishedArticles` uses, so
+ * a locale without its own translation points at the path it really renders.
+ *
+ * `slug` narrows to the one entry a live route belongs to, whichever language
+ * that route is in. A detail page knows only the slug it was asked for, so
+ * keying on that lets it read its hreflang map beside the article instead of a
+ * round trip behind it — see the note in `articles/[slug]/page.tsx`.
+ */
+export async function listPublishedArticleRoutes(
+  slug?: string,
+): Promise<PublishedArticleRoutes[]> {
+  const now = new Date();
+  const rows = await db
+    .select({
+      entryId: editorialEntries.id,
+      sourceLanguage: editorialRevisions.sourceLanguageCode,
+      languageCode: editorialPublications.languageCode,
+      slug: editorialEntryRoutes.slug,
+      publishedAt: editorialPublications.publishedAt,
+      lastReviewedAt: editorialRevisions.lastReviewedAt,
+    })
+    .from(editorialEntries)
+    .innerJoin(
+      editorialPublications,
+      eq(editorialPublications.entryId, editorialEntries.id),
+    )
+    .innerJoin(
+      editorialRevisions,
+      eq(editorialRevisions.id, editorialPublications.revisionId),
+    )
+    .innerJoin(
+      editorialEntryRoutes,
+      and(
+        eq(editorialEntryRoutes.entryId, editorialEntries.id),
+        eq(
+          editorialEntryRoutes.languageCode,
+          editorialPublications.languageCode,
+        ),
+        isNull(editorialEntryRoutes.retiredAt),
+      ),
+    )
+    .where(
+      and(
+        eq(editorialEntries.kind, "article"),
+        isNull(editorialEntries.archivedAt),
+        isNull(editorialPublications.unpublishedAt),
+        or(
+          isNull(editorialPublications.scheduledFor),
+          lte(editorialPublications.scheduledFor, now),
+        ),
+        slug
+          ? inArray(
+              editorialEntries.id,
+              db
+                .select({ entryId: editorialEntryRoutes.entryId })
+                .from(editorialEntryRoutes)
+                .where(
+                  and(
+                    eq(editorialEntryRoutes.slug, slug),
+                    // A retired slug names no page, matching how
+                    // `loadPublishedArticle` resolves the same URL.
+                    isNull(editorialEntryRoutes.retiredAt),
+                  ),
+                ),
+            )
+          : undefined,
+      ),
+    );
+
+  const byEntry = new Map<string, (typeof rows)[number][]>();
+  for (const row of rows) {
+    const entryRows = byEntry.get(row.entryId) ?? [];
+    entryRows.push(row);
+    byEntry.set(row.entryId, entryRows);
+  }
+
+  return [...byEntry.entries()].flatMap(([id, entryRows]) => {
+    const sourceLanguage = entryRows[0]?.sourceLanguage;
+    const slugs = Object.fromEntries(
+      publicSupportedLocales.flatMap((locale) => {
+        const served =
+          entryRows.find((row) => row.languageCode === locale) ??
+          entryRows.find((row) => row.languageCode === sourceLanguage) ??
+          entryRows[0];
+        return served ? [[locale, served.slug] as const] : [];
+      }),
+    ) as Record<PublicLocale, string>;
+    const stamps = entryRows.map((row) =>
+      (row.lastReviewedAt ?? row.publishedAt).getTime(),
+    );
+    return stamps.length > 0
+      ? [{ entryId: id, slugs, lastModified: new Date(Math.max(...stamps)) }]
+      : [];
+  });
+}
+
+export interface PublishedOrganizationSummary {
+  slug: string;
+  displayName: string;
+  lastModified: Date;
+}
+
+/**
+ * Every organisation whose public page exists, for the sitemap.
+ *
+ * The conditions mirror `loadPublishedOrganization` down to the verified
+ * translation it needs to render, because a listed URL that answers 404 is
+ * worse for a crawler than one that was never announced.
+ */
+export async function listPublishedOrganizations(): Promise<
+  PublishedOrganizationSummary[]
+> {
+  const rows = await db
+    .selectDistinct({
+      slug: organizations.slug,
+      displayName: organizations.displayName,
+      lastModified: organizationProfiles.updatedAt,
+    })
+    .from(organizations)
+    .innerJoin(
+      organizationProfiles,
+      eq(organizationProfiles.organizationId, organizations.id),
+    )
+    .innerJoin(
+      organizationProfileTranslations,
+      and(
+        eq(organizationProfileTranslations.organizationId, organizations.id),
+        eq(organizationProfileTranslations.state, "verified"),
+      ),
+    )
+    .where(
+      and(
+        eq(organizations.status, "verified"),
+        eq(organizations.publishingSuspended, false),
+        eq(organizationProfiles.published, true),
+      ),
+    );
+  return rows;
 }
 
 export interface PublishedOrganization {

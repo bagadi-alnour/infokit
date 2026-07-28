@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { DataTable, type DataTableLabels } from "~/components/admin/data-table";
 import { SelectControl } from "~/components/admin/select-control";
@@ -20,6 +20,8 @@ export type EventTableRow = {
   href: string;
   title: string;
   hostName: string | null;
+  /** The person who entered it, when the record still names one. */
+  createdBy: string | null;
   visibility: EventVisibilityValue;
   cancelled: boolean;
   archived: boolean;
@@ -41,6 +43,7 @@ export type EventsTableLabels = DataTableLabels & {
   /** What that column is, for the filter and columns menus: "Host". */
   host: string;
   reach: string;
+  createdBy: string;
   hostPlatform: string;
   cancelled: string;
   archived: string;
@@ -68,11 +71,14 @@ export function EventsTable({
   rows,
   labels,
   nowIso,
+  createAction,
 }: {
   rows: EventTableRow[];
   labels: EventsTableLabels;
   /** The server's "now", so the past/upcoming split matches the page. */
   nowIso: string;
+  /** "New event", when this editor may add one — it sits in the toolbar. */
+  createAction?: ReactNode;
 }) {
   // An archived event stays reachable — that is how it gets restored — but it
   // is not part of the agenda until someone asks for it, so it is kept out of
@@ -203,6 +209,19 @@ export function EventsTable({
           </Chip>
         ),
       },
+      {
+        id: "createdBy",
+        // Filterable, because "everything I put in the agenda" is the question
+        // this column is asked; the dash is a value too — nobody is recorded.
+        accessorFn: (row) => row.createdBy ?? "—",
+        header: () => labels.createdBy,
+        meta: { label: labels.createdBy, filter: {} },
+        cell: ({ row }) => (
+          <span className="text-copy-muted text-sm">
+            {row.original.createdBy ?? "—"}
+          </span>
+        ),
+      },
     ],
     [labels, nowIso],
   );
@@ -216,11 +235,12 @@ export function EventsTable({
       rowId={(row) => row.id}
       rowHref={(row) => row.href}
       searchValue={(row) =>
-        `${row.title} ${row.hostName ?? ""} ${row.whereLabel ?? ""} ${row.cityName}`
+        `${row.title} ${row.hostName ?? ""} ${row.createdBy ?? ""} ${row.whereLabel ?? ""} ${row.cityName}`
       }
       initialSorting={[{ id: "when", desc: false }]}
       // What is coming is the agenda; what already happened is a record of it.
       initialColumnFilters={[{ id: "when", value: ["upcoming"] }]}
+      createAction={createAction}
       filters={
         <SelectControl
           label={labels.state}

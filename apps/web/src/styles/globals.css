@@ -1,8 +1,36 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@inkpilot/editor/styles.css";
-@import "@xyflow/react/dist/style.css";
+
+/* The editor's chrome and the flow canvas are console furniture, so their
+   stylesheets are imported by the components that draw them rather than from
+   here. Together they were about 18 kB of render-blocking CSS on every public
+   page, none of which has a toolbar or a canvas on it. Public article bodies are
+   styled by `.infokit-prose` below, not by the editor's sheet. */
+
+/* Which sources this sheet is built from. Tailwind writes a utility only where
+   it can see one used, so scanning the whole app put the console's vocabulary —
+   data tables, comboboxes, dialogs, the flow canvas — into the one stylesheet
+   every public page blocks on: 25 kB over the wire to render a page of text.
+   The console keeps its own sheet (src/styles/workspace.css) and this one is
+   built from the public pages, the shared parts they render, and the sign-in
+   screens. Naming what to leave out rather than what to include is deliberate:
+   a new public page is scanned by default, and forgetting to list one would be
+   a page with no styles at all. */
+@source not "../app/*/dashboard/**";
+@source not "../app/*/translate/**";
+@source not "../app/*/simulator-editor-preview/**";
+@source not "../components/admin/**";
+@source not "../components/editor/**";
+@source not "../components/ui/**";
+
+/* Read back in: sign-in borrows the console's form primitives, and these four
+   shadcn parts are rendered by public components. */
+@source "../components/admin/workspace.tsx";
+@source "../components/ui/button.tsx";
+@source "../components/ui/direction.tsx";
+@source "../components/ui/hover-card.tsx";
+@source "../components/ui/select.tsx";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -55,6 +83,15 @@
   --color-danger-soft: var(--infokit-danger-soft);
   --color-neutral: var(--infokit-neutral-status);
   --color-neutral-soft: var(--infokit-neutral-status-soft);
+
+  /* Content families (docs/DESIGN-SYSTEM.md §5): one hue per kind of content,
+     the same four on the site and in the app. Structural, never a signal. */
+  --color-event: var(--infokit-event-accent);
+  --color-event-wash: var(--infokit-event-wash);
+  --color-article: var(--infokit-article-accent);
+  --color-article-wash: var(--infokit-article-wash);
+  --color-guide: var(--infokit-guide-accent);
+  --color-guide-wash: var(--infokit-guide-wash);
 
   --radius-chip: var(--infokit-radius-chip);
   --radius-control: var(--infokit-radius-control);
@@ -168,16 +205,41 @@
   }
 }
 
+/* The public bar earns its shadow only once the page has moved under it, so a
+   page read from the top has one hairline of chrome and nothing else. Scroll
+   timelines carry it with no script and no scroll listener; a browser without
+   them keeps the resting bar, which is the same rule as every other layer of
+   motion here (docs/DESIGN-SYSTEM.md §2 rule 7). */
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-public-header] {
+      animation: infokit-header-lift linear both;
+      animation-timeline: scroll(root block);
+      animation-range: 0 5rem;
+    }
+
+    @keyframes infokit-header-lift {
+      from {
+        box-shadow: none;
+      }
+      to {
+        box-shadow: var(--infokit-shadow-md);
+      }
+    }
+  }
+}
+
 /* Public typography helpers -------------------------------------------------
    Used by the reading surfaces (articles, simulator results, activity
    descriptions) so authored HTML follows the same rules as the components. */
+/* Shape only, no colour: an eyebrow is tinted by the content family it opens
+   (docs/DESIGN-SYSTEM.md §5), so the caller names the colour role. */
 @utility text-eyebrow {
   font-family: var(--infokit-font-heading);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--infokit-accent-deep);
 }
 
 .infokit-prose {
@@ -298,77 +360,4 @@
 
 .leaflet-control-attribution a {
   color: var(--infokit-accent-deep);
-}
-
-/* InkPilot is an editing engine; InfoKit remains responsible for its visual
-   language and deliberately disables media in public activity descriptions. */
-.infokit-rich-text-editor {
-  --wf-color-primary: var(--infokit-accent);
-  --wf-color-bg: var(--infokit-surface);
-  --wf-color-fg: var(--infokit-ink);
-  --wf-color-border: var(--infokit-border);
-  --wf-color-muted: var(--infokit-surface-subtle);
-  --wf-color-muted-fg: var(--infokit-text-muted);
-  --wf-color-error: var(--infokit-danger);
-  --wf-color-warning: var(--infokit-warning);
-  --wf-color-success: var(--infokit-success);
-  --wf-radius-sm: var(--infokit-radius-chip);
-  --wf-radius-md: var(--infokit-radius-control);
-}
-
-.infokit-rich-text-editor .wf-toolbar {
-  position: static;
-}
-
-.infokit-rich-text-editor .wf-toolbar-btn.is-active {
-  color: var(--infokit-accent-contrast);
-}
-
-.infokit-rich-text-editor .wf-toolbar-btn[hidden] {
-  display: none;
-}
-
-.infokit-rich-text-editor .ProseMirror {
-  min-height: 11rem;
-  max-width: none;
-}
-
-/* In the translation workspace the text *is* the work — a source pane and a
-   target pane are read against each other — so its editors get noticeably more
-   room than an ordinary description field. */
-[data-translation-workspace] .infokit-rich-text-editor .ProseMirror {
-  min-height: 20rem;
-}
-
-/* React Flow supplies graph behavior; the workspace tokens own its visuals. */
-.react-flow {
-  --xy-background-color: var(--infokit-surface-subtle);
-  --xy-edge-stroke: var(--infokit-border-strong);
-  --xy-edge-stroke-selected: var(--infokit-accent);
-  --xy-connectionline-stroke: var(--infokit-accent);
-  --xy-minimap-background-color: var(--infokit-surface);
-  --xy-minimap-mask-background-color: color-mix(
-    in oklch,
-    var(--infokit-surface-subtle) 72%,
-    transparent
-  );
-  --xy-controls-button-background-color: var(--infokit-surface);
-  --xy-controls-button-background-color-hover: var(--infokit-accent-soft);
-  --xy-controls-button-color: var(--infokit-ink);
-  --xy-controls-button-border-color: var(--infokit-border);
-}
-
-.react-flow__node {
-  font-family: var(--infokit-font-body);
-}
-
-.react-flow__edge.selected .react-flow__edge-path {
-  stroke: var(--infokit-accent);
-}
-
-.simulator-handle {
-  width: 0.75rem;
-  height: 0.75rem;
-  border: 2px solid var(--infokit-surface);
-  background: var(--infokit-accent);
 }

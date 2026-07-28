@@ -32,6 +32,7 @@ export interface CatalogMap {
   "dashboard-places": typeof import("./messages/en/dashboard-places.json");
   "dashboard-simulator": typeof import("./messages/en/dashboard-simulator.json");
   home: typeof import("./messages/en/home.json");
+  member: typeof import("./messages/en/member.json");
   login: typeof import("./messages/en/login.json");
   "login-check": typeof import("./messages/en/login-check.json");
   "login-error": typeof import("./messages/en/login-error.json");
@@ -75,6 +76,7 @@ const catalogLoaders = {
     "dashboard-simulator": async () =>
       (await import("./messages/fr/dashboard-simulator.json")).default,
     home: async () => (await import("./messages/fr/home.json")).default,
+    member: async () => (await import("./messages/fr/member.json")).default,
     login: async () => (await import("./messages/fr/login.json")).default,
     "login-check": async () =>
       (await import("./messages/fr/login-check.json")).default,
@@ -110,6 +112,7 @@ const catalogLoaders = {
     "dashboard-simulator": async () =>
       (await import("./messages/en/dashboard-simulator.json")).default,
     home: async () => (await import("./messages/en/home.json")).default,
+    member: async () => (await import("./messages/en/member.json")).default,
     login: async () => (await import("./messages/en/login.json")).default,
     "login-check": async () =>
       (await import("./messages/en/login-check.json")).default,
@@ -145,6 +148,7 @@ const catalogLoaders = {
     "dashboard-simulator": async () =>
       (await import("./messages/ar/dashboard-simulator.json")).default,
     home: async () => (await import("./messages/ar/home.json")).default,
+    member: async () => (await import("./messages/ar/member.json")).default,
     login: async () => (await import("./messages/ar/login.json")).default,
     "login-check": async () =>
       (await import("./messages/ar/login-check.json")).default,
@@ -163,37 +167,51 @@ const catalogLoaders = {
  * Chrome overlays for the supported public languages that do not yet own a
  * full interface catalogue. Each file holds only the stable UI keys; the rest
  * of the catalogue falls back to English.
+ *
+ * The `common` overlay carries the form-validation wording. A field that
+ * rejects what someone typed has to say why in their language: telling a
+ * reader under stress "Check this value" in English is telling them nothing,
+ * so that handful of strings is translated in all eleven languages even
+ * though the rest of the catalogue still falls back to English.
  */
 const overlayLoaders = {
   fa: {
+    common: async () => (await import("./messages/fa/common.json")).default,
     "public-content": async () =>
       (await import("./messages/fa/public-content.json")).default,
   },
   prs: {
+    common: async () => (await import("./messages/prs/common.json")).default,
     "public-content": async () =>
       (await import("./messages/prs/public-content.json")).default,
   },
   ps: {
+    common: async () => (await import("./messages/ps/common.json")).default,
     "public-content": async () =>
       (await import("./messages/ps/public-content.json")).default,
   },
   ckb: {
+    common: async () => (await import("./messages/ckb/common.json")).default,
     "public-content": async () =>
       (await import("./messages/ckb/public-content.json")).default,
   },
   ti: {
+    common: async () => (await import("./messages/ti/common.json")).default,
     "public-content": async () =>
       (await import("./messages/ti/public-content.json")).default,
   },
   am: {
+    common: async () => (await import("./messages/am/common.json")).default,
     "public-content": async () =>
       (await import("./messages/am/public-content.json")).default,
   },
   om: {
+    common: async () => (await import("./messages/om/common.json")).default,
     "public-content": async () =>
       (await import("./messages/om/public-content.json")).default,
   },
   so: {
+    common: async () => (await import("./messages/so/common.json")).default,
     "public-content": async () =>
       (await import("./messages/so/public-content.json")).default,
   },

@@ -7,8 +7,8 @@ import { z } from "zod";
 
 import { env } from "~/env";
 import { localizedPath } from "~/i18n/routing";
+import { optionalText } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
-import { auth } from "~/server/auth";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { db } from "~/server/db";
 import { sendMemberInvitation } from "~/server/invitations";
@@ -27,11 +27,6 @@ import {
   organizations,
   users,
 } from "~/server/db/schema";
-
-const optional = z
-  .string()
-  .trim()
-  .transform((value) => (value === "" ? null : value));
 
 function refresh(locale: Locale) {
   revalidatePath(localizedPath("/dashboard/team", locale));
@@ -64,7 +59,7 @@ async function requireTeam(teamId: string) {
 const createTeamSchema = z.object({
   organizationId: z.string().uuid(),
   cityId: z.string().uuid(),
-  name: optional,
+  name: optionalText,
 });
 
 /**
@@ -121,9 +116,9 @@ export const createTeam = protectedPermissionAction(
 const inviteSchema = z.object({
   teamId: z.string().uuid(),
   email: z.string().trim().toLowerCase().email(),
-  displayName: optional,
-  title: optional,
-  skills: optional,
+  displayName: optionalText,
+  title: optionalText,
+  skills: optionalText,
   languages: z.array(z.string().min(2).max(35)).max(30),
 });
 
@@ -134,7 +129,7 @@ const inviteSchema = z.object({
  */
 export const inviteTeamMember = protectedPermissionAction(
   "members.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     assertEnabled();
     const parsed = inviteSchema.parse({
       teamId: formData.get("teamId"),
@@ -217,16 +212,15 @@ export const inviteTeamMember = protectedPermissionAction(
     });
 
     if (!account && created) {
-      const session = await auth();
       await sendMemberInvitation({
         organizationId: team.organizationId,
         email: parsed.email,
         memberId: member.id,
-        invitedById: session?.user.id ?? null,
+        invitedById: user.id,
         locale,
         organizationName: team.organizationName,
         teamName: team.name,
-        inviterName: session?.user.name ?? session?.user.email ?? team.name,
+        inviterName: user.name ?? user.email ?? team.name,
       });
     }
     await recordAudit({
@@ -245,8 +239,8 @@ export const inviteTeamMember = protectedPermissionAction(
 const profileSchema = z.object({
   memberId: z.string().uuid(),
   displayName: z.string().trim().min(2).max(200),
-  title: optional,
-  skills: optional,
+  title: optionalText,
+  skills: optionalText,
   languages: z.array(z.string().min(2).max(35)).max(30),
 });
 
@@ -412,7 +406,7 @@ const resendSchema = z.object({
 
 export const resendMemberInvitation = protectedPermissionAction(
   "members.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     assertEnabled();
     const parsed = resendSchema.parse({
       teamId: formData.get("teamId"),
@@ -436,16 +430,15 @@ export const resendMemberInvitation = protectedPermissionAction(
     if (!member?.email) {
       throw new Error("Only pending invitations can be resent");
     }
-    const session = await auth();
     await sendMemberInvitation({
       organizationId: team.organizationId,
       email: member.email,
       memberId: member.id,
-      invitedById: session?.user.id ?? null,
+      invitedById: user.id,
       locale,
       organizationName: team.organizationName,
       teamName: team.name,
-      inviterName: session?.user.name ?? session?.user.email ?? team.name,
+      inviterName: user.name ?? user.email ?? team.name,
     });
     refresh(locale);
   },

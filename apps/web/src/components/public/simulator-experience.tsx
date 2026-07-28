@@ -95,8 +95,10 @@ export function SimulatorExperience({
       ) : null}
 
       {!started ? (
-        <SurfaceCard className="shadow-lift flex flex-col gap-5 p-6 md:p-8">
-          <Eyebrow>{labels.source}</Eyebrow>
+        // The invitation is the one washed card of the guide family, the same
+        // card the index offered — starting a guide looks like choosing it.
+        <SurfaceCard className="shadow-lift border-guide bg-guide-wash flex flex-col gap-5 p-6 md:p-8">
+          <Eyebrow family="guide">{labels.source}</Eyebrow>
           <h1 className="text-ink text-3xl font-bold leading-tight tracking-tight md:text-4xl">
             {document.title}
           </h1>
@@ -106,7 +108,9 @@ export function SimulatorExperience({
             </p>
           ) : null}
 
-          <div className="bg-brand-soft text-brand-soft-ink rounded-card flex items-start gap-3 p-4">
+          {/* Plain surface on the washed card: the promise about the answers is
+              the quietest thing on the page and the most important. */}
+          <div className="bg-surface border-line text-ink rounded-card flex items-start gap-3 border p-4">
             <Lock className="mt-0.5 size-5 shrink-0" aria-hidden />
             <div className="min-w-0 flex-1">
               <p className="font-semibold">{labels.privacy}</p>
@@ -144,13 +148,13 @@ export function SimulatorExperience({
           aria-live="polite"
           className="shadow-lift flex flex-col gap-5 p-6 md:p-8"
         >
-          <div className="border-line flex items-center justify-between gap-3 border-b pb-4">
-            <p className="text-eyebrow">
+          {/* The questions need the quiet, so a step card stays on plain
+              surface and carries the family only in the rule that counts. */}
+          <div className="border-guide flex items-center justify-between gap-3 border-b pb-4">
+            <p className="text-copy-muted text-xs font-bold uppercase tracking-[0.08em]">
               {formatStep(labels.step, history.length + 1)}
             </p>
-            <p className="text-copy-muted text-xs font-bold uppercase tracking-[0.08em]">
-              {kindLabel}
-            </p>
+            <p className="text-eyebrow text-guide">{kindLabel}</p>
           </div>
 
           <h1 className="text-ink text-2xl font-bold leading-snug md:text-3xl">

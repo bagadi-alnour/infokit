@@ -1,0 +1,11 @@
+{
+  "form.required": "Waa loo baahan yahay",
+  "form.invalid": "Hubi qiimahan.",
+  "form.saveFailed": "Lama kaydin. Isku day mar kale.",
+  "form.tooLong": "Qoraalkan waa ka dheer inta meeshan ogolaato.",
+  "form.tooShort": "Qoraalkan waa ka gaaban inta meeshan ogolaato.",
+  "form.endBeforeStart": "Dhammaadka waa inuu ka dambeeyaa bilowga.",
+  "form.invalidDate": "Geli taariikh sax ah.",
+  "form.invalidTime": "Geli waqti sax ah.",
+  "form.reviewFields": "Qaybo ka mid ah waa inay hagaajiyaan ka hor kaydinta."
+}

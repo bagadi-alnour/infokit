@@ -14,14 +14,14 @@ import {
   PageHeader,
   ReadOnlyField,
   Select,
-  TextArea,
   TextInput,
   WorkspacePage,
 } from "~/components/admin/workspace";
 import {
-  OrganizationTranslationPanel,
-  type OrganizationLanguageStatus,
-} from "~/components/admin/organization-translation-panel";
+  OrganizationNarrativeEditor,
+  type OrganizationNarrativeLanguage,
+} from "~/components/admin/organization-narrative-editor";
+import { OrganizationArchiveAction } from "~/components/admin/organization-archive-action";
 import { StewardContactForm } from "~/components/admin/steward-contact-form";
 import { StewardContactSummary } from "~/components/admin/steward-contact";
 import { Icon } from "~/components/icons";
@@ -31,13 +31,15 @@ import { DatePicker } from "~/components/ui/date-picker";
 import { Label } from "~/components/ui/label";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
+import { editorialLanguageCodes } from "~/lib/editorial-languages";
 import {
   hasStewardContact,
   type StewardContactValues,
 } from "~/lib/steward-contact";
+import { buildWorkspaceLabels } from "~/lib/workspace-labels";
 import { getRoleTestState } from "~/server/auth/authorization";
 import { organizationWriteAccess } from "~/server/auth/org-access";
-import { requireEditor } from "~/server/auth/require";
+import { hasPermission, requireEditor } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
   activities,
@@ -75,7 +77,6 @@ import {
   toggleOrganizationContact,
   toggleOrganizationLanguage,
   updateOrganization,
-  upsertOrganizationPurpose,
 } from "../actions";
 import { updateOrganizationSteward } from "../../steward-actions";
 
@@ -86,7 +87,6 @@ const statusTone = {
   archived: "neutral",
 } as const;
 
-const LOCALES = ["fr", "en", "ar"] as const;
 const CONTACT_KINDS = ["phone", "whatsapp", "email", "on_site", "url"] as const;
 
 /**
@@ -106,6 +106,15 @@ export default async function OrganizationDetailPage({
   const { locale: rawLocale, id } = await params;
   const locale = requireRouteLocale(rawLocale);
   const t = await loadPageCatalog(locale, "dashboard-console");
+  /**
+   * The language accordion speaks the create catalogue's vocabulary — the same
+   * words the article and activity editors use for the same states and errands,
+   * with this page's own field names filling the rest.
+   */
+  const narrativeLabels = buildWorkspaceLabels(
+    await loadPageCatalog(locale, "dashboard-overview"),
+    t,
+  );
   const user = await requireEditor(locale);
 
   const [org] = await db
@@ -121,6 +130,14 @@ export default async function OrganizationDetailPage({
   const canWrite = access.canWrite;
   const canLifecycle =
     canWrite && authorization.effectivePermissions.has("organization.verify");
+  /**
+   * Asking a translator, and accepting what they send, are asked for this
+   * organisation — the same two questions the article and activity screens ask.
+   */
+  const [canRequestTranslations, canReviewTranslations] = await Promise.all([
+    hasPermission("content.translation.request", id),
+    hasPermission("content.translation.review", id),
+  ]);
 
   const [profile] = await db
     .select()
@@ -148,7 +165,9 @@ export default async function OrganizationDetailPage({
    * outstanding per target language.
    */
   const narrativeSourceLanguage =
-    LOCALES.find((code) => code === profile?.narrativeSourceLanguage) ?? "fr";
+    editorialLanguageCodes.find(
+      (code) => code === profile?.narrativeSourceLanguage,
+    ) ?? "fr";
   const [narrativeSource] = await db
     .select({ id: translationSourceVersions.id })
     .from(translationSourceVersions)
@@ -188,12 +207,23 @@ export default async function OrganizationDetailPage({
       latestAssignmentByLanguage.set(assignment.languageCode, assignment);
     }
   }
-  const narrativeLanguageStatuses: OrganizationLanguageStatus[] = LOCALES.map(
-    (code) => {
+  const narrativeLanguages: OrganizationNarrativeLanguage[] =
+    editorialLanguageCodes.map((code) => {
       const assignment = latestAssignmentByLanguage.get(code);
+      const row = narratives.get(code);
       return {
         code,
-        authored: Boolean(narratives.get(code)?.purpose.trim()),
+        purpose: row?.purpose ?? "",
+        goals: row?.goals ?? "",
+        values: row?.values ?? "",
+        state: row?.state ?? null,
+        // Translated from a version of the narrative that has since moved on.
+        stale: Boolean(
+          code !== narrativeSourceLanguage &&
+          row?.sourceVersionId &&
+          narrativeSource &&
+          row.sourceVersionId !== narrativeSource.id,
+        ),
         assignment: assignment
           ? {
               id: assignment.id,
@@ -215,8 +245,7 @@ export default async function OrganizationDetailPage({
             }
           : null,
       };
-    },
-  );
+    });
 
   const assignments = await db
     .select({
@@ -477,25 +506,6 @@ export default async function OrganizationDetailPage({
             )}
           </>
         }
-        action={
-          canLifecycle ? (
-            <form action={setOrganizationArchived}>
-              {localeHidden}
-              {hidden}
-              <input
-                type="hidden"
-                name="archive"
-                value={archived ? "false" : "true"}
-              />
-              <PendingButton variant="secondary">
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon name="archive" size={15} />
-                  {archived ? t["console.restore"] : t["console.archive"]}
-                </span>
-              </PendingButton>
-            </form>
-          ) : null
-        }
       />
 
       {!canWrite && access.actor === "platform_admin" ? (
@@ -519,44 +529,56 @@ export default async function OrganizationDetailPage({
         </Notice>
       ) : null}
 
-      <div className="grid min-w-0 gap-4">
-        <div className="grid gap-4 lg:grid-cols-2">
+      {/* At desktop width the public profile is an actual rail, not a section
+       * that may silently fall below the record when a container threshold is
+       * missed. Narrow screens keep the same reading order in normal flow. */}
+      <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="grid min-w-0 gap-5 xl:col-start-1 xl:row-start-1">
           <Card title={t["section.profile"]}>
             {canWrite ? (
-              <form action={updateOrganization} className="grid gap-3">
+              <form
+                action={updateOrganization}
+                className="grid gap-x-4 gap-y-3 md:grid-cols-12"
+              >
                 {localeHidden}
                 {hidden}
-                <Field label={t["field.displayName"]}>
-                  <TextInput
-                    name="displayName"
-                    required
-                    minLength={2}
-                    defaultValue={org.displayName}
-                  />
-                </Field>
-                <Field
-                  label={t["field.legalName"]}
-                  hint={t["console.optional"]}
-                >
-                  <TextInput
-                    name="legalName"
-                    defaultValue={org.legalName ?? ""}
-                  />
-                </Field>
-                <Field
-                  label={t["field.foundedYear"]}
-                  hint={t["console.optional"]}
-                >
-                  <TextInput
-                    name="foundedYear"
-                    type="number"
-                    inputMode="numeric"
-                    min={1800}
-                    max={new Date().getFullYear()}
-                    defaultValue={org.foundedYear ?? ""}
-                  />
-                </Field>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="md:col-span-7">
+                  <Field label={t["field.displayName"]}>
+                    <TextInput
+                      name="displayName"
+                      required
+                      minLength={2}
+                      defaultValue={org.displayName}
+                    />
+                  </Field>
+                </div>
+                <div className="md:col-span-5">
+                  <Field
+                    label={t["field.legalName"]}
+                    hint={t["console.optional"]}
+                  >
+                    <TextInput
+                      name="legalName"
+                      defaultValue={org.legalName ?? ""}
+                    />
+                  </Field>
+                </div>
+                <div className="md:col-span-2">
+                  <Field
+                    label={t["field.foundedYear"]}
+                    hint={t["console.optional"]}
+                  >
+                    <TextInput
+                      name="foundedYear"
+                      type="number"
+                      inputMode="numeric"
+                      min={1800}
+                      max={new Date().getFullYear()}
+                      defaultValue={org.foundedYear ?? ""}
+                    />
+                  </Field>
+                </div>
+                <div className="md:col-span-3">
                   {canLifecycle ? (
                     <Field label={t["field.status"]}>
                       <Select
@@ -580,6 +602,8 @@ export default async function OrganizationDetailPage({
                       />
                     </>
                   )}
+                </div>
+                <div className="md:col-span-7">
                   <Field
                     label={t["field.website"]}
                     hint={t["console.optional"]}
@@ -591,38 +615,44 @@ export default async function OrganizationDetailPage({
                     />
                   </Field>
                 </div>
-                <Field
-                  label={t["field.sourceUrl"]}
-                  hint={t["console.optional"]}
-                >
-                  <TextInput
-                    name="sourceUrl"
-                    inputMode="url"
-                    defaultValue={profile?.sourceUrl ?? ""}
-                  />
-                </Field>
-                <ControlField
-                  label={t["field.sourceCheckedOn"]}
-                  htmlFor="organization-source-checked-on"
-                  hint={t["console.optional"]}
-                >
-                  <DatePicker
-                    id="organization-source-checked-on"
-                    name="sourceCheckedOn"
-                    locale={locale}
-                    defaultValue={profile?.sourceCheckedOn ?? ""}
-                    placeholder={t["console.selectDate"]}
-                    clearLabel={t["console.clearDate"]}
-                  />
-                </ControlField>
-                <Label className="min-h-9">
-                  <Checkbox
-                    name="published"
-                    defaultChecked={profile?.published ?? false}
-                  />
-                  {t["field.published"]}
-                </Label>
-                <div>
+                <div className="md:col-span-8">
+                  <Field
+                    label={t["field.sourceUrl"]}
+                    hint={t["console.optional"]}
+                  >
+                    <TextInput
+                      name="sourceUrl"
+                      inputMode="url"
+                      defaultValue={profile?.sourceUrl ?? ""}
+                    />
+                  </Field>
+                </div>
+                <div className="md:col-span-4">
+                  <ControlField
+                    label={t["field.sourceCheckedOn"]}
+                    htmlFor="organization-source-checked-on"
+                    hint={t["console.optional"]}
+                  >
+                    <DatePicker
+                      id="organization-source-checked-on"
+                      name="sourceCheckedOn"
+                      locale={locale}
+                      defaultValue={profile?.sourceCheckedOn ?? ""}
+                      placeholder={t["console.selectDate"]}
+                      clearLabel={t["console.clearDate"]}
+                    />
+                  </ControlField>
+                </div>
+                {/* The switch that decides whether any of this is public sits on
+                 * the same line as the save it needs to take effect. */}
+                <div className="border-line flex flex-wrap items-center justify-between gap-3 border-t pt-3 md:col-span-12">
+                  <Label className="min-h-9">
+                    <Checkbox
+                      name="published"
+                      defaultChecked={profile?.published ?? false}
+                    />
+                    {t["field.published"]}
+                  </Label>
                   <PendingButton>{t["console.save"]}</PendingButton>
                 </div>
               </form>
@@ -668,290 +698,176 @@ export default async function OrganizationDetailPage({
             )}
           </Card>
 
-          <Card title={t["section.publicProfile"]}>
-            <div className="grid gap-3">
-              {LOCALES.map((code) => {
-                const row = narratives.get(code);
-                const dir = code === "ar" ? "rtl" : "ltr";
-                if (!canWrite) {
-                  return (
-                    <div
-                      key={code}
-                      className="border-line grid gap-2 rounded-lg border p-3"
+          {/* These are the two compact public classification sets. Keeping them
+           * together uses the wide work column without separating related facts
+           * across the page; they stack naturally on smaller screens. */}
+          <div className="grid items-start gap-5 lg:grid-cols-2">
+            <Card title={t["section.specialities"]} hint={t["spec.hint"]}>
+              {assignments.length === 0 ? (
+                <EmptyState>{t["empty.section"]}</EmptyState>
+              ) : (
+                <ul className="flex flex-wrap gap-2">
+                  {assignments.map((assignment) => (
+                    <li
+                      key={assignment.id}
+                      className={`border-line bg-surface flex items-center gap-1.5 rounded-full border py-1 ${canWrite ? "pe-1 ps-1" : "pe-3 ps-3"}`}
                     >
-                      <p className="text-copy-muted text-xs font-bold uppercase">
-                        {code}
-                      </p>
-                      <ReadOnlyField
-                        label={t["field.purpose"]}
-                        value={row?.purpose}
-                        dir={dir}
-                      />
-                      <ReadOnlyField
-                        label={t["field.goals"]}
-                        value={row?.goals}
-                        dir={dir}
-                      />
-                      <ReadOnlyField
-                        label={t["field.values"]}
-                        value={row?.values}
-                        dir={dir}
-                      />
-                    </div>
-                  );
-                }
-                return (
-                  <form
-                    key={code}
-                    action={upsertOrganizationPurpose}
-                    className="grid gap-2"
-                    dir={dir}
-                  >
-                    {localeHidden}
-                    {hidden}
-                    <input type="hidden" name="languageCode" value={code} />
-                    <Field
-                      label={`${t["field.purpose"]} — ${code.toUpperCase()}`}
-                    >
-                      <TextArea
-                        name="purpose"
-                        rows={2}
-                        required
-                        defaultValue={row?.purpose ?? ""}
-                      />
-                    </Field>
-                    <Field
-                      label={t["field.goals"]}
-                      hint={t["console.optional"]}
-                    >
-                      <TextArea
-                        name="goals"
-                        rows={3}
-                        defaultValue={row?.goals ?? ""}
-                      />
-                    </Field>
-                    <Field
-                      label={t["field.values"]}
-                      hint={t["console.optional"]}
-                    >
-                      <TextArea
-                        name="values"
-                        rows={3}
-                        defaultValue={row?.values ?? ""}
-                      />
-                    </Field>
-                    <div>
-                      <PendingButton variant="secondary">
-                        {t["console.save"]} {code}
-                      </PendingButton>
-                    </div>
-                  </form>
-                );
-              })}
-            </div>
-          </Card>
-
-          <Card
-            title={t["section.translations"]}
-            hint={t["translation.orgHint"]}
-          >
-            {canWrite ? (
-              <form
-                action={setOrganizationNarrativeLanguage}
-                className="border-line mb-4 flex flex-wrap items-end gap-3 border-b pb-4"
-              >
-                {localeHidden}
-                {hidden}
-                <div className="min-w-40 flex-1">
-                  <ControlField
-                    label={t["field.sourceLanguage"]}
-                    htmlFor="narrative-source-language"
-                    hint={t["translation.sourceHint"]}
-                  >
-                    <Select
-                      id="narrative-source-language"
-                      name="sourceLanguage"
-                      defaultValue={narrativeSourceLanguage}
-                    >
-                      {LOCALES.map((code) => (
-                        <option key={code} value={code}>
-                          {t[`language.${code}`]}
-                        </option>
-                      ))}
-                    </Select>
-                  </ControlField>
-                </div>
-                <PendingButton variant="secondary">
-                  {t["console.save"]}
-                </PendingButton>
-              </form>
-            ) : (
-              <div className="mb-4">
-                <ReadOnlyField
-                  label={t["field.sourceLanguage"]}
-                  value={t[`language.${narrativeSourceLanguage}`]}
-                />
-              </div>
-            )}
-            <OrganizationTranslationPanel
-              locale={locale}
-              organizationId={org.id}
-              sourceLanguage={narrativeSourceLanguage}
-              languages={narrativeLanguageStatuses}
-              labels={t}
-              hasSource={Boolean(narrativeSource)}
-              disabled={!canWrite}
-            />
-          </Card>
-        </div>
-
-        <Card title={t["section.specialities"]} hint={t["spec.hint"]}>
-          {assignments.length === 0 ? (
-            <EmptyState>{t["empty.section"]}</EmptyState>
-          ) : (
-            <ul className="mb-3 flex flex-wrap gap-2">
-              {assignments.map((assignment) => (
-                <li
-                  key={assignment.id}
-                  className="border-line bg-surface flex items-center gap-2 rounded-full border py-1 pe-1 ps-3"
-                >
-                  {assignment.isPrimary ? (
-                    <Icon name="star" size={14} className="text-brand" />
-                  ) : null}
-                  <span className="text-sm font-medium">
-                    {assignment.label ?? assignment.code}
-                  </span>
-                  {canWrite ? (
-                    <form action={retireOrganizationSpeciality}>
-                      {localeHidden}
-                      {hidden}
-                      <input
-                        type="hidden"
-                        name="assignmentId"
-                        value={assignment.id}
-                      />
-                      <PendingButton
-                        variant="ghost"
-                        className="!px-2 !py-0.5"
-                        aria-label={t["console.remove"]}
-                      >
-                        ✕
-                      </PendingButton>
-                    </form>
-                  ) : (
-                    <span className="pe-2" />
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {canWrite ? (
-            <div className="flex flex-wrap items-end gap-3">
-              {addable.length > 0 ? (
+                      {/* Which speciality leads is a property of that speciality,
+                       * so it is decided on it: the star marks it, the star of the
+                       * current one clears it back to co-equal. The dropdown this
+                       * replaces listed the same rows a second time and asked the
+                       * reader to match names between two controls. */}
+                      {canWrite ? (
+                        <form action={setPrimarySpeciality}>
+                          {localeHidden}
+                          {hidden}
+                          <input
+                            type="hidden"
+                            name="assignmentId"
+                            value={assignment.isPrimary ? "" : assignment.id}
+                          />
+                          <PendingButton
+                            variant="ghost"
+                            className="!rounded-full !px-1.5 !py-0.5"
+                            aria-label={
+                              assignment.isPrimary
+                                ? t["spec.clearPrimary"]
+                                : t["spec.setPrimary"]
+                            }
+                            title={
+                              assignment.isPrimary
+                                ? t["spec.clearPrimary"]
+                                : t["spec.setPrimary"]
+                            }
+                          >
+                            {/* Filled, not merely coloured: the marked star reads
+                             * as marked in a screenshot, in high contrast, and
+                             * to anyone who does not see the brand colour. */}
+                            <Icon
+                              name="star"
+                              size={14}
+                              className={
+                                assignment.isPrimary
+                                  ? "text-brand fill-current"
+                                  : "text-copy-muted"
+                              }
+                            />
+                          </PendingButton>
+                        </form>
+                      ) : assignment.isPrimary ? (
+                        <Icon name="star" size={14} className="text-brand" />
+                      ) : null}
+                      <span className="text-sm font-medium">
+                        {assignment.label ?? assignment.code}
+                      </span>
+                      {/* The star is never the only carrier: the leading
+                       * speciality also says so in words. */}
+                      {assignment.isPrimary ? (
+                        <span className="text-brand text-[11px] font-semibold uppercase tracking-wide">
+                          {t["spec.primary"]}
+                        </span>
+                      ) : null}
+                      {canWrite ? (
+                        <form action={retireOrganizationSpeciality}>
+                          {localeHidden}
+                          {hidden}
+                          <input
+                            type="hidden"
+                            name="assignmentId"
+                            value={assignment.id}
+                          />
+                          <PendingButton
+                            variant="ghost"
+                            className="!rounded-full !px-2 !py-0.5"
+                            aria-label={t["console.remove"]}
+                            title={t["console.remove"]}
+                          >
+                            ✕
+                          </PendingButton>
+                        </form>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {canWrite && addable.length > 0 ? (
                 <form
                   action={addOrganizationSpeciality}
-                  className="flex items-end gap-2"
+                  className="border-line mt-4 grid items-end gap-3 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_auto]"
                 >
                   {localeHidden}
                   {hidden}
-                  <Field label={t["console.add"]}>
-                    <Select name="specialityId">
-                      {addable.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.label ?? s.code}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <PendingButton variant="secondary">
+                  <div className="min-w-56 flex-1">
+                    <Field label={t["subj.speciality"]}>
+                      <Select name="specialityId">
+                        {addable.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.label ?? s.code}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  </div>
+                  <PendingButton variant="secondary" className="min-w-20">
                     {t["console.add"]}
                   </PendingButton>
                 </form>
               ) : null}
-              {assignments.length > 0 ? (
-                <form
-                  action={setPrimarySpeciality}
-                  className="flex items-end gap-2"
-                >
-                  {localeHidden}
-                  {hidden}
-                  <Field label={t["spec.primary"]}>
-                    <Select
-                      name="assignmentId"
-                      defaultValue={
-                        assignments.find((a) => a.isPrimary)?.id ?? ""
-                      }
-                    >
-                      <option value="">{t["spec.clearPrimary"]}</option>
-                      {assignments.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.label ?? a.code}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
-                  <PendingButton variant="secondary">
-                    {t["spec.setPrimary"]}
-                  </PendingButton>
-                </form>
-              ) : null}
-            </div>
-          ) : null}
-        </Card>
+            </Card>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card title={t["section.languages"]} hint={t["lang.hint"]}>
-            {canWrite ? (
-              <ul className="flex flex-wrap gap-2">
-                {allLanguages.map((language) => {
-                  const on = orgLangs.has(language.code);
-                  return (
-                    <li key={language.code}>
-                      <form action={toggleOrganizationLanguage}>
-                        {localeHidden}
-                        {hidden}
-                        <input
-                          type="hidden"
-                          name="languageCode"
-                          value={language.code}
-                        />
-                        <input
-                          type="hidden"
-                          name="enabled"
-                          value={on ? "false" : "true"}
-                        />
-                        <PendingButton
-                          variant={on ? "primary" : "secondary"}
-                          className="!rounded-full"
-                        >
-                          {on ? "✓ " : ""}
-                          {language.nativeName}
-                        </PendingButton>
-                      </form>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : orgLangs.size === 0 ? (
-              <EmptyState>{t["empty.section"]}</EmptyState>
-            ) : (
-              <ul className="flex flex-wrap gap-2">
-                {allLanguages
-                  .filter((language) => orgLangs.has(language.code))
-                  .map((language) => (
-                    <li key={language.code}>
-                      <Chip tone="accent">{language.nativeName}</Chip>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </Card>
+            <Card title={t["section.languages"]} hint={t["lang.hint"]}>
+              {canWrite ? (
+                <ul className="flex flex-wrap gap-2">
+                  {allLanguages.map((language) => {
+                    const on = orgLangs.has(language.code);
+                    return (
+                      <li key={language.code}>
+                        <form action={toggleOrganizationLanguage}>
+                          {localeHidden}
+                          {hidden}
+                          <input
+                            type="hidden"
+                            name="languageCode"
+                            value={language.code}
+                          />
+                          <input
+                            type="hidden"
+                            name="enabled"
+                            value={on ? "false" : "true"}
+                          />
+                          <PendingButton
+                            variant={on ? "primary" : "secondary"}
+                            className="!rounded-full"
+                          >
+                            {on ? "✓ " : ""}
+                            {language.nativeName}
+                          </PendingButton>
+                        </form>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : orgLangs.size === 0 ? (
+                <EmptyState>{t["empty.section"]}</EmptyState>
+              ) : (
+                <ul className="flex flex-wrap gap-2">
+                  {allLanguages
+                    .filter((language) => orgLangs.has(language.code))
+                    .map((language) => (
+                      <li key={language.code}>
+                        <Chip tone="accent">{language.nativeName}</Chip>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </Card>
+          </div>
 
           <Card title={t["section.contacts"]} hint={t["contact.hint"]}>
             {contactRows.length === 0 ? (
               <EmptyState>{t["empty.section"]}</EmptyState>
             ) : (
-              <ul className="divide-line mb-3 divide-y">
+              <ul className="divide-line divide-y">
                 {contactRows.map((contact) => (
                   <li
                     key={contact.id}
@@ -998,10 +914,13 @@ export default async function OrganizationDetailPage({
                 ))}
               </ul>
             )}
+            {/* Adding a contact is its own step below the list, on the grid the
+             * profile form uses: three labelled fields and the button that files
+             * them, never a row of controls squeezed against each other. */}
             {canWrite ? (
               <form
                 action={addOrganizationContact}
-                className="flex flex-wrap items-end gap-2"
+                className="border-line mt-4 grid items-end gap-3 border-t pt-4 md:grid-cols-[minmax(9rem,.7fr)_minmax(0,1.2fr)_minmax(0,1fr)_auto]"
               >
                 {localeHidden}
                 {hidden}
@@ -1020,129 +939,166 @@ export default async function OrganizationDetailPage({
                 <Field label={t["contact.label"]}>
                   <TextInput name="labelFr" />
                 </Field>
-                <PendingButton variant="secondary">
-                  {t["console.add"]}
-                </PendingButton>
+                <div>
+                  <PendingButton variant="secondary" className="min-w-20">
+                    {t["console.add"]}
+                  </PendingButton>
+                </div>
               </form>
             ) : null}
           </Card>
 
-          {/* The contacts above are published; this one never is. It is the line
-           * back to whoever knows, for an editor elsewhere in the network who
-           * finds something wrong on this record. */}
-          <Card title={t["steward.title"]} hint={t["steward.hint"]}>
-            {canWrite ? (
-              <StewardContactForm
-                action={updateOrganizationSteward}
-                locale={locale}
-                recordId={org.id}
-                values={steward}
-                labels={t}
-              />
-            ) : hasStewardContact(steward) ? (
-              <StewardContactSummary values={steward} labels={t} />
-            ) : (
-              <EmptyState>{t["steward.empty"]}</EmptyState>
-            )}
-          </Card>
-        </div>
-
-        <Card
-          title={`${t["section.members"]} (${String(memberRows.length)})`}
-          hint={t["members.hint"]}
-          action={
-            canWrite &&
-            authorization.effectivePermissions.has("members.manage") ? (
+          {/* Public offerings follow the public contact data they rely on, before
+           * the private membership and invitation administration below. */}
+          <Card
+            title={`${t["section.activities"]} (${String(orgActivities.length)})`}
+            action={
               <Link
-                href={localizedPath(`/dashboard/team?org=${org.id}`, locale)}
+                href={localizedPath(
+                  `/dashboard/activities?q=${encodeURIComponent(org.displayName)}`,
+                  locale,
+                )}
                 className="text-copy-muted hover:text-ink inline-flex items-center gap-1.5 text-xs font-medium"
               >
                 <Icon name="external" size={14} />
-                {t["members.manage"]}
+                {t["console.open"]}
               </Link>
-            ) : null
-          }
-        >
-          {!canReadMembers ? (
-            <EmptyState>{t["members.hidden"]}</EmptyState>
-          ) : memberRows.length === 0 ? (
-            <EmptyState>{t["members.empty"]}</EmptyState>
-          ) : (
-            <ul className="divide-line divide-y">
-              {memberRows.map((member) => {
-                const granted = rolesByMember.get(member.id) ?? [];
-                return (
+            }
+          >
+            {orgActivities.length === 0 ? (
+              <EmptyState>{t["empty.section"]}</EmptyState>
+            ) : (
+              <ul className="divide-line divide-y">
+                {orgActivities.map((activity) => (
                   <li
-                    key={member.id}
-                    className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-start sm:gap-4"
+                    key={activity.id}
+                    className="flex items-center justify-between py-2"
                   >
-                    <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                        {member.displayName}
-                        <Chip tone={memberStatusTone[member.status]}>
-                          {memberStatusLabel[member.status]}
-                        </Chip>
-                        {member.userId === null ? (
-                          <span className="text-copy-muted text-xs">
-                            {t["members.noAccount"]}
-                          </span>
-                        ) : null}
-                      </p>
-                      {member.title ? (
-                        <p className="text-copy-muted text-xs">
-                          {member.title}
-                        </p>
-                      ) : null}
-                      {canReadMemberEmails && member.contactEmail ? (
-                        <p className="text-copy-muted text-xs">
-                          {member.contactEmail}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-copy-muted mb-1 text-[11px] font-semibold uppercase tracking-wide">
-                        {t["members.roles"]}
-                      </p>
-                      {granted.length === 0 ? (
-                        <p className="text-copy-muted text-xs">
-                          {t["members.noRole"]}
-                        </p>
-                      ) : (
-                        <ul className="flex flex-wrap gap-1.5">
-                          {granted.map((role) => (
-                            <li key={role.code}>
-                              {/* The console names roles by their code, as the
-                               * role switcher does — the code is what the
-                               * permission matrix is written in. */}
-                              <Chip
-                                tone="accent"
-                                title={role.description ?? undefined}
-                              >
-                                {role.code}
-                                {role.expiresAt
-                                  ? ` · ${t["members.until"]} ${dateFormat.format(role.expiresAt)}`
-                                  : ""}
-                              </Chip>
-                            </li>
-                          ))}
-                        </ul>
+                    <Link
+                      href={localizedPath(
+                        `/dashboard/activities?activity=${activity.id}`,
+                        locale,
                       )}
-                    </div>
+                      className="text-sm font-medium hover:underline"
+                    >
+                      {activity.name ?? t["activities.untitled"]}
+                    </Link>
+                    <Chip tone={activity.published ? "ok" : "neutral"}>
+                      {activity.published
+                        ? t["act.published"]
+                        : t["status.draft"]}
+                    </Chip>
                   </li>
-                );
-              })}
-            </ul>
-          )}
+                ))}
+              </ul>
+            )}
+          </Card>
 
+          <section id="organization-members" className="scroll-mt-6">
+            <Card
+              title={`${t["section.members"]} (${String(memberRows.length)})`}
+              hint={t["members.hint"]}
+              action={
+                canWrite &&
+                authorization.effectivePermissions.has("members.manage") ? (
+                  <Link
+                    href={localizedPath(
+                      `/dashboard/team?org=${org.id}`,
+                      locale,
+                    )}
+                    className="text-copy-muted hover:text-ink inline-flex items-center gap-1.5 text-xs font-medium"
+                  >
+                    <Icon name="external" size={14} />
+                    {t["members.manage"]}
+                  </Link>
+                ) : null
+              }
+            >
+              {!canReadMembers ? (
+                <EmptyState>{t["members.hidden"]}</EmptyState>
+              ) : memberRows.length === 0 ? (
+                <EmptyState>{t["members.empty"]}</EmptyState>
+              ) : (
+                <ul className="divide-line divide-y">
+                  {memberRows.map((member) => {
+                    const granted = rolesByMember.get(member.id) ?? [];
+                    return (
+                      <li
+                        key={member.id}
+                        className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-start sm:gap-4"
+                      >
+                        <div className="min-w-0">
+                          <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                            {member.displayName}
+                            <Chip tone={memberStatusTone[member.status]}>
+                              {memberStatusLabel[member.status]}
+                            </Chip>
+                            {member.userId === null ? (
+                              <span className="text-copy-muted text-xs">
+                                {t["members.noAccount"]}
+                              </span>
+                            ) : null}
+                          </p>
+                          {member.title ? (
+                            <p className="text-copy-muted text-xs">
+                              {member.title}
+                            </p>
+                          ) : null}
+                          {canReadMemberEmails && member.contactEmail ? (
+                            <p className="text-copy-muted text-xs">
+                              {member.contactEmail}
+                            </p>
+                          ) : null}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-copy-muted mb-1 text-[11px] font-semibold uppercase tracking-wide">
+                            {t["members.roles"]}
+                          </p>
+                          {granted.length === 0 ? (
+                            <p className="text-copy-muted text-xs">
+                              {t["members.noRole"]}
+                            </p>
+                          ) : (
+                            <ul className="flex flex-wrap gap-1.5">
+                              {granted.map((role) => (
+                                <li key={role.code}>
+                                  {/* The console names roles by their code, as
+                                   * the role switcher does — the code is what
+                                   * the permission matrix is written in. */}
+                                  <Chip
+                                    tone="accent"
+                                    title={role.description ?? undefined}
+                                  >
+                                    {role.code}
+                                    {role.expiresAt
+                                      ? ` · ${t["members.until"]} ${dateFormat.format(role.expiresAt)}`
+                                      : ""}
+                                  </Chip>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Card>
+          </section>
+
+          {/* A pending invitation is not a member: it is a link with an expiry
+           * date, resent or revoked on its own. Its own card says so, and gives
+           * the send form room to be read as a form. */}
           {canSeeInvitations ? (
-            <div className="border-line mt-5 border-t pt-4">
-              <p className="text-copy-muted mb-2 text-[11px] font-semibold uppercase tracking-wide">
-                {t["invite.pendingTitle"]}
-              </p>
+            <Card
+              title={`${t["invite.pendingTitle"]} (${String(invitationRows.length)})`}
+              hint={canInvite ? t["invite.hint"] : undefined}
+            >
               {invitationRows.length === 0 ? (
                 <EmptyState>{t["invite.none"]}</EmptyState>
               ) : (
-                <ul className="divide-line mb-3 divide-y">
+                <ul className="divide-line divide-y">
                   {invitationRows.map((invitation) => {
                     const expired = invitation.expiresAt.getTime() <= now;
                     return (
@@ -1201,146 +1157,183 @@ export default async function OrganizationDetailPage({
                 </ul>
               )}
               {canInvite ? (
-                <>
-                  <form
-                    action={inviteOrganizationRepresentative}
-                    className="flex flex-wrap items-end gap-2"
+                <form
+                  action={inviteOrganizationRepresentative}
+                  className="border-line mt-4 grid items-end gap-3 border-t pt-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,.8fr)_minmax(10rem,.7fr)_auto]"
+                >
+                  {localeHidden}
+                  {hidden}
+                  <Field label={t["invite.email"]}>
+                    <TextInput name="email" type="email" required />
+                  </Field>
+                  <Field
+                    label={t["invite.displayName"]}
+                    hint={t["console.optional"]}
                   >
-                    {localeHidden}
-                    {hidden}
-                    <Field label={t["invite.email"]}>
-                      <TextInput name="email" type="email" required />
-                    </Field>
-                    <Field
-                      label={t["invite.displayName"]}
-                      hint={t["console.optional"]}
-                    >
-                      <TextInput name="displayName" />
-                    </Field>
-                    <Field label={t["invite.role"]}>
-                      {/* Roles are named by code here, as everywhere else in
-                       * the console: the code is what the permission matrix is
-                       * written in. */}
-                      <Select name="roleCode" defaultValue="organization_admin">
-                        {INVITABLE_ROLE_CODES.map((code) => (
-                          <option key={code} value={code}>
-                            {code}
-                          </option>
-                        ))}
-                      </Select>
-                    </Field>
-                    <PendingButton variant="secondary">
+                    <TextInput name="displayName" />
+                  </Field>
+                  <Field label={t["invite.role"]}>
+                    {/* Roles are named by code here, as everywhere else in the
+                     * console: the code is what the permission matrix is written
+                     * in. */}
+                    <Select name="roleCode" defaultValue="organization_admin">
+                      {INVITABLE_ROLE_CODES.map((code) => (
+                        <option key={code} value={code}>
+                          {code}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <div>
+                    <PendingButton variant="secondary" className="min-w-28">
                       {t["invite.send"]}
                     </PendingButton>
-                  </form>
-                  <p className="text-copy-muted mt-2 text-xs">
-                    {t["invite.hint"]}
-                  </p>
-                </>
+                  </div>
+                </form>
               ) : null}
-            </div>
+            </Card>
           ) : null}
-        </Card>
+        </div>
 
-        <Card
-          title={`${t["section.activities"]} (${String(orgActivities.length)})`}
-          action={
-            <Link
-              href={localizedPath(
-                `/dashboard/activities?q=${encodeURIComponent(org.displayName)}`,
-                locale,
-              )}
-              className="text-copy-muted hover:text-ink inline-flex items-center gap-1.5 text-xs font-medium"
-            >
-              <Icon name="external" size={14} />
-              {t["console.open"]}
-            </Link>
-          }
-        >
-          {orgActivities.length === 0 ? (
-            <EmptyState>{t["empty.section"]}</EmptyState>
-          ) : (
-            <ul className="divide-line divide-y">
-              {orgActivities.map((activity) => (
-                <li
-                  key={activity.id}
-                  className="flex items-center justify-between py-2"
-                >
-                  <Link
-                    href={localizedPath(
-                      `/dashboard/activities?activity=${activity.id}`,
-                      locale,
-                    )}
-                    className="text-sm font-medium hover:underline"
+        {/* The public-facing text stays visible beside the record work, with
+         * all configured languages and each language's own action menu. */}
+        <aside className="grid min-w-0 gap-5 xl:col-start-2 xl:row-start-1">
+          <Card
+            title={t["section.publicProfile"]}
+            hint={t["translation.orgHint"]}
+          >
+            {canWrite ? (
+              <form
+                action={setOrganizationNarrativeLanguage}
+                className="border-line mb-4 grid items-end gap-3 border-b pb-4 sm:grid-cols-[minmax(0,1fr)_auto]"
+              >
+                {localeHidden}
+                {hidden}
+                <div className="min-w-40 flex-1">
+                  <ControlField
+                    label={t["field.sourceLanguage"]}
+                    htmlFor="narrative-source-language"
+                    hint={t["translation.sourceHint"]}
                   >
-                    {activity.name ?? t["activities.untitled"]}
-                  </Link>
-                  <Chip tone={activity.published ? "ok" : "neutral"}>
-                    {activity.published
-                      ? t["act.published"]
-                      : t["status.draft"]}
-                  </Chip>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+                    <Select
+                      id="narrative-source-language"
+                      name="sourceLanguage"
+                      defaultValue={narrativeSourceLanguage}
+                    >
+                      {editorialLanguageCodes.map((code) => (
+                        <option key={code} value={code}>
+                          {narrativeLabels[`language.${code}`]}
+                        </option>
+                      ))}
+                    </Select>
+                  </ControlField>
+                </div>
+                <PendingButton variant="secondary" className="min-w-20">
+                  {t["console.save"]}
+                </PendingButton>
+              </form>
+            ) : (
+              <div className="mb-4">
+                <ReadOnlyField
+                  label={t["field.sourceLanguage"]}
+                  value={narrativeLabels[`language.${narrativeSourceLanguage}`]}
+                />
+              </div>
+            )}
+            <OrganizationNarrativeEditor
+              locale={locale}
+              organizationId={org.id}
+              sourceLanguage={narrativeSourceLanguage}
+              languages={narrativeLanguages}
+              labels={narrativeLabels}
+              hasSource={Boolean(narrativeSource)}
+              canWrite={canWrite}
+              canRequest={canRequestTranslations}
+              canReview={canReviewTranslations}
+            />
+          </Card>
 
-        <Card title={t["section.record"]} hint={t["record.hint"]}>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <ReadOnlyField label={t["field.slug"]} value={org.slug} />
-            <ReadOnlyField label={t["field.timezone"]} value={org.timezone} />
-            <ReadOnlyField
-              label={t["org.maintainedBy"]}
-              value={
-                access.claimed
-                  ? t["org.maintainedByOrg"]
-                  : t["org.maintainedByPlatform"]
-              }
-            />
-            <ReadOnlyField
-              label={t["field.publishing"]}
-              value={
-                org.publishingSuspended
-                  ? t["field.publishingSuspended"]
-                  : t["field.publishingActive"]
-              }
-            />
-            <ReadOnlyField
-              label={t["field.createdAt"]}
-              value={dateFormat.format(org.createdAt)}
-            />
-            <ReadOnlyField
-              label={t["field.updatedAt"]}
-              value={dateFormat.format(org.updatedAt)}
-            />
-            <ReadOnlyField
-              label={t["org.claimedOn"]}
-              value={org.claimedAt ? dateFormat.format(org.claimedAt) : null}
-            />
-            <ReadOnlyField label={t["field.recordId"]} value={org.id} />
-          </div>
-        </Card>
+          {/* The contacts in the other column are published; this one never is.
+           * It is the line back to whoever knows, for an editor elsewhere in the
+           * network who finds something wrong on this record. */}
+          <Card title={t["steward.title"]} hint={t["steward.hint"]}>
+            {canWrite ? (
+              <StewardContactForm
+                action={updateOrganizationSteward}
+                locale={locale}
+                recordId={org.id}
+                values={steward}
+                labels={t}
+                columns={false}
+              />
+            ) : hasStewardContact(steward) ? (
+              <StewardContactSummary values={steward} labels={t} />
+            ) : (
+              <EmptyState>{t["steward.empty"]}</EmptyState>
+            )}
+          </Card>
 
-        {canLifecycle || (authorization.isSuperadmin && access.claimed) ? (
+          {/* Stable system metadata comes last: it supports administration,
+           * but the profile and its steward are the active editing work. */}
+          <Card title={t["section.record"]} hint={t["record.hint"]}>
+            <div className="grid gap-3">
+              <ReadOnlyField label={t["field.slug"]} value={org.slug} />
+              <ReadOnlyField label={t["field.timezone"]} value={org.timezone} />
+              <ReadOnlyField
+                label={t["org.maintainedBy"]}
+                value={
+                  access.claimed
+                    ? t["org.maintainedByOrg"]
+                    : t["org.maintainedByPlatform"]
+                }
+              />
+              <ReadOnlyField
+                label={t["field.publishing"]}
+                value={
+                  org.publishingSuspended
+                    ? t["field.publishingSuspended"]
+                    : t["field.publishingActive"]
+                }
+              />
+              <ReadOnlyField
+                label={t["field.createdAt"]}
+                value={dateFormat.format(org.createdAt)}
+              />
+              <ReadOnlyField
+                label={t["field.updatedAt"]}
+                value={dateFormat.format(org.updatedAt)}
+              />
+              <ReadOnlyField
+                label={t["org.claimedOn"]}
+                value={org.claimedAt ? dateFormat.format(org.claimedAt) : null}
+              />
+              <ReadOnlyField label={t["field.recordId"]} value={org.id} />
+            </div>
+          </Card>
+        </aside>
+      </div>
+
+      {canLifecycle || (authorization.isSuperadmin && access.claimed) ? (
+        <div className="mt-4">
           <DangerZone title={t["org.danger"]}>
             {canLifecycle ? (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-copy-muted max-w-xl text-sm">
                   {archived ? t["org.restoreHint"] : t["org.archiveHint"]}
                 </p>
-                <form action={setOrganizationArchived}>
-                  {localeHidden}
-                  {hidden}
-                  <input
-                    type="hidden"
-                    name="archive"
-                    value={archived ? "false" : "true"}
-                  />
-                  <PendingButton variant={archived ? "secondary" : "danger"}>
-                    {archived ? t["console.restore"] : t["console.archive"]}
-                  </PendingButton>
-                </form>
+                <OrganizationArchiveAction
+                  action={setOrganizationArchived}
+                  locale={locale}
+                  organizationId={org.id}
+                  archived={archived}
+                  labels={{
+                    archive: t["console.archive"],
+                    restore: t["console.restore"],
+                    cancel: t.cancel,
+                    confirmTitle: t["org.archiveConfirmTitle"],
+                    confirmBody: t["org.archiveConfirmBody"],
+                  }}
+                />
               </div>
             ) : null}
             {authorization.isSuperadmin && access.claimed ? (
@@ -1367,8 +1360,8 @@ export default async function OrganizationDetailPage({
               </form>
             ) : null}
           </DangerZone>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </WorkspacePage>
   );
 }

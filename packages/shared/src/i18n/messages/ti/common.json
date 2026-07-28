@@ -1,0 +1,11 @@
+{
+  "form.required": "ዘድሊ",
+  "form.invalid": "እዚ ዋጋ ኣረጋግጽ።",
+  "form.saveFailed": "ኣይተዓቀበን። እንደገና ፈትን።",
+  "form.tooLong": "እዚ ጽሑፍ ካብቲ ዝፍቀድ ንውሓት ይነውሕ።",
+  "form.tooShort": "እዚ ጽሑፍ ካብቲ ዝፍቀድ ንውሓት ይሓጽር።",
+  "form.endBeforeStart": "መወዳእታ ድሕሪ መጀመርታ ክኸውን ኣለዎ።",
+  "form.invalidDate": "ቅኑዕ ዕለት ኣእቱ።",
+  "form.invalidTime": "ቅኑዕ ሰዓት ኣእቱ።",
+  "form.reviewFields": "ቅድሚ ምዕቃብ ገለ ክፍልታት ምትዕርራይ ይሓቱ።"
+}

@@ -23,13 +23,15 @@ pnpm install
 cp apps/web/.env.example apps/web/.env
 apps/web/start-database.sh   # local Postgres on port 5433
 pnpm db:push                 # push-mode while tables are empty
-pnpm dev:web
+pnpm dev                     # web (API + site) and the mobile QR code together
 ```
 
 ## Commands
 
-- `pnpm dev:web` — Next.js dev server
-- `pnpm dev:mobile` — Expo dev server; the app reads the web app's public endpoints (`EXPO_PUBLIC_INFOKIT_API_URL`, see `apps/mobile/.env.example`), so run `dev:web` too
+- `pnpm dev` — everything at once: the Next.js app on port 3030 (API and site) in the background, and the Expo dev server in the foreground, where it prints the QR code that opens the app in Expo Go and keeps its own keyboard shortcuts (`i`, `a`, `r`). It is deliberately not `turbo run dev`: sharing the terminal with other tasks, Expo drops both. Scanning needs the phone on the same network as this machine; the app finds this machine's address through the dev server it loaded from, because `localhost` on a phone is the phone. Use `pnpm dev:mobile:tunnel` for the mobile half when the two are on different networks.
+- `pnpm dev:web` — the Next.js app on its own
+- `pnpm dev:mobile` — the Expo dev server on its own; it reads the web app's public endpoints (`EXPO_PUBLIC_INFOKIT_API_URL`, see `apps/mobile/.env.example`), so `dev:web` has to be running too. It takes the first free port from 8081 up, so a second one never stops to ask, and prints the QR code itself when its output is piped somewhere Expo will not draw one.
+- `pnpm ios` / `pnpm android` — the same dev server, opened straight onto a simulator or emulator
 - `pnpm check:ci` — format check + lint + typecheck; the health question
 - `pnpm db:push` / `pnpm db:generate --name <slug>` / `pnpm db:studio`
 - `pnpm test:unit` — web unit tests

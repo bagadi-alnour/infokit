@@ -1,7 +1,7 @@
 "use client";
 
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 import { Button } from "~/components/ui/button";
 import {
@@ -10,8 +10,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
-
-const informationRailStorageKey = "infokit-runbook-information-rail";
+import { useWorkspacePreferences } from "~/stores/workspace-preferences";
 
 export function RunbookInformationRail({
   main,
@@ -24,30 +23,18 @@ export function RunbookInformationRail({
   hideLabel: string;
   showLabel: string;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  /**
+   * Whether the rail stays open is a device preference, not page state: the
+   * store keeps it, persists it and rehydrates it after the workspace mounts, so
+   * this panel neither touches storage nor guesses when it is safe to read.
+   */
+  const expanded = useWorkspacePreferences(
+    (preferences) => preferences.informationRailExpanded,
+  );
+  const setExpanded = useWorkspacePreferences(
+    (preferences) => preferences.setInformationRailExpanded,
+  );
   const informationId = useId();
-
-  useEffect(() => {
-    try {
-      setExpanded(
-        window.localStorage.getItem(informationRailStorageKey) !== "collapsed",
-      );
-    } catch {
-      // Storage may be unavailable in privacy-focused browsing modes.
-    }
-  }, []);
-
-  function updateExpanded(nextExpanded: boolean) {
-    setExpanded(nextExpanded);
-    try {
-      window.localStorage.setItem(
-        informationRailStorageKey,
-        nextExpanded ? "expanded" : "collapsed",
-      );
-    } catch {
-      // The interaction still works for this page when storage is unavailable.
-    }
-  }
 
   const toggleLabel = expanded ? hideLabel : showLabel;
 
@@ -89,7 +76,7 @@ export function RunbookInformationRail({
                   aria-expanded={expanded}
                   aria-label={toggleLabel}
                   onClick={() => {
-                    updateExpanded(!expanded);
+                    setExpanded(!expanded);
                   }}
                 >
                   {expanded ? (

@@ -31,10 +31,19 @@ function serializeDate(value: Date | undefined): string {
   return `${String(year)}-${month}-${day}`;
 }
 
+/**
+ * The workspace date field: a popover calendar over a hidden `YYYY-MM-DD`
+ * input, so a form posts a date the way a `<input type="date">` would.
+ *
+ * Uncontrolled by default — most forms only need the value at submit. Pass
+ * `value` when something else owns it (React Hook Form, a linked end date), and
+ * the field follows that value, including a reset back to empty.
+ */
 export function DatePicker({
   id,
   name,
   locale,
+  value: controlledValue,
   defaultValue,
   placeholder,
   clearLabel,
@@ -47,6 +56,7 @@ export function DatePicker({
   id?: string;
   name: string;
   locale: "fr" | "en" | "ar";
+  value?: string;
   defaultValue?: string | null;
   placeholder: string;
   clearLabel: string;
@@ -57,12 +67,21 @@ export function DatePicker({
   toYear?: number;
 }) {
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState<Date | undefined>(() =>
-    parseDate(defaultValue),
+  const [uncontrolledValue, setUncontrolledValue] = useState<Date | undefined>(
+    () => parseDate(defaultValue),
   );
+  const value =
+    controlledValue === undefined
+      ? uncontrolledValue
+      : parseDate(controlledValue);
   const formatted = value
     ? new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(value)
     : null;
+
+  function setValue(nextValue: Date | undefined) {
+    if (controlledValue === undefined) setUncontrolledValue(nextValue);
+    onValueChange?.(serializeDate(nextValue));
+  }
 
   return (
     <div className="flex items-center gap-2">
@@ -92,7 +111,6 @@ export function DatePicker({
             selected={value}
             onSelect={(nextValue) => {
               setValue(nextValue);
-              onValueChange?.(serializeDate(nextValue));
               if (nextValue) setOpen(false);
             }}
             locale={calendarLocales[locale]}
@@ -110,7 +128,6 @@ export function DatePicker({
           size="icon"
           onClick={() => {
             setValue(undefined);
-            onValueChange?.("");
           }}
         >
           <X aria-hidden />

@@ -8,7 +8,6 @@ import { z } from "zod";
 import { localizedPath } from "~/i18n/routing";
 import { parisToday } from "~/lib/freshness";
 import { recordAudit } from "~/server/audit";
-import { auth } from "~/server/auth";
 import {
   getRoleTestState,
   platformPermissionsForUser,
@@ -61,16 +60,13 @@ async function eligibleToday(ids: string[]) {
     );
 }
 
-async function confirm(ids: string[], locale: Locale) {
+async function confirm(ids: string[], locale: Locale, actorId: string) {
   const eligible = await eligibleToday(ids);
   const uniqueActivities = [
     ...new Map(eligible.map((activity) => [activity.id, activity])).values(),
   ];
   if (uniqueActivities.length === 0) return;
 
-  const session = await auth();
-  const actorId = session?.user.id;
-  if (!actorId) throw new Error("Authentication required");
   const [authorization, platformPermissions] = await Promise.all([
     getRoleTestState(actorId),
     platformPermissionsForUser(actorId),
@@ -208,18 +204,22 @@ async function confirm(ids: string[], locale: Locale) {
 
 export const confirmActivityToday = protectedPermissionAction(
   "content.activity.verify",
-  async (formData, locale) => {
-    await confirm([activityIdSchema.parse(formData.get("activityId"))], locale);
+  async (formData, locale, user) => {
+    await confirm(
+      [activityIdSchema.parse(formData.get("activityId"))],
+      locale,
+      user.id,
+    );
   },
 );
 
 export const confirmActivitiesToday = protectedPermissionAction(
   "content.activity.verify",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const ids = formData
       .getAll("activityId")
       .map((value) => activityIdSchema.parse(value));
-    await confirm(ids, locale);
+    await confirm(ids, locale, user.id);
   },
 );
 

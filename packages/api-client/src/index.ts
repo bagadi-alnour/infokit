@@ -11,8 +11,18 @@
  */
 import type { PublicLocale } from "@infokit/shared/i18n";
 import type {
+  MemberAgendaPayload,
+  MemberEventPayload,
+  MemberSessionPayload,
   PublicActivityDetailPayload,
   PublicActivityListPayload,
+  PublicArticleDetailPayload,
+  PublicArticleListPayload,
+  PublicEventDetailPayload,
+  PublicEventListPayload,
+  PublicGuideDetailPayload,
+  PublicGuideListPayload,
+  PublicOrganizationDetailPayload,
 } from "@infokit/shared/public-content";
 
 export interface PublicClientOptions {
@@ -25,6 +35,11 @@ export interface PublicClientOptions {
 export interface PublicRequestOptions {
   locale?: PublicLocale;
   signal?: AbortSignal;
+}
+
+export interface AgendaRequestOptions extends PublicRequestOptions {
+  /** `YYYY-MM`. Moves the calendar's labels, never what may be read. */
+  month?: string;
 }
 
 /**
@@ -59,6 +74,16 @@ function absolute(baseUrl: string, path: string): string {
   return path.startsWith("/") ? `${baseUrl}${path}` : path;
 }
 
+/** Query string for the parameters every endpoint here understands. */
+function query(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const encoded = search.toString();
+  return encoded ? `?${encoded}` : "";
+}
+
 export interface PublicClient {
   /** Absolute URL for a site-relative link or image from a payload. */
   resolveUrl(path: string): string;
@@ -70,6 +95,31 @@ export interface PublicClient {
     slug: string,
     options?: PublicRequestOptions,
   ): Promise<PublicActivityDetailPayload | null>;
+  listArticles(
+    options?: PublicRequestOptions,
+  ): Promise<PublicArticleListPayload>;
+  /** Null when nothing is published under this slug. */
+  getArticle(
+    slug: string,
+    options?: PublicRequestOptions,
+  ): Promise<PublicArticleDetailPayload | null>;
+  listEvents(options?: AgendaRequestOptions): Promise<PublicEventListPayload>;
+  /** Null for an id that is not an event open to everyone. */
+  getEvent(
+    id: string,
+    options?: PublicRequestOptions,
+  ): Promise<PublicEventDetailPayload | null>;
+  listGuides(options?: PublicRequestOptions): Promise<PublicGuideListPayload>;
+  /** Null when nothing is published under this slug. */
+  getGuide(
+    slug: string,
+    options?: PublicRequestOptions,
+  ): Promise<PublicGuideDetailPayload | null>;
+  /** Null unless a verified organisation has published a profile there. */
+  getOrganization(
+    slug: string,
+    options?: PublicRequestOptions,
+  ): Promise<PublicOrganizationDetailPayload | null>;
 }
 
 export function createPublicClient(options: PublicClientOptions): PublicClient {
@@ -78,9 +128,9 @@ export function createPublicClient(options: PublicClientOptions): PublicClient {
 
   async function request<Payload>(
     path: string,
-    { locale, signal }: PublicRequestOptions = {},
+    { locale, signal, ...rest }: AgendaRequestOptions = {},
   ): Promise<Payload> {
-    const url = `${baseUrl}${path}${locale ? `?locale=${locale}` : ""}`;
+    const url = `${baseUrl}${path}${query({ locale, month: rest.month })}`;
     let response: Response;
     try {
       response = await fetchImpl(url, {
@@ -139,5 +189,177 @@ export function createPublicClient(options: PublicClientOptions): PublicClient {
         `/api/public/activities/${encodeURIComponent(slug)}`,
         requestOptions,
       ),
+    listArticles: (requestOptions) =>
+      request<PublicArticleListPayload>("/api/public/articles", requestOptions),
+    getArticle: (slug, requestOptions) =>
+      requestOptional<PublicArticleDetailPayload>(
+        `/api/public/articles/${encodeURIComponent(slug)}`,
+        requestOptions,
+      ),
+    listEvents: (requestOptions) =>
+      request<PublicEventListPayload>("/api/public/events", requestOptions),
+    getEvent: (id, requestOptions) =>
+      requestOptional<PublicEventDetailPayload>(
+        `/api/public/events/${encodeURIComponent(id)}`,
+        requestOptions,
+      ),
+    listGuides: (requestOptions) =>
+      request<PublicGuideListPayload>("/api/public/guides", requestOptions),
+    getGuide: (slug, requestOptions) =>
+      requestOptional<PublicGuideDetailPayload>(
+        `/api/public/guides/${encodeURIComponent(slug)}`,
+        requestOptions,
+      ),
+    getOrganization: (slug, requestOptions) =>
+      requestOptional<PublicOrganizationDetailPayload>(
+        `/api/public/organizations/${encodeURIComponent(slug)}`,
+        requestOptions,
+      ),
+  };
+}
+
+/**
+ * The members' client. It is a separate object from the public one on purpose:
+ * every call here carries a device session token, nothing it returns may be
+ * cached, and a 401 means one specific thing — sign in again. Keeping the two
+ * apart means a public screen cannot accidentally send a token, and a member
+ * screen cannot accidentally forget one.
+ */
+export interface MemberClientOptions extends PublicClientOptions {
+  /** Reads the stored token; null while nobody is signed in on this device. */
+  token: () => Promise<string | null> | string | null;
+}
+
+/** The device session is gone: expired, revoked, or never there. */
+export class MemberSignedOutError extends Error {
+  constructor() {
+    super("This device is not signed in.");
+    this.name = "MemberSignedOutError";
+  }
+}
+
+export interface MemberClient {
+  /** Who is reading this device — or the door's words when nobody is. */
+  session(options?: PublicRequestOptions): Promise<MemberSessionPayload>;
+  agenda(options?: AgendaRequestOptions): Promise<MemberAgendaPayload>;
+  /** Null when this member may not read that event, or it does not exist. */
+  event(
+    id: string,
+    options?: PublicRequestOptions,
+  ): Promise<MemberEventPayload | null>;
+  /** Trade a hand-off code for a device session token. */
+  exchange(
+    code: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<{ token: string; expiresAt: string }>;
+  /** Ends the session on the server, not only on the phone. */
+  signOut(options?: { signal?: AbortSignal }): Promise<void>;
+}
+
+export function createMemberClient(options: MemberClientOptions): MemberClient {
+  const baseUrl = normalizeBaseUrl(options.baseUrl);
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+
+  async function call<Payload>(
+    path: string,
+    {
+      method = "GET",
+      body,
+      signal,
+      authenticated = true,
+    }: {
+      method?: string;
+      body?: unknown;
+      signal?: AbortSignal;
+      authenticated?: boolean;
+    } = {},
+  ): Promise<Payload> {
+    const headers: Record<string, string> = { accept: "application/json" };
+    if (authenticated) {
+      const token = await options.token();
+      if (!token) throw new MemberSignedOutError();
+      headers.authorization = `Bearer ${token}`;
+    }
+    if (body !== undefined) headers["content-type"] = "application/json";
+
+    const url = `${baseUrl}${path}`;
+    let response: Response;
+    try {
+      response = await fetchImpl(url, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal,
+      });
+    } catch (cause) {
+      if (cause instanceof Error && cause.name === "AbortError") throw cause;
+      throw new PublicApiError("The request did not reach the server.", {
+        status: 0,
+        url,
+      });
+    }
+    // A revoked session is not a failure to retry: it is a sign-in to redo.
+    if (response.status === 401) throw new MemberSignedOutError();
+    if (response.status === 204) return undefined as Payload;
+    if (!response.ok) {
+      throw new PublicApiError(
+        `The server answered ${String(response.status)}.`,
+        { status: response.status, url },
+      );
+    }
+    try {
+      return (await response.json()) as Payload;
+    } catch {
+      throw new PublicApiError("The server answer was not readable JSON.", {
+        status: response.status,
+        url,
+      });
+    }
+  }
+
+  return {
+    async session({ locale, signal } = {}) {
+      const token = await options.token();
+      // Signed out is an answer here, so the call goes out either way — with a
+      // token when there is one, and plain when there is not.
+      const url = `/api/member/session${query({ locale })}`;
+      return token
+        ? call<MemberSessionPayload>(url, { signal })
+        : call<MemberSessionPayload>(url, { signal, authenticated: false });
+    },
+    agenda: ({ locale, month, signal } = {}) =>
+      call<MemberAgendaPayload>(
+        `/api/member/agenda${query({ locale, month })}`,
+        { signal },
+      ),
+    async event(id, { locale, signal } = {}) {
+      try {
+        return await call<MemberEventPayload>(
+          `/api/member/events/${encodeURIComponent(id)}${query({ locale })}`,
+          { signal },
+        );
+      } catch (cause) {
+        if (cause instanceof PublicApiError && cause.status === 404)
+          return null;
+        throw cause;
+      }
+    },
+    exchange: (code, { signal } = {}) =>
+      call<{ token: string; expiresAt: string }>(
+        "/api/member/device/exchange",
+        { method: "POST", body: { code }, signal, authenticated: false },
+      ),
+    async signOut({ signal } = {}) {
+      try {
+        await call<unknown>("/api/member/session", {
+          method: "DELETE",
+          signal,
+        });
+      } catch (cause) {
+        // Already signed out is the outcome the caller wanted.
+        if (cause instanceof MemberSignedOutError) return;
+        throw cause;
+      }
+    },
   };
 }

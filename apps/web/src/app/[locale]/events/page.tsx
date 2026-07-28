@@ -19,7 +19,10 @@ import {
   inlineLinkClass,
 } from "~/components/public/primitives";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
-import { languageAlternates, localizedPath } from "~/i18n/routing";
+import { JsonLd } from "~/components/seo/json-ld";
+import { localizedPath } from "~/i18n/routing";
+import { publicMetadata } from "~/seo/metadata";
+import { eventJsonLd } from "~/seo/structured-data";
 import { cn } from "~/lib/utils";
 import {
   listPastPublicCoordinationEvents,
@@ -38,10 +41,20 @@ import {
 } from "~/server/content/event-presentation";
 import { eventIcsHref, eventMapHref } from "~/lib/event-links";
 
-export const metadata: Metadata = {
-  title: "Events",
-  alternates: { languages: languageAlternates("/events") },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const locale = requirePublicRouteLocale((await params).locale);
+  const messages = await loadPageCatalog(locale, "public-content");
+  return publicMetadata({
+    path: "/events",
+    locale,
+    title: messages["events.title"],
+    description: messages["events.description"],
+  });
+}
 
 /**
  * The public agenda: only events an organisation deliberately opened to
@@ -157,10 +170,33 @@ export default async function PublicEventsPage({
 
   return (
     <PublicSiteShell locale={locale} currentPath="/events" messages={messages}>
+      {/* Each upcoming event as its own node rather than one list: this is the
+       * shape that becomes an event result, and a past event has nothing left
+       * to announce. */}
+      <JsonLd
+        data={upcoming.map((event) =>
+          eventJsonLd({
+            locale,
+            id: event.id,
+            name: event.title,
+            description: event.description,
+            startsAt: event.startsAt,
+            endsAt: event.endsAt,
+            cancelled: event.status === "cancelled",
+            hostName: event.hostName,
+            placeName:
+              eventWhereLabel(event) ?? cityById.get(event.cityId)?.name,
+            address: event.placeAddressLine,
+            precision: event.placePrecision,
+            image: media.get(event.id)?.cover?.url,
+          }),
+        )}
+      />
       <PublicPageHeader
         eyebrow={messages["events.eyebrow"]}
         title={messages["events.title"]}
         description={messages["events.description"]}
+        family="event"
       >
         {/* Both views are plain links: they work with JavaScript off and can be
          * bookmarked, which matters on a shared or borrowed phone. */}

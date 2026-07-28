@@ -7,7 +7,7 @@ import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import {
-  isRtlEditorialLanguage,
+  editorialTextDirection,
   type EditorialLanguage,
 } from "~/lib/editorial-languages";
 
@@ -53,11 +53,9 @@ export function SimulatorTranslationAssignment({
     [];
   const editable =
     assignment.state === "requested" || assignment.state === "draft";
-  const targetDirection = isRtlEditorialLanguage(
+  const targetDirection = editorialTextDirection(
     assignment.targetLanguage as EditorialLanguage,
-  )
-    ? "rtl"
-    : "ltr";
+  );
 
   return (
     <main className="mx-auto min-h-dvh max-w-7xl px-4 py-8 md:px-6">
@@ -125,13 +123,9 @@ export function SimulatorTranslationAssignment({
                   <div
                     className="border-line bg-subtle grid content-start gap-4 rounded-xl border p-4"
                     lang={assignment.sourceLanguage}
-                    dir={
-                      isRtlEditorialLanguage(
-                        assignment.sourceLanguage as EditorialLanguage,
-                      )
-                        ? "rtl"
-                        : "ltr"
-                    }
+                    dir={editorialTextDirection(
+                      assignment.sourceLanguage as EditorialLanguage,
+                    )}
                   >
                     {[
                       sourceNode.explanation,

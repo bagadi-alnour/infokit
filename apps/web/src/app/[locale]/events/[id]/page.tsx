@@ -1,3 +1,4 @@
+import type { PublicLocale } from "@infokit/shared/i18n";
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import {
   ArrowLeft,
@@ -10,6 +11,7 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { ContactValue, contactIcon } from "~/components/public/contact-value";
 import {
@@ -25,9 +27,12 @@ import {
   PublicPageHeader,
   PublicSiteShell,
 } from "~/components/public/public-site-shell";
+import { JsonLd } from "~/components/seo/json-ld";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { eventIcsHref, eventMapHref } from "~/lib/event-links";
+import { metaDescription, publicMetadata } from "~/seo/metadata";
+import { breadcrumbJsonLd, eventJsonLd } from "~/seo/structured-data";
 import { findPublicCoordinationEvent } from "~/server/content/coordination-events";
 import { publicEventMediaFor } from "~/server/content/event-media";
 import {
@@ -36,11 +41,40 @@ import {
   listCityViews,
 } from "~/server/content/event-presentation";
 
-export const metadata: Metadata = {
-  title: "Event",
-};
-
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+interface PublicEventPageProps {
+  params: Promise<{ locale: string; id: string }>;
+}
+
+/** Shared by `generateMetadata` and the page, so describing costs no query. */
+const loadEvent = cache(
+  async (eventId: string, locale: PublicLocale) =>
+    await findPublicCoordinationEvent({ eventId, locale }),
+);
+
+export async function generateMetadata({
+  params,
+}: PublicEventPageProps): Promise<Metadata> {
+  const { locale: localeParam, id } = await params;
+  const locale = requirePublicRouteLocale(localeParam);
+  if (!UUID.test(id)) return {};
+  const [event, messages] = await Promise.all([
+    loadEvent(id, locale),
+    loadPageCatalog(locale, "public-content"),
+  ]);
+  if (!event) return {};
+
+  return publicMetadata({
+    path: `/events/${id}`,
+    locale,
+    title: event.title,
+    description: metaDescription(
+      event.description,
+      messages["events.description"],
+    ),
+  });
+}
 
 /**
  * One public event on its own page, so it can be shared as a link. Only the
@@ -49,16 +83,14 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export default async function PublicEventPage({
   params,
-}: {
-  params: Promise<{ locale: string; id: string }>;
-}) {
+}: PublicEventPageProps) {
   const { locale: localeParam, id } = await params;
   const locale = requirePublicRouteLocale(localeParam);
   const messages = await loadPageCatalog(locale, "public-content");
   // An id that cannot be a uuid is a wrong link, not a database question.
   if (!UUID.test(id)) notFound();
   const [event, cityList, media] = await Promise.all([
-    findPublicCoordinationEvent({ eventId: id, locale }),
+    loadEvent(id, locale),
     listCityViews(locale),
     publicEventMediaFor({ eventId: id, locale }),
   ]);
@@ -83,9 +115,36 @@ export default async function PublicEventPage({
       messages={messages}
       width="reading"
     >
+      <JsonLd
+        data={[
+          eventJsonLd({
+            locale,
+            id,
+            name: event.title,
+            description: event.description,
+            startsAt: event.startsAt,
+            endsAt: event.endsAt,
+            cancelled: event.status === "cancelled",
+            hostName: event.hostName,
+            placeName: where ?? city?.name,
+            address: event.placeAddressLine,
+            precision: event.placePrecision,
+            image: media.cover?.url,
+          }),
+          breadcrumbJsonLd({
+            locale,
+            trail: [
+              { name: messages["public.nav.home"], path: "/" },
+              { name: messages["events.title"], path: "/events" },
+              { name: event.title, path: `/events/${id}` },
+            ],
+          }),
+        ]}
+      />
       <PublicPageHeader
         eyebrow={messages["events.eyebrow"]}
         title={event.title}
+        family="event"
         actions={
           <ActionLink
             href={localizedPath("/events", locale)}

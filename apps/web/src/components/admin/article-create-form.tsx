@@ -1,5 +1,6 @@
 "use client";
 
+import { type Locale } from "@infokit/shared/i18n";
 import {
   ArrowLeft,
   FileImage,
@@ -9,44 +10,35 @@ import {
   MapPin,
   Plus,
   Tag,
-  X,
 } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { createArticle } from "~/app/[locale]/dashboard/articles/actions";
 import { createArticleImageUpload } from "~/app/[locale]/dashboard/articles/image-actions";
 import { createArticleTag } from "~/app/[locale]/dashboard/articles/tag-actions";
+import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import {
-  isPermissionDeniedError,
-  useActionErrorToast,
-} from "~/components/admin/admin-ui-provider";
+  CoverImageField,
+  coverImageLabels,
+} from "~/components/admin/cover-image-field";
 import {
-  CoverImagePreview,
-  useCoverImagePreview,
-} from "~/components/admin/cover-image-preview";
+  CheckboxFormField,
+  DateFormField,
+  FormSubmitButton,
+  SearchableMultiSelectFormField,
+  SearchableSelectFormField,
+  SelectFormField,
+  TextFormField,
+} from "~/components/admin/form-field";
 import { GlobalTagManager } from "~/components/admin/global-tag-manager";
-import {
-  ArticleContentFields,
-  emptyArticleContent,
-} from "~/components/admin/article-content-fields";
-import {
-  SearchableMultiSelect,
-  SearchableSelect,
-} from "~/components/admin/searchable-select";
-import { PendingButton } from "~/components/pending-button";
 import { PublicationChoice } from "~/components/admin/publication-choice";
 import {
-  Attachment,
-  AttachmentAction,
-  AttachmentActions,
-  AttachmentContent,
-  AttachmentDescription,
-  AttachmentMedia,
-  AttachmentTitle,
-  AttachmentTrigger,
-} from "~/components/ui/attachment";
+  articleFieldNames,
+  TranslationWorkspace,
+} from "~/components/admin/translation-workspace";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -56,18 +48,18 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { Checkbox } from "~/components/ui/checkbox";
-import { DatePicker } from "~/components/ui/date-picker";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import { SelectField } from "~/components/ui/select-field";
 import { Separator } from "~/components/ui/separator";
 import {
-  editorialLanguageCodes,
-  type EditorialLanguage,
-} from "~/lib/editorial-languages";
-
-type SourceLanguage = EditorialLanguage;
+  useFormMessages,
+  useServerFormAction,
+  useWorkspaceForm,
+} from "~/hooks/use-workspace-form";
+import { articleScopes } from "~/lib/article-scope";
+import { editorialLanguageCodes } from "~/lib/editorial-languages";
+import { readLabel, type FormMessages, type Labels } from "~/lib/form-messages";
+import { slugPattern } from "~/lib/slug";
 
 export interface ArticleFormOption {
   id: string;
@@ -76,8 +68,74 @@ export interface ArticleFormOption {
   organizationId?: string | null;
 }
 
-function label(labels: Record<string, string>, key: string) {
-  return labels[key] ?? key;
+/**
+ * The article as this form holds it: one field per `FormData` key `createArticle`
+ * reads, so what the editor filled in and what the action parses cannot describe
+ * different articles.
+ *
+ * The source text is not here. `TranslationWorkspace` owns the title, summary and
+ * body for every language and posts its own inputs, so the required-title rule
+ * stays where that editor lives; this schema covers the decisions around the
+ * text — reach, owner, tags, dates and freshness — including the two the action
+ * throws on, which an editor deserves to hear before saving rather than after.
+ */
+function articleFormSchema(messages: FormMessages, slugInvalid: string) {
+  const optional = z.string();
+  return z
+    .object({
+      sourceLanguage: z.enum(editorialLanguageCodes),
+      slug: z
+        .string()
+        .regex(slugPattern, slugInvalid)
+        .max(160, messages.tooLong),
+      scope: z.enum(articleScopes),
+      cityId: optional,
+      organizationId: optional,
+      // The chips input already stops at three; the server agrees, so the form
+      // says so too rather than letting a fourth tag fail the save.
+      tagIds: z.array(z.string()).max(3, messages.invalid),
+      articleDate: optional,
+      featured: z.boolean(),
+      canBecomeOutdated: z.boolean(),
+      unreliableFrom: optional,
+    })
+    .superRefine((values, context) => {
+      if (values.scope === "city" && values.cityId === "") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cityId"],
+          message: messages.required,
+        });
+      }
+      if (values.canBecomeOutdated && values.unreliableFrom === "") {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["unreliableFrom"],
+          message: messages.required,
+        });
+      }
+    });
+}
+
+type ArticleFieldValues = z.infer<ReturnType<typeof articleFormSchema>>;
+
+/** A new article starts global, French, and a draft. */
+const articleDefaults: ArticleFieldValues = {
+  sourceLanguage: "fr",
+  slug: "",
+  scope: "global",
+  cityId: "",
+  organizationId: "",
+  tagIds: [],
+  articleDate: "",
+  featured: false,
+  canBecomeOutdated: false,
+  unreliableFrom: "",
+};
+
+/** A tag is offered when it is platform-wide or belongs to the chosen owner. */
+function tagBelongsTo(tag: ArticleFormOption, organizationId: string) {
+  return tag.organizationId === null || tag.organizationId === organizationId;
 }
 
 export function ArticleCreateForm({
@@ -88,131 +146,110 @@ export function ArticleCreateForm({
   tags,
   globalTags = [],
   canManageGlobalTags = false,
+  canPublish = false,
   labels,
+  editorLabels,
+  aiEnabled,
 }: {
-  locale: string;
+  locale: Locale;
   articlesPath: string;
   organizations: ArticleFormOption[];
   cities: ArticleFormOption[];
   tags: ArticleFormOption[];
   globalTags?: { id: string; label: string; active: boolean }[];
   canManageGlobalTags?: boolean;
-  labels: Record<string, string>;
+  /**
+   * Whether this editor may put an article in front of readers from this form.
+   * Publishing straight from a creation form means nobody has reviewed it, which
+   * belongs to whoever holds the platform's own check; everyone else sends it up
+   * the chain instead, so the two publishing choices are simply not offered.
+   */
+  canPublish?: boolean;
+  labels: Labels;
+  /** The workspace's own vocabulary; see `~/lib/workspace-labels`. */
+  editorLabels: Labels;
+  /** False when no AI translation provider is configured for this deployment. */
+  aiEnabled: boolean;
 }) {
-  const [organizationId, setOrganizationId] = useState("");
-  const [scope, setScope] = useState<"global" | "city">("global");
-  const [cityId, setCityId] = useState("");
-  const [sourceLanguage, setSourceLanguage] = useState<SourceLanguage>("fr");
+  const copy = (key: string) => readLabel(labels, key);
+  const messages = useFormMessages(labels);
+  const schema = useMemo(
+    () => articleFormSchema(messages, readLabel(labels, "field.slugInvalid")),
+    [labels, messages],
+  );
+  const form = useWorkspaceForm({ schema, defaultValues: articleDefaults });
+  const { formProps } = useServerFormAction({
+    form,
+    action: createArticle,
+    errorMessage: copy("toast.createError"),
+    // The form is two columns and five cards tall, so the field holding the
+    // submit back is often off screen.
+    invalidMessage: messages.reviewFields,
+  });
+
+  // Tags an editor creates from here, and the box they type them in: a label on
+  // its way to becoming a tag is not part of the article, so it stays local.
   const [availableTags, setAvailableTags] = useState(tags);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [newTagLabel, setNewTagLabel] = useState("");
   const [creatingTag, setCreatingTag] = useState(false);
-  const [canOutdate, setCanOutdate] = useState(false);
-  const [slug, setSlug] = useState("");
-  const [coverAssetId, setCoverAssetId] = useState("");
-  const [coverFileName, setCoverFileName] = useState("");
-  const [coverAlt, setCoverAlt] = useState("");
-  const [rightsConfirmed, setRightsConfirmed] = useState(false);
-  const [imageState, setImageState] = useState<
-    "idle" | "uploading" | "done" | "error"
-  >("idle");
-  const coverInputRef = useRef<HTMLInputElement>(null);
   const showActionError = useActionErrorToast();
-  const { previewSrc, showFile, clearPreview } = useCoverImagePreview();
+
+  const sourceLanguage = form.watch("sourceLanguage");
+  const slug = form.watch("slug");
+  const scope = form.watch("scope");
+  const organizationId = form.watch("organizationId");
+  const canOutdate = form.watch("canBecomeOutdated");
+
+  const offeredTags = useMemo(
+    () => availableTags.filter((tag) => tagBelongsTo(tag, organizationId)),
+    [availableTags, organizationId],
+  );
+  useEffect(() => {
+    // A tag belongs to one organisation, so changing the owner drops a tag the
+    // new owner does not have instead of posting a tag it may not use.
+    const selected = form.getValues("tagIds");
+    const kept = selected.filter((tagId) =>
+      offeredTags.some((tag) => tag.id === tagId),
+    );
+    if (kept.length === selected.length) return;
+    form.setValue("tagIds", kept, { shouldDirty: true });
+  }, [form, offeredTags]);
 
   const addTag = async () => {
     const nextLabel = newTagLabel.trim();
     if (!nextLabel || creatingTag) return;
     setCreatingTag(true);
     try {
-      const formData = new FormData();
-      formData.set("locale", locale);
-      formData.set("label", nextLabel);
-      formData.set("organizationId", organizationId);
-      const created = await createArticleTag(formData);
+      const request = new FormData();
+      request.set("locale", locale);
+      request.set("label", nextLabel);
+      request.set("organizationId", organizationId);
+      const created = await createArticleTag(request);
       setAvailableTags((current) => {
         const withoutCreated = current.filter((tag) => tag.id !== created.id);
         return [...withoutCreated, created].sort((left, right) =>
           left.label.localeCompare(right.label, locale),
         );
       });
-      setSelectedTags((current) =>
-        current.includes(created.id) || current.length >= 3
-          ? current
-          : [...current, created.id],
-      );
+      const selected = form.getValues("tagIds");
+      const room = !selected.includes(created.id) && selected.length < 3;
+      if (room) {
+        form.setValue("tagIds", [...selected, created.id], {
+          shouldDirty: true,
+        });
+      }
       setNewTagLabel("");
-      toast.success(
-        label(
-          labels,
-          selectedTags.length >= 3 ? "tag.createdNotSelected" : "tag.created",
-        ),
-      );
+      toast.success(copy(room ? "tag.created" : "tag.createdNotSelected"));
     } catch (error) {
-      showActionError(error, label(labels, "tag.createError"));
+      showActionError(error, copy("tag.createError"));
     } finally {
       setCreatingTag(false);
     }
   };
 
-  const uploadCover = async (file: File | undefined) => {
-    if (!file) return;
-    setCoverFileName(file.name);
-    setImageState("uploading");
-    try {
-      const uploadRequest = new FormData();
-      uploadRequest.set("locale", locale);
-      uploadRequest.set("mimeType", file.type);
-      uploadRequest.set("byteSize", String(file.size));
-      uploadRequest.set("languageCode", sourceLanguage);
-      uploadRequest.set("altText", coverAlt);
-      uploadRequest.set("rightsConfirmed", rightsConfirmed ? "true" : "false");
-      const upload = await createArticleImageUpload(uploadRequest);
-      const response = await fetch(upload.uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!response.ok) throw new Error("Upload failed");
-      setCoverAssetId(upload.assetId);
-      showFile(file);
-      setImageState("done");
-    } catch (error) {
-      setCoverAssetId("");
-      setImageState(isPermissionDeniedError(error) ? "idle" : "error");
-      showActionError(error, label(labels, "image.error"));
-    }
-  };
-
-  const clearCover = () => {
-    setCoverAssetId("");
-    setCoverFileName("");
-    setImageState("idle");
-    clearPreview();
-    if (coverInputRef.current) coverInputRef.current.value = "";
-  };
-
-  const chooseCover = () => {
-    if (!coverInputRef.current) return;
-    coverInputRef.current.value = "";
-    coverInputRef.current.click();
-  };
-
-  const canChooseCover =
-    coverAlt.trim().length > 0 && rightsConfirmed && imageState !== "uploading";
-  const attachmentDescription =
-    imageState === "uploading"
-      ? label(labels, "image.uploading")
-      : imageState === "done"
-        ? label(labels, "image.uploaded").replace("{name}", coverFileName)
-        : imageState === "error"
-          ? label(labels, "image.error")
-          : label(labels, "image.constraints");
-
   return (
-    <form action={createArticle} className="grid gap-6">
+    <form {...formProps} className="grid gap-6">
       <input type="hidden" name="locale" value={locale} />
-      <input type="hidden" name="coverAssetId" value={coverAssetId} />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
@@ -224,7 +261,7 @@ export function ArticleCreateForm({
             className="-ms-2"
           >
             <ArrowLeft aria-hidden />
-            {label(labels, "create.back")}
+            {copy("create.back")}
           </Button>
           <div className="flex items-center gap-3">
             <span className="bg-brand-soft text-brand flex size-10 items-center justify-center rounded-lg">
@@ -232,440 +269,293 @@ export function ArticleCreateForm({
             </span>
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">
-                {label(labels, "create.title")}
+                {copy("create.title")}
               </h1>
               <p className="text-copy-muted mt-1 max-w-2xl text-sm">
-                {label(labels, "create.hint")}
+                {copy("create.hint")}
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>{label(labels, "create.contentHeading")}</CardTitle>
-            <CardDescription>
-              {label(labels, "create.contentHint")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="article-source-language">
-                  {label(labels, "field.sourceLanguage")}
-                </FieldLabel>
-                <SelectField
-                  id="article-source-language"
-                  name="sourceLanguage"
-                  value={sourceLanguage}
-                  onValueChange={(next) => {
-                    setSourceLanguage(next as SourceLanguage);
-                  }}
-                >
-                  {editorialLanguageCodes.map((language) => (
-                    <option key={language} value={language}>
-                      {label(labels, `language.${language}`)}
-                    </option>
-                  ))}
-                </SelectField>
-                <FieldDescription>
-                  {label(labels, "field.sourceLanguageHint")}
-                </FieldDescription>
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="article-slug">
-                  {label(labels, "field.slug")}
-                </FieldLabel>
-                <Input
-                  id="article-slug"
-                  name="slug"
-                  value={slug}
-                  onChange={(event) => {
-                    setSlug(event.target.value);
-                  }}
-                  autoComplete="off"
-                  placeholder={label(labels, "field.slugPlaceholder")}
-                  pattern="[a-z0-9\-]*"
-                />
-                <FieldDescription>
-                  {label(labels, "field.slugHint")}
-                </FieldDescription>
-                <p className="text-copy-muted truncate text-xs" dir="ltr">
-                  /{sourceLanguage}/articles/
-                  {slug || label(labels, "field.slugPreview")}
-                </p>
-              </Field>
-            </div>
-            <Separator />
-            <ArticleContentFields
-              key={sourceLanguage}
-              interfaceLocale={locale}
-              sourceLanguage={sourceLanguage}
-              initial={emptyArticleContent}
-              labels={labels}
+      {/* Content spans the full width: the source pane and the language
+       * accordion each need the room, and everything below it is short-field
+       * work that reads fine in two columns. */}
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>{copy("create.contentHeading")}</CardTitle>
+          <CardDescription>{copy("create.contentHint")}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectFormField
+              control={form.control}
+              name="sourceLanguage"
+              label={copy("field.sourceLanguage")}
+              description={copy("field.sourceLanguageHint")}
+            >
+              {editorialLanguageCodes.map((language) => (
+                <option key={language} value={language}>
+                  {copy(`language.${language}`)}
+                </option>
+              ))}
+            </SelectFormField>
+            <TextFormField
+              control={form.control}
+              name="slug"
+              label={copy("field.slug")}
+              description={
+                <>
+                  {copy("field.slugHint")}
+                  <span className="mt-1 block truncate" dir="ltr">
+                    /{sourceLanguage}/articles/
+                    {slug || copy("field.slugPreview")}
+                  </span>
+                </>
+              }
+              autoComplete="off"
+              placeholder={copy("field.slugPlaceholder")}
             />
-          </CardContent>
-        </Card>
+          </div>
+          <Separator />
+          {/* Keyed on the source language: switching it rebuilds the editor
+           * around the new source text instead of relabelling the old one. */}
+          <TranslationWorkspace
+            key={sourceLanguage}
+            entityKind="editorial_entry"
+            organizationId={organizationId || undefined}
+            interfaceLocale={locale}
+            sourceLanguage={sourceLanguage}
+            labels={editorLabels}
+            aiEnabled={aiEnabled}
+            names={articleFieldNames}
+            fields={{ summary: true }}
+            media={
+              <Card>
+                <CardHeader className="border-b">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileImage aria-hidden />
+                    {copy("image.heading")}
+                  </CardTitle>
+                  <CardDescription>{copy("image.hint")}</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  <CoverImageField
+                    locale={locale}
+                    sourceLanguage={sourceLanguage}
+                    createUpload={createArticleImageUpload}
+                    labels={coverImageLabels(labels, "image")}
+                  />
+                </CardContent>
+              </Card>
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="grid gap-6">
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>{copy("create.scopeHeading")}</CardTitle>
+              <CardDescription>{copy("create.scopeHint")}</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <SelectFormField
+                control={form.control}
+                name="scope"
+                label={copy("scope.type")}
+                description={
+                  <span className="flex gap-2">
+                    {scope === "global" ? (
+                      <Globe2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    ) : (
+                      <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    )}
+                    {copy(
+                      scope === "global"
+                        ? "scope.globalHint"
+                        : "scope.cityHint",
+                    )}
+                  </span>
+                }
+              >
+                <option value="global">{copy("scope.global")}</option>
+                <option value="city">{copy("scope.city")}</option>
+              </SelectFormField>
+              {/* A city-scoped article needs its city, so the field only exists
+               * while the answer matters — and only then does it post. */}
+              {scope === "city" ? (
+                <SearchableSelectFormField
+                  control={form.control}
+                  name="cityId"
+                  label={copy("field.city")}
+                  options={cities.map((city) => ({
+                    value: city.id,
+                    label: city.label,
+                  }))}
+                  placeholder={copy("field.cityPlaceholder")}
+                  emptyLabel={copy("noMatch")}
+                  required
+                />
+              ) : null}
+              <SearchableSelectFormField
+                control={form.control}
+                name="organizationId"
+                label={copy("field.organization")}
+                description={copy("field.organizationHint")}
+                options={[
+                  { value: "", label: copy("scope.platform") },
+                  ...organizations.map((organization) => ({
+                    value: organization.id,
+                    label: organization.label,
+                  })),
+                ]}
+                placeholder={copy("scope.platform")}
+                emptyLabel={copy("noMatch")}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>{copy("create.classificationHeading")}</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {offeredTags.length > 0 ? (
+                <SearchableMultiSelectFormField
+                  control={form.control}
+                  name="tagIds"
+                  label={copy("field.tags")}
+                  description={copy("field.tagsHint")}
+                  options={offeredTags.map((tag) => ({
+                    value: tag.id,
+                    label: tag.label,
+                    description: tag.description,
+                  }))}
+                  placeholder={copy("field.tagsPlaceholder")}
+                  emptyLabel={copy("noMatch")}
+                  maxSelections={3}
+                />
+              ) : (
+                <Field className="gap-1">
+                  <FieldLabel>{copy("field.tags")}</FieldLabel>
+                  <p className="text-copy-muted text-sm">
+                    {copy("field.tagsEmpty")}
+                  </p>
+                  <FieldDescription className="text-copy-muted text-xs">
+                    {copy("field.tagsHint")}
+                  </FieldDescription>
+                </Field>
+              )}
+              <div className="border-line bg-subtle grid gap-2 rounded-lg border p-3">
+                <p className="text-copy-muted text-xs">
+                  {copy("tag.createHint")}
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={newTagLabel}
+                    onChange={(event) => {
+                      setNewTagLabel(event.target.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      // Enter here creates a tag; it must not also submit the
+                      // article the editor is still writing.
+                      event.preventDefault();
+                      void addTag();
+                    }}
+                    maxLength={120}
+                    aria-label={copy("tag.newLabel")}
+                    placeholder={copy("tag.newPlaceholder")}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={!newTagLabel.trim() || creatingTag}
+                    onClick={() => void addTag()}
+                  >
+                    {creatingTag ? (
+                      <LoaderCircle className="animate-spin" aria-hidden />
+                    ) : (
+                      <Tag aria-hidden />
+                    )}
+                    {copy("tag.create")}
+                  </Button>
+                </div>
+              </div>
+              {canManageGlobalTags ? (
+                <GlobalTagManager
+                  locale={locale}
+                  tags={globalTags}
+                  labels={labels}
+                />
+              ) : null}
+              <DateFormField
+                control={form.control}
+                name="articleDate"
+                label={copy("field.articleDate")}
+                description={copy("field.articleDateHint")}
+                locale={locale}
+                placeholder={copy("date.select")}
+                clearLabel={copy("date.clear")}
+              />
+              <CheckboxFormField
+                control={form.control}
+                name="featured"
+                label={copy("field.featured")}
+                description={copy("field.featuredHint")}
+                className="border-line bg-subtle rounded-lg border p-3"
+              />
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="grid gap-6 xl:sticky xl:top-6">
           <Card>
             <CardHeader className="border-b">
-              <CardTitle>{label(labels, "create.scopeHeading")}</CardTitle>
-              <CardDescription>
-                {label(labels, "create.scopeHint")}
-              </CardDescription>
+              <CardTitle>{copy("freshness.question")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
-              <Field>
-                <FieldLabel htmlFor="article-scope">
-                  {label(labels, "scope.type")}
-                </FieldLabel>
-                <SelectField
-                  id="article-scope"
-                  name="scope"
-                  value={scope}
-                  onValueChange={(next) => {
-                    setScope(next as "global" | "city");
-                  }}
-                >
-                  <option value="global">
-                    {label(labels, "scope.global")}
-                  </option>
-                  <option value="city">{label(labels, "scope.city")}</option>
-                </SelectField>
-                <FieldDescription className="flex gap-2">
-                  {scope === "global" ? (
-                    <Globe2 className="mt-0.5 size-4 shrink-0" aria-hidden />
-                  ) : (
-                    <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
-                  )}
-                  {label(
-                    labels,
-                    scope === "global" ? "scope.globalHint" : "scope.cityHint",
-                  )}
-                </FieldDescription>
-              </Field>
-              {scope === "city" ? (
-                <Field>
-                  <FieldLabel>{label(labels, "field.city")}</FieldLabel>
-                  <SearchableSelect
-                    name="cityId"
-                    options={cities.map((city) => ({
-                      value: city.id,
-                      label: city.label,
-                    }))}
-                    value={cityId}
-                    onValueChange={setCityId}
-                    label={label(labels, "field.city")}
-                    placeholder={label(labels, "field.cityPlaceholder")}
-                    emptyLabel={label(labels, "noMatch")}
-                    required
-                  />
-                </Field>
-              ) : (
-                <input type="hidden" name="cityId" value="" />
-              )}
-              <Field>
-                <FieldLabel>{label(labels, "field.organization")}</FieldLabel>
-                <SearchableSelect
-                  name="organizationId"
-                  options={[
-                    { value: "", label: label(labels, "scope.platform") },
-                    ...organizations.map((organization) => ({
-                      value: organization.id,
-                      label: organization.label,
-                    })),
-                  ]}
-                  value={organizationId}
-                  onValueChange={(nextOrganizationId) => {
-                    setOrganizationId(nextOrganizationId);
-                    setSelectedTags((current) =>
-                      current.filter((tagId) => {
-                        const tag = availableTags.find(
-                          (item) => item.id === tagId,
-                        );
-                        return (
-                          tag?.organizationId === null ||
-                          tag?.organizationId === nextOrganizationId
-                        );
-                      }),
-                    );
-                  }}
-                  label={label(labels, "field.organization")}
-                  placeholder={label(labels, "scope.platform")}
-                  emptyLabel={label(labels, "noMatch")}
-                />
-                <FieldDescription>
-                  {label(labels, "field.organizationHint")}
-                </FieldDescription>
-              </Field>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle>
-                {label(labels, "create.classificationHeading")}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <Field>
-                <FieldLabel>{label(labels, "field.tags")}</FieldLabel>
-                {availableTags.some(
-                  (tag) =>
-                    tag.organizationId === null ||
-                    tag.organizationId === organizationId,
-                ) ? (
-                  <SearchableMultiSelect
-                    name="tagIds"
-                    maxSelections={3}
-                    options={availableTags
-                      .filter(
-                        (tag) =>
-                          tag.organizationId === null ||
-                          tag.organizationId === organizationId,
-                      )
-                      .map((tag) => ({
-                        value: tag.id,
-                        label: tag.label,
-                        description: tag.description,
-                      }))}
-                    value={selectedTags}
-                    onValueChange={setSelectedTags}
-                    label={label(labels, "field.tags")}
-                    placeholder={label(labels, "field.tagsPlaceholder")}
-                    emptyLabel={label(labels, "noMatch")}
-                  />
-                ) : (
-                  <p className="text-copy-muted text-sm">
-                    {label(labels, "field.tagsEmpty")}
-                  </p>
-                )}
-                <FieldDescription>
-                  {label(labels, "field.tagsHint")}
-                </FieldDescription>
-                <div className="border-line bg-subtle grid gap-2 rounded-lg border p-3">
-                  <p className="text-copy-muted text-xs">
-                    {label(labels, "tag.createHint")}
-                  </p>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      value={newTagLabel}
-                      onChange={(event) => {
-                        setNewTagLabel(event.target.value);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void addTag();
-                        }
-                      }}
-                      maxLength={120}
-                      aria-label={label(labels, "tag.newLabel")}
-                      placeholder={label(labels, "tag.newPlaceholder")}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="shrink-0"
-                      disabled={!newTagLabel.trim() || creatingTag}
-                      onClick={() => void addTag()}
-                    >
-                      {creatingTag ? (
-                        <LoaderCircle className="animate-spin" aria-hidden />
-                      ) : (
-                        <Tag aria-hidden />
-                      )}
-                      {label(labels, "tag.create")}
-                    </Button>
-                  </div>
-                </div>
-                {canManageGlobalTags ? (
-                  <GlobalTagManager
-                    locale={locale}
-                    tags={globalTags}
-                    labels={labels}
-                  />
-                ) : null}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="article-date">
-                  {label(labels, "field.articleDate")}
-                </FieldLabel>
-                <DatePicker
-                  id="article-date"
-                  name="articleDate"
-                  locale={locale as "fr" | "en" | "ar"}
-                  placeholder={label(labels, "date.select")}
-                  clearLabel={label(labels, "date.clear")}
-                />
-                <FieldDescription>
-                  {label(labels, "field.articleDateHint")}
-                </FieldDescription>
-              </Field>
-              <label className="border-line bg-subtle flex items-start gap-3 rounded-lg border p-3 text-sm">
-                <Checkbox name="featured" className="mt-0.5" />
-                <span>
-                  <span className="font-medium">
-                    {label(labels, "field.featured")}
-                  </span>
-                  <span className="text-copy-muted mt-0.5 block text-xs">
-                    {label(labels, "field.featuredHint")}
-                  </span>
-                </span>
-              </label>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center gap-2">
-                <FileImage aria-hidden />
-                {label(labels, "image.heading")}
-              </CardTitle>
-              <CardDescription>{label(labels, "image.hint")}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <Field>
-                <FieldLabel htmlFor="cover-alt">
-                  {label(labels, "image.alt")}
-                </FieldLabel>
-                <Input
-                  id="cover-alt"
-                  value={coverAlt}
-                  onChange={(event) => {
-                    setCoverAlt(event.target.value);
-                  }}
-                  maxLength={500}
-                />
-                <FieldDescription>
-                  {label(labels, "image.altHint")}
-                </FieldDescription>
-              </Field>
-              <label className="flex items-start gap-3 text-sm">
-                <Checkbox
-                  checked={rightsConfirmed}
-                  onCheckedChange={setRightsConfirmed}
-                  className="mt-0.5"
-                />
-                <span>{label(labels, "image.rights")}</span>
-              </label>
-              <input
-                ref={coverInputRef}
-                id="article-cover-image"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/avif"
-                className="sr-only"
-                disabled={!canChooseCover}
-                onChange={(event) => void uploadCover(event.target.files?.[0])}
+              <CheckboxFormField
+                control={form.control}
+                name="canBecomeOutdated"
+                label={copy("freshness.canOutdate")}
+                description={copy("freshness.canOutdateHint")}
+                className="border-line bg-subtle rounded-lg border p-3"
               />
-              <Attachment state={imageState} className="w-full">
-                <AttachmentMedia>
-                  {imageState === "uploading" ? (
-                    <LoaderCircle
-                      data-slot="spinner"
-                      className="animate-spin"
-                      aria-hidden
-                    />
-                  ) : (
-                    <FileImage aria-hidden />
-                  )}
-                </AttachmentMedia>
-                <AttachmentContent>
-                  <AttachmentTitle>
-                    {coverFileName || label(labels, "image.select")}
-                  </AttachmentTitle>
-                  <AttachmentDescription
-                    role={imageState === "error" ? "alert" : undefined}
-                  >
-                    {attachmentDescription}
-                  </AttachmentDescription>
-                </AttachmentContent>
-                {coverFileName && imageState !== "uploading" ? (
-                  <AttachmentActions>
-                    <AttachmentAction
-                      type="button"
-                      aria-label={label(labels, "image.remove")}
-                      onClick={clearCover}
-                    >
-                      <X aria-hidden />
-                    </AttachmentAction>
-                  </AttachmentActions>
-                ) : null}
-                <AttachmentTrigger
-                  aria-label={label(
-                    labels,
-                    coverFileName ? "image.replace" : "image.select",
-                  )}
-                  disabled={!canChooseCover}
-                  onClick={chooseCover}
-                />
-              </Attachment>
-              {previewSrc ? (
-                <CoverImagePreview
-                  src={previewSrc}
-                  alt={coverAlt || coverFileName}
-                />
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle>{label(labels, "freshness.question")}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <label className="border-line bg-subtle flex items-start gap-3 rounded-lg border p-3 text-sm">
-                <Checkbox
-                  name="canBecomeOutdated"
-                  checked={canOutdate}
-                  onCheckedChange={setCanOutdate}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-medium">
-                    {label(labels, "freshness.canOutdate")}
-                  </span>
-                  <span className="text-copy-muted mt-0.5 block text-xs">
-                    {label(labels, "freshness.canOutdateHint")}
-                  </span>
-                </span>
-              </label>
               {canOutdate ? (
-                <Field>
-                  <FieldLabel htmlFor="article-unreliable-from">
-                    {label(labels, "freshness.unreliableFrom")}
-                  </FieldLabel>
-                  <DatePicker
-                    id="article-unreliable-from"
-                    name="unreliableFrom"
-                    locale={locale as "fr" | "en" | "ar"}
-                    placeholder={label(labels, "date.select")}
-                    clearLabel={label(labels, "date.clear")}
-                    required
-                  />
-                  <FieldDescription>
-                    {label(labels, "freshness.unreliableHint")}
-                  </FieldDescription>
-                </Field>
+                <DateFormField
+                  control={form.control}
+                  name="unreliableFrom"
+                  label={copy("freshness.unreliableFrom")}
+                  description={copy("freshness.unreliableHint")}
+                  locale={locale}
+                  placeholder={copy("date.select")}
+                  clearLabel={copy("date.clear")}
+                  required
+                />
               ) : null}
             </CardContent>
             <CardContent className="border-t pt-5">
               <PublicationChoice
-                locale={locale as "fr" | "en" | "ar"}
+                locale={locale}
+                canPublish={canPublish}
                 labels={{
-                  heading: label(labels, "publication.heading"),
-                  hint: label(labels, "publication.hint"),
-                  draft: label(labels, "publication.draft"),
-                  now: label(labels, "publication.now"),
-                  scheduled: label(labels, "publication.scheduled"),
-                  date: label(labels, "publication.dateOnly"),
-                  time: label(labels, "publication.time"),
-                  selectDate: label(labels, "publication.selectDate"),
-                  clearDate: label(labels, "publication.clearDate"),
-                  dateHint: label(labels, "publication.dateHint"),
+                  heading: copy("publication.heading"),
+                  hint: copy("publication.hint"),
+                  draft: copy("publication.draft"),
+                  team: copy("publication.team"),
+                  platform: copy("publication.platform"),
+                  now: copy("publication.now"),
+                  scheduled: copy("publication.scheduled"),
+                  date: copy("publication.dateOnly"),
+                  time: copy("publication.time"),
+                  selectDate: copy("publication.selectDate"),
+                  clearDate: copy("publication.clearDate"),
+                  dateHint: copy("publication.dateHint"),
                 }}
               />
             </CardContent>
@@ -675,12 +565,12 @@ export function ArticleCreateForm({
                 render={<Link href={articlesPath} />}
                 variant="outline"
               >
-                {label(labels, "action.cancel")}
+                {copy("action.cancel")}
               </Button>
-              <PendingButton>
+              <FormSubmitButton control={form.control}>
                 <Plus aria-hidden />
-                {label(labels, "create.action")}
-              </PendingButton>
+                {copy("create.action")}
+              </FormSubmitButton>
             </CardFooter>
           </Card>
         </div>

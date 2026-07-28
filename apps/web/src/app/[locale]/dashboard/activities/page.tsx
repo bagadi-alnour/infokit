@@ -1,25 +1,42 @@
+import { isPublicLocale } from "@infokit/shared/i18n";
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
-import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import {
   ArrowLeft,
-  ArrowRight,
   CalendarClock,
+  FileImage,
   MapPin,
   Plus,
-  Search,
   TriangleAlert,
 } from "lucide-react";
 import Link from "next/link";
 
+import {
+  ActivitiesTable,
+  type ActivitiesTableLabels,
+  type ActivityTableRow,
+} from "~/components/admin/activities-table";
 import { ActivityEditorForm } from "~/components/admin/activity-content-form";
-import { ActivityMediaManager } from "~/components/admin/activity-media-manager";
+import {
+  ActivityCoverManager,
+  ActivityDownloadsManager,
+} from "~/components/admin/activity-media-manager";
 import { ActivityScheduleForm } from "~/components/admin/activity-schedule-form";
 import { ActivityScheduleRules } from "~/components/admin/activity-schedule-rules";
 import { ActivityServiceManager } from "~/components/admin/activity-service-manager";
-import { ActivityTranslationPanel } from "~/components/admin/activity-translation-panel";
+import { ActivityTranslationInbox } from "~/components/admin/activity-translation-inbox";
+import {
+  ACTIVITY_STATES,
+  type ActivityStateValue,
+} from "~/components/admin/content-states";
 import { StewardContactForm } from "~/components/admin/steward-contact-form";
 import type { WorkspaceTranslation } from "~/components/admin/translation-workspace";
-import { WorkspacePage } from "~/components/admin/workspace";
+import {
+  PageHeader,
+  Stat,
+  StatGrid,
+  WorkspacePage,
+} from "~/components/admin/workspace";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -29,20 +46,23 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { Input } from "~/components/ui/input";
-import { SelectField } from "~/components/ui/select-field";
-import { ScrollArea } from "~/components/ui/scroll-area";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import {
   editorialLanguageCodes,
   type EditorialLanguage,
 } from "~/lib/editorial-languages";
+import { formMessageLabels } from "~/lib/form-messages";
+import { buildWorkspaceLabels } from "~/lib/workspace-labels";
+import { zonedDateKey } from "~/lib/zoned-time";
+import { hasAiTranslationProvider } from "~/server/ai/provider";
 import { createAssetReadUrl } from "~/server/assets/s3";
 import { db } from "~/server/db";
 import { auth } from "~/server/auth";
 import { hasActualPlatformPermission } from "~/server/auth/authorization";
 import { hasPermission } from "~/server/auth/require";
+import { platformVerifyPermission } from "~/server/content/language-review";
+import { loadStewardCandidates } from "~/server/content/steward-candidates";
 import {
   activities,
   activityAssets,
@@ -74,14 +94,7 @@ import { updateActivitySteward } from "../steward-actions";
 
 const weekdays = [1, 2, 3, 4, 5, 6, 7] as const;
 
-const activityStates = [
-  "published",
-  "scheduled",
-  "draft",
-  "cancelled",
-  "uncertain",
-] as const;
-type ActivityState = (typeof activityStates)[number];
+type ActivityState = ActivityStateValue;
 
 const stateBadge: Record<ActivityState, "default" | "secondary" | "outline"> = {
   published: "default",
@@ -128,7 +141,7 @@ export default async function ActivitiesPage({
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ activity?: string; q?: string; status?: string }>;
+  searchParams: Promise<{ activity?: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
   const search = await searchParams;
@@ -143,21 +156,21 @@ export default async function ActivitiesPage({
     (await hasActualPlatformPermission(session.user.id, "support.superadmin")),
   );
 
-  // Rich-text editor toolbar/field labels reuse the create catalogue.
-  const editorLabels: Record<string, string> = {};
-  for (const [key, value] of Object.entries(overviewLabels)) {
-    if (key.startsWith("create.")) {
-      editorLabels[key.replace(/^create\./, "")] = value;
-    }
-  }
-  for (const language of editorialLanguageCodes) {
-    editorLabels[`language.${language}`] = t[`language.${language}`];
-  }
+  // The editor, its language accordion and every dialog those open speak one
+  // vocabulary: the create catalogue, filled from this page's own words.
+  const editorLabels = buildWorkspaceLabels(
+    overviewLabels,
+    t,
+    translationLabels,
+  );
 
   // ---- Activity list ----------------------------------------------------
   const activityRows = await db
     .select({
       id: activities.id,
+      // The public URL key: the row menu can only offer the public page to an
+      // activity that has one.
+      slug: activities.slug,
       organizationId: activities.organizationId,
       cityId: activities.cityId,
       teamId: activities.teamId,
@@ -176,11 +189,20 @@ export default async function ActivitiesPage({
       cityCode: cities.code,
       cityName: cityTranslations.name,
       teamName: cityTeams.name,
+      // Who entered it. The organisation answers for the activity; this is the
+      // person to ask what they meant.
+      createdByName: users.name,
+      // Who may operate on it from the list: the person who entered it answers
+      // for it. Compared on the server; the browser is told the answer, not the
+      // identity it was derived from.
+      createdById: activities.createdById,
     })
     .from(activities)
-    .innerJoin(organizations, eq(activities.organizationId, organizations.id))
-    // A global activity belongs to no city and therefore to no city team, so
-    // both joins are outer: requiring them would hide those rows entirely.
+    // Every join is outer, because every one of these is optional: an activity
+    // the platform holds has no organisation, and a global activity belongs to
+    // no city and therefore to no city team. An inner join would not filter
+    // those rows, it would hide them.
+    .leftJoin(organizations, eq(activities.organizationId, organizations.id))
     .leftJoin(cities, eq(activities.cityId, cities.id))
     .leftJoin(cityTeams, eq(activities.teamId, cityTeams.id))
     .leftJoin(
@@ -190,19 +212,17 @@ export default async function ActivitiesPage({
         eq(cityTranslations.languageCode, locale),
       ),
     )
+    .leftJoin(users, eq(users.id, activities.createdById))
     .where(isNull(activities.archivedAt))
     .orderBy(asc(organizations.displayName), asc(cities.code));
-  const rows = activityRows.map((activity) => {
-    if (!activity.organizationId) {
-      throw new Error(
-        "Claimed activity query returned an unassigned organization",
-      );
-    }
-    return {
-      ...activity,
-      organizationId: activity.organizationId,
-    };
-  });
+  /**
+   * An activity with no organisation is one the platform holds itself, so the
+   * owner column names the platform rather than leaving the cell empty.
+   */
+  const rows = activityRows.map((activity) => ({
+    ...activity,
+    organization: activity.organization ?? t["activity.platformOwner"],
+  }));
   const ids = rows.map((row) => row.id);
   const nameRows = ids.length
     ? await db
@@ -259,6 +279,41 @@ export default async function ActivitiesPage({
   }
 
   const now = new Date();
+
+  /**
+   * The days an activity opens, for the list. Only rules that apply today count:
+   * a season that has ended, or one that has not started, is not an opening day
+   * — and a column that says otherwise sends someone to a closed door.
+   */
+  const todayKey = zonedDateKey(now, "Europe/Paris");
+  const scheduleDayRows = ids.length
+    ? await db
+        .select({
+          activityId: scheduleRules.activityId,
+          weekday: scheduleRules.weekday,
+        })
+        .from(scheduleRules)
+        .where(
+          and(
+            inArray(scheduleRules.activityId, ids),
+            or(
+              isNull(scheduleRules.validFrom),
+              lte(scheduleRules.validFrom, todayKey),
+            ),
+            or(
+              isNull(scheduleRules.validTo),
+              gte(scheduleRules.validTo, todayKey),
+            ),
+          ),
+        )
+    : [];
+  const openWeekdaysById = new Map<string, Set<number>>();
+  for (const row of scheduleDayRows) {
+    const days = openWeekdaysById.get(row.activityId) ?? new Set<number>();
+    days.add(row.weekday);
+    openWeekdaysById.set(row.activityId, days);
+  }
+
   const list = rows.map((row) => ({
     ...row,
     title: getName(row.id),
@@ -270,24 +325,15 @@ export default async function ActivitiesPage({
       scheduled: (scheduledLanguagesById.get(row.id) ?? []).length > 0,
     }),
     publishedLanguages: publishedLanguagesById.get(row.id) ?? [],
+    /** Monday first, always in the week's order rather than the rules'. */
+    openWeekdays: weekdays.filter((weekday) =>
+      openWeekdaysById.get(row.id)?.has(weekday),
+    ),
+    /** A language waiting for its publication date still counts as spoken for. */
+    scheduledLanguages: scheduledLanguagesById.get(row.id) ?? [],
     reviewDue: row.reviewDueAt !== null && row.reviewDueAt <= now,
   }));
 
-  const query = search.q?.trim().toLocaleLowerCase(locale) ?? "";
-  const requestedStatus = activityStates.includes(
-    search.status as ActivityState,
-  )
-    ? (search.status as ActivityState)
-    : "";
-  const filtered = list.filter((activity) => {
-    const matchesStatus =
-      !requestedStatus || activity.state === requestedStatus;
-    const searchable =
-      `${activity.title} ${activity.organization} ${activity.scopeLabel}`.toLocaleLowerCase(
-        locale,
-      );
-    return matchesStatus && (!query || searchable.includes(query));
-  });
   const publishedCount = list.filter(
     (activity) => activity.state === "published",
   ).length;
@@ -295,9 +341,122 @@ export default async function ActivitiesPage({
     (activity) => activity.state !== "published" || activity.reviewDue,
   ).length;
 
+  /**
+   * The public page of an activity, when it has one: a slug, and a language
+   * that is live. The workspace language comes first — it is the one the editor
+   * is reading — and any other published language will do. Every editorial
+   * language is a public locale, so a published language always resolves.
+   */
+  const publicActivityHref = (slug: string | null, languages: string[]) => {
+    if (!slug) return null;
+    const language = languages.includes(locale)
+      ? locale
+      : languages.find(isPublicLocale);
+    return language ? localizedPath(`/activities/${slug}`, language) : null;
+  };
+
+  /**
+   * Who may change an activity from the list: the person who entered it, and a
+   * platform administrator — who has to be able to finish what someone who has
+   * left started, and is the only editor a seeded activity has. Everyone else
+   * reads it.
+   */
+  const viewerId = session?.user.id ?? null;
+  const mayEdit = (createdById: string | null) =>
+    canManageGlobal || (viewerId !== null && createdById === viewerId);
+
+  const tableRows: ActivityTableRow[] = list.map((activity) => {
+    const canEdit = mayEdit(activity.createdById);
+    return {
+      id: activity.id,
+      href: localizedPath("/dashboard/activities", locale, {
+        activity: activity.id,
+      }),
+      title: activity.title,
+      scopeLabel: activity.scopeLabel,
+      teamName: activity.teamName,
+      owner: activity.organization,
+      createdBy: activity.createdByName,
+      state: activity.state,
+      publishedLanguages: activity.publishedLanguages,
+      openDays: activity.openWeekdays.map(
+        (weekday) => t[`weekday.${String(weekday)}` as keyof typeof t],
+      ),
+      updatedAtIso: activity.updatedAt.toISOString(),
+      updatedLabel: localeDate(activity.updatedAt, locale),
+      reviewDue: activity.reviewDue,
+      publicHref: publicActivityHref(
+        activity.slug,
+        activity.publishedLanguages,
+      ),
+      canEdit,
+      // Publishing is a promise to the public: an activity keeps that promise
+      // until someone takes each language down, and only then can it go. A
+      // language waiting for its date is a promise too.
+      canDelete:
+        canEdit &&
+        activity.publishedLanguages.length === 0 &&
+        activity.scheduledLanguages.length === 0,
+    };
+  });
+
+  const tableLabels: ActivitiesTableLabels = {
+    search: t["console.search"],
+    searchPlaceholder: t["list.searchPlaceholder"],
+    columns: t["table.columns"],
+    clear: t["table.clearSearch"],
+    filterBy: t["table.filterBy"],
+    noMatch: t["list.noResults"],
+    rowsPerPage: t["table.rowsPerPage"],
+    results: t["table.results"],
+    page: t["table.page"],
+    previous: t["table.previousPage"],
+    next: t["table.nextPage"],
+    activity: t["list.nameColumn"],
+    owner: t["list.ownerColumn"],
+    createdBy: t["list.createdByColumn"],
+    status: t["list.statusColumn"],
+    languages: t["list.languagesColumn"],
+    openDays: t["list.openDaysColumn"],
+    updated: t["list.updatedColumn"],
+    cityTeam: t["activity.cityTeam"],
+    reviewDue: t["list.reviewDue"],
+    // Punctuation, not wording: an empty cell reads as a missing value.
+    none: "—",
+    stateLabels: Object.fromEntries(
+      ACTIVITY_STATES.map((state) => [state, t[`state.${state}`]]),
+    ) as Record<ActivityStateValue, string>,
+    languageLabels: Object.fromEntries(
+      editorialLanguageCodes.map((code) => [code, t[`language.${code}`]]),
+    ),
+    dayLabels: weekdays.map(
+      (weekday) => t[`weekday.${String(weekday)}` as keyof typeof t],
+    ),
+    actions: t["table.actions"],
+    open: t["rowAction.open"],
+    view: t["rowAction.view"],
+    viewPublic: t["rowAction.viewPublic"],
+    unpublish: t["rowAction.unpublish"],
+    unpublishTitle: t["rowAction.unpublishTitle"],
+    unpublishBody: t["rowAction.unpublishBody"],
+    unpublishConfirm: t["rowAction.unpublishConfirm"],
+    remove: t["rowAction.delete"],
+    removeTitle: t["rowAction.deleteTitle"],
+    removeBody: t["rowAction.deleteBody"],
+    removeConfirm: t["rowAction.deleteConfirm"],
+    removed: t["toast.deleted"],
+    cancel: t.cancel,
+    unpublished: t["toast.unpublished"],
+    actionError: t["toast.actionError"],
+  };
+
   const selected = search.activity
     ? list.find((row) => row.id === search.activity)
     : undefined;
+  /** Who the custodian organisation already knows, for the contact card. */
+  const stewardCandidates = await loadStewardCandidates(
+    selected?.organizationId,
+  );
 
   // ---- Selected activity detail ----------------------------------------
   const [
@@ -317,6 +476,7 @@ export default async function ActivitiesPage({
             descriptionText: activityTranslations.descriptionText,
             state: activityTranslations.state,
             method: activityTranslations.method,
+            reviewStage: activityTranslations.reviewStage,
             verifiedById: activityTranslations.verifiedById,
             verifiedByName: users.name,
             // Set when the source moved after this language was last checked.
@@ -367,10 +527,14 @@ export default async function ActivitiesPage({
             ),
           )
           .where(
-            or(
-              isNull(services.organizationId),
-              eq(services.organizationId, selected.organizationId),
-            ),
+            // A platform-held activity draws on the shared catalogue alone: the
+            // services an organisation owns are not the platform's to attach.
+            selected.organizationId
+              ? or(
+                  isNull(services.organizationId),
+                  eq(services.organizationId, selected.organizationId),
+                )
+              : isNull(services.organizationId),
           )
           .orderBy(asc(serviceCategories.displayOrder)),
         db.select().from(serviceTranslations),
@@ -413,20 +577,18 @@ export default async function ActivitiesPage({
     }
   }
   // Rendering the verify control is a read-side decision; the action re-checks.
+  // A platform-held activity is checked platform-wide: there is no organisation
+  // whose members could hold the permission for it.
   const canVerifyTranslations = selected
-    ? await hasPermission("content.translation.verify", selected.organizationId)
+    ? await hasPermission(
+        "content.translation.verify",
+        selected.organizationId ?? undefined,
+      )
     : false;
 
   // ---- Classification, translator, and media (selected activity only) --
-  const countWords = (value: string) =>
-    value.trim() ? value.trim().split(/\s+/).length : 0;
-  const sourceRow = initialTranslationRows.find(
-    (row) => row.languageCode === selected?.sourceLanguageCode,
-  );
-  const sourceWordCount = selected
-    ? countWords(`${sourceRow?.name ?? ""} ${sourceRow?.descriptionText ?? ""}`)
-    : 0;
-
+  // The word count a translator is quoted comes from the source pane as it
+  // stands, so the workspace counts it in the browser rather than here.
   const [
     assignmentRows,
     categoryOptionRows,
@@ -622,6 +784,7 @@ export default async function ActivitiesPage({
       name: translation?.name ?? null,
       state: translation?.state ?? "draft",
       method: translation?.method ?? "human",
+      reviewStage: translation?.reviewStage ?? "none",
       publishedAt:
         publication && !scheduled
           ? localePublicationDateTime(
@@ -656,6 +819,50 @@ export default async function ActivitiesPage({
         : null,
     };
   });
+
+  /**
+   * What each language's own menu offers. Every item is re-checked by the action
+   * behind it; this only decides what is worth showing.
+   *
+   * Clearing a language for the public is asked platform-wide, with no
+   * organisation named — the same call `decideLanguageReview` makes, so an
+   * association's own verifier is not shown a decision the platform reserves.
+   */
+  const languageAbilities = selected
+    ? {
+        canPublish: await hasPermission(
+          "content.activity.manage",
+          selected.organizationId ?? undefined,
+        ),
+        canTeamValidate: await hasPermission(
+          "content.activity.verify",
+          selected.organizationId ?? undefined,
+        ),
+        canPlatformVerify: await hasPermission(platformVerifyPermission),
+        canInvite: await hasPermission(
+          "content.translation.request",
+          selected.organizationId ?? undefined,
+        ),
+        // The record exists, so there is something to hand somebody.
+        canGiveAccess: true,
+      }
+    : null;
+  /** The same rows, keyed by language, as the accordion's menus read them. */
+  const languageStates = Object.fromEntries(
+    languageStatuses.map((language) => [
+      language.code,
+      {
+        saved: Boolean(language.name),
+        published: Boolean(language.publishedAt),
+        scheduled: Boolean(language.scheduledFor),
+        reviewStage: language.reviewStage,
+        // A translator has sent words back that nobody has read yet. The state
+        // above is already narrowed to "expired" when the link ran out, so a
+        // stale submission does not ask to be countersigned.
+        submitted: language.assignment?.state === "submitted",
+      },
+    ]),
+  );
 
   const categoryOptions = categoryOptionRows.map((row) => ({
     value: row.id,
@@ -727,28 +934,29 @@ export default async function ActivitiesPage({
         t["service.untitled"],
     };
   });
+  // Adding an activity belongs to the list's own toolbar, beside the controls
+  // that shape the list. The header keeps it only while there is no list yet —
+  // the first activity has to be creatable from an empty page.
+  const createActivity = (
+    <Button
+      nativeButton={false}
+      render={
+        <Link href={localizedPath("/dashboard/activities/new", locale)} />
+      }
+    >
+      <Plus aria-hidden />
+      {t["activity.create.action"]}
+    </Button>
+  );
+
   return (
     <WorkspacePage>
       {!selected ? (
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              {t["activities.title"]}
-            </h1>
-            <p className="text-copy-muted mt-2 max-w-3xl text-sm">
-              {t["activities.sub"]}
-            </p>
-          </div>
-          <Button
-            nativeButton={false}
-            render={
-              <Link href={localizedPath("/dashboard/activities/new", locale)} />
-            }
-          >
-            <Plus aria-hidden />
-            {t["activity.create.action"]}
-          </Button>
-        </div>
+        <PageHeader
+          title={t["activities.title"]}
+          sub={t["activities.sub"]}
+          action={rows.length === 0 ? createActivity : null}
+        />
       ) : null}
 
       {rows.length === 0 ? (
@@ -758,141 +966,21 @@ export default async function ActivitiesPage({
           </CardContent>
         </Card>
       ) : !selected ? (
-        <section className="grid gap-5">
-          <dl className="border-line bg-surface grid overflow-hidden rounded-xl border sm:grid-cols-3">
-            {[
-              [t["list.total"], list.length],
-              [t["list.published"], publishedCount],
-              [t["list.attention"], attentionCount],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="border-line grid gap-1 border-b px-5 py-4 last:border-b-0 sm:border-b-0 sm:border-e sm:last:border-e-0"
-              >
-                <dt className="text-copy-muted text-xs font-medium">{label}</dt>
-                <dd className="text-2xl font-semibold tabular-nums">{value}</dd>
-              </div>
-            ))}
-          </dl>
+        <>
+          <StatGrid>
+            <Stat label={t["list.total"]} value={list.length} />
+            <Stat label={t["list.published"]} value={publishedCount} />
+            <Stat label={t["list.attention"]} value={attentionCount} />
+          </StatGrid>
 
-          <form
-            action={localizedPath("/dashboard/activities", locale)}
-            method="get"
-            className="border-line bg-surface grid gap-3 rounded-xl border p-3 md:grid-cols-[minmax(0,1fr)_14rem_auto]"
-          >
-            <Input
-              type="search"
-              name="q"
-              defaultValue={search.q ?? ""}
-              placeholder={t["list.searchPlaceholder"]}
-              aria-label={t["list.searchPlaceholder"]}
-            />
-            <SelectField
-              name="status"
-              defaultValue={requestedStatus}
-              aria-label={t["list.filterState"]}
-            >
-              <option value="">{t["list.allStates"]}</option>
-              {activityStates.map((state) => (
-                <option key={state} value={state}>
-                  {t[`state.${state}`]}
-                </option>
-              ))}
-            </SelectField>
-            <Button type="submit">
-              <Search aria-hidden />
-              {t["list.applyFilters"]}
-            </Button>
-          </form>
-
-          <div className="border-line bg-surface overflow-hidden rounded-xl border">
-            <div className="border-line bg-subtle text-copy-muted hidden grid-cols-[minmax(16rem,2fr)_minmax(9rem,1fr)_8rem_minmax(10rem,1fr)_9rem_2rem] gap-4 border-b px-5 py-3 text-xs font-medium md:grid">
-              <span>{t["list.nameColumn"]}</span>
-              <span>{t["list.ownerColumn"]}</span>
-              <span>{t["list.statusColumn"]}</span>
-              <span>{t["list.languagesColumn"]}</span>
-              <span>{t["list.updatedColumn"]}</span>
-              <span aria-hidden />
-            </div>
-            {filtered.length > 0 ? (
-              <nav
-                aria-label={t["activities.title"]}
-                className="divide-line divide-y"
-              >
-                {filtered.map((activity) => (
-                  <Link
-                    key={activity.id}
-                    href={`${localizedPath("/dashboard/activities", locale)}?activity=${activity.id}`}
-                    aria-label={t["list.open"].replace(
-                      "{title}",
-                      activity.title,
-                    )}
-                    className="hover:bg-subtle focus-visible:ring-ring grid gap-4 px-5 py-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset md:grid-cols-[minmax(16rem,2fr)_minmax(9rem,1fr)_8rem_minmax(10rem,1fr)_9rem_2rem] md:items-center"
-                  >
-                    <div className="min-w-0">
-                      <span className="block truncate font-semibold">
-                        {activity.title}
-                      </span>
-                      <span className="text-copy-muted mt-1 block truncate text-xs">
-                        {activity.scopeLabel}
-                        {activity.teamName
-                          ? ` · ${t["activity.cityTeam"]}: ${activity.teamName}`
-                          : ""}
-                      </span>
-                    </div>
-                    <p className="text-copy-muted min-w-0 truncate text-sm">
-                      <span className="mb-1 block text-xs font-medium md:hidden">
-                        {t["list.ownerColumn"]}
-                      </span>
-                      {activity.organization}
-                    </p>
-                    <div>
-                      <span className="text-copy-muted mb-1 block text-xs font-medium md:hidden">
-                        {t["list.statusColumn"]}
-                      </span>
-                      <Badge variant={stateBadge[activity.state]}>
-                        {t[`state.${activity.state}`]}
-                      </Badge>
-                    </div>
-                    <div className="flex min-w-0 flex-wrap gap-1.5">
-                      <span className="text-copy-muted mb-0.5 block w-full text-xs font-medium md:hidden">
-                        {t["list.languagesColumn"]}
-                      </span>
-                      {activity.publishedLanguages.length > 0
-                        ? activity.publishedLanguages.map((language) => (
-                            <span
-                              key={language}
-                              className="border-line text-copy-muted rounded border px-1.5 py-0.5 text-[0.7rem] font-medium"
-                            >
-                              {t[`language.${language}` as keyof typeof t]}
-                            </span>
-                          ))
-                        : "—"}
-                    </div>
-                    <time
-                      dateTime={activity.updatedAt.toISOString()}
-                      className="text-copy-muted text-sm tabular-nums"
-                    >
-                      <span className="mb-1 block text-xs font-medium md:hidden">
-                        {t["list.updatedColumn"]}
-                      </span>
-                      {localeDate(activity.updatedAt, locale)}
-                    </time>
-                    <ArrowRight
-                      className="text-copy-muted hidden size-4 md:block"
-                      aria-hidden
-                    />
-                  </Link>
-                ))}
-              </nav>
-            ) : (
-              <p className="text-copy-muted px-5 py-12 text-center text-sm">
-                {t["list.noResults"]}
-              </p>
-            )}
-          </div>
-        </section>
-      ) : (
+          <ActivitiesTable
+            rows={tableRows}
+            locale={locale}
+            labels={tableLabels}
+            createAction={createActivity}
+          />
+        </>
+      ) : languageAbilities ? (
         <div className="min-w-0 space-y-5">
           <Button
             variant="ghost"
@@ -905,342 +993,369 @@ export default async function ActivitiesPage({
             {t["activity.create.back"]}
           </Button>
 
-          <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
-            <div className="grid min-w-0 gap-5 xl:col-start-1 xl:row-start-1">
-              <Card>
-                <CardHeader>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <CardTitle className="text-xl">
-                        {selected.title}
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        {selected.organization} · {selected.scopeLabel}
-                      </CardDescription>
-                    </div>
-                    <Badge variant={stateBadge[selected.state]}>
-                      {t[`state.${selected.state}`]}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  <div className="text-copy-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                    <span>
-                      {t["overview.owner"]}:{" "}
-                      <span className="text-ink font-medium">
-                        {selected.organization}
-                      </span>
-                    </span>
-                    <span>
-                      {t["overview.sourceLanguage"]}:{" "}
-                      <span className="text-ink font-medium">
-                        {
-                          t[
-                            `language.${selected.sourceLanguageCode}` as keyof typeof t
-                          ]
-                        }
-                      </span>
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <MapPin className="size-3.5" aria-hidden />
-                      {selected.scopeLabel}
-                      {selected.teamName
-                        ? ` · ${t["activity.cityTeam"]}: ${selected.teamName}`
-                        : ""}
-                    </span>
-                  </div>
-                  {selected.reviewDue ? (
-                    <div className="border-warn/50 bg-warn-soft text-warn flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium">
-                      <TriangleAlert className="size-4 shrink-0" aria-hidden />
-                      {t["freshness.warning"]}
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <CardTitle className="text-xl">{selected.title}</CardTitle>
+                  <CardDescription className="mt-1">
+                    {selected.organization} · {selected.scopeLabel}
+                  </CardDescription>
+                </div>
+                <Badge variant={stateBadge[selected.state]}>
+                  {t[`state.${selected.state}`]}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <div className="text-copy-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                <span>
+                  {t["overview.owner"]}:{" "}
+                  <span className="text-ink font-medium">
+                    {selected.organization}
+                  </span>
+                </span>
+                <span>
+                  {t["overview.sourceLanguage"]}:{" "}
+                  <span className="text-ink font-medium">
+                    {
+                      t[
+                        `language.${selected.sourceLanguageCode}` as keyof typeof t
+                      ]
+                    }
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="size-3.5" aria-hidden />
+                  {selected.scopeLabel}
+                  {selected.teamName
+                    ? ` · ${t["activity.cityTeam"]}: ${selected.teamName}`
+                    : ""}
+                </span>
+              </div>
+              {selected.reviewDue ? (
+                <div className="border-warn/50 bg-warn-soft text-warn flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium">
+                  <TriangleAlert className="size-4 shrink-0" aria-hidden />
+                  {t["freshness.warning"]}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
 
-              <Card className="min-w-0">
-                <CardHeader>
-                  <CardTitle className="text-base">
-                    {t["detail.content"]}
-                  </CardTitle>
-                  <CardDescription>{t["detail.contentHint"]}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ActivityEditorForm
+          {/* The text spans the full width: the source pane and the language
+           * accordion each need the room, and the photo and the documents lay
+           * out below both. Everything under it is short-field work. */}
+          <Card className="min-w-0">
+            <CardHeader>
+              <CardTitle className="text-base">{t["detail.content"]}</CardTitle>
+              <CardDescription>{t["detail.contentHint"]}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ActivityEditorForm
+                key={selected.id}
+                locale={locale}
+                activityId={selected.id}
+                organizationId={selected.organizationId}
+                sourceLanguage={
+                  selected.sourceLanguageCode as EditorialLanguage
+                }
+                initial={initialContent}
+                languageStates={languageStates}
+                abilities={languageAbilities}
+                aiEnabled={hasAiTranslationProvider()}
+                // The list this came from excludes archived activities, so a
+                // selected one is never frozen.
+                archived={false}
+                canVerify={canVerifyTranslations}
+                returnPath={`/${locale}/dashboard/activities?activity=${selected.id}`}
+                categories={categoryOptions}
+                audiences={audienceOptions}
+                tags={tagOptions}
+                initialCategoryId={selected.categoryId}
+                initialAudienceId={selected.audienceCategoryId}
+                initialTagIds={currentTagIds}
+                media={
+                  <Card>
+                    <CardHeader className="border-b">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <FileImage className="size-4 shrink-0" aria-hidden />
+                        {t["media.title"]}
+                      </CardTitle>
+                      <CardDescription>{t["media.hint"]}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ActivityCoverManager
+                        key={`${selected.id}-${coverMedia?.assetId ?? "none"}`}
+                        locale={locale}
+                        activityId={selected.id}
+                        sourceLanguage={
+                          selected.sourceLanguageCode as EditorialLanguage
+                        }
+                        cover={coverMedia}
+                        labels={{
+                          coverAttached: t["media.coverAttached"],
+                          altLabel: t["media.altLabel"],
+                          rights: t["media.rights"],
+                          select: t["media.select"],
+                          replace: t["media.replace"],
+                          remove: t["media.remove"],
+                          uploading: t["media.uploading"],
+                          uploadError: t["media.uploadError"],
+                          coverSaved: t["media.coverSaved"],
+                          coverRemoved: t["media.coverRemoved"],
+                          removeError: t["media.removeError"],
+                          constraints: t["media.constraints"],
+                        }}
+                      />
+                    </CardContent>
+                  </Card>
+                }
+                downloads={
+                  <ActivityDownloadsManager
                     key={selected.id}
                     locale={locale}
                     activityId={selected.id}
-                    organizationId={selected.organizationId}
                     sourceLanguage={
                       selected.sourceLanguageCode as EditorialLanguage
                     }
-                    initial={initialContent}
-                    canVerify={canVerifyTranslations}
-                    returnPath={`/${locale}/dashboard/activities?activity=${selected.id}`}
-                    categories={categoryOptions}
-                    audiences={audienceOptions}
-                    tags={tagOptions}
-                    initialCategoryId={selected.categoryId}
-                    initialAudienceId={selected.audienceCategoryId}
-                    initialTagIds={currentTagIds}
-                    editorLabels={editorLabels}
+                    downloads={downloadMedia}
                     labels={{
-                      save: t["editor.save"],
-                      saved: t["editor.saved"],
-                      saveError: t["editor.saveError"],
-                      category: t["table.category"],
-                      audience: t["table.audience"],
-                      tags: t["activity.create.tags"],
-                      tagsHint: t["editor.tagsHint"],
-                      tagsEmpty: t["editor.tagsEmpty"],
-                      tagsPlaceholder: t["activity.create.chooseTags"],
-                      noMatch: t["activity.create.noMatch"],
+                      downloadsHeading: t["media.downloadsHeading"],
+                      downloadsHint: t["media.downloadsHint"],
+                      downloadsEmpty: t["media.downloadsEmpty"],
+                      downloadTitle: t["media.downloadTitle"],
+                      rights: t["media.rights"],
+                      addDownload: t["media.addDownload"],
+                      remove: t["media.remove"],
+                      uploading: t["media.uploading"],
+                      uploadError: t["media.uploadError"],
+                      downloadAdded: t["media.downloadAdded"],
+                      downloadRemoved: t["media.downloadRemoved"],
+                      removeError: t["media.removeError"],
+                      downloadConstraints: t["media.downloadConstraints"],
                     }}
                   />
-                </CardContent>
-              </Card>
+                }
+                editorLabels={editorLabels}
+                labels={{
+                  save: t["editor.save"],
+                  saved: t["editor.saved"],
+                  saveError: t["editor.saveError"],
+                  category: t["table.category"],
+                  audience: t["table.audience"],
+                  tags: t["activity.create.tags"],
+                  tagsHint: t["editor.tagsHint"],
+                  tagsEmpty: t["editor.tagsEmpty"],
+                  tagsPlaceholder: t["activity.create.chooseTags"],
+                  noMatch: t["activity.create.noMatch"],
+                }}
+              />
+            </CardContent>
+          </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">
-                    {t["activity.services"]}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ActivityServiceManager
-                    key={selected.id}
-                    activityId={selected.id}
-                    organizationId={selected.organizationId}
-                    locale={locale}
-                    assignedIds={[
-                      ...new Set(assignedServices.map((service) => service.id)),
-                    ]}
-                    services={managedServices}
-                    categories={categoryRows.map((category) => ({
-                      value: category.id,
-                      label: category.label ?? category.code,
-                      icon: category.icon,
-                    }))}
-                    labels={{
-                      assignment: t["serviceManager.assignment"],
-                      assignmentPlaceholder:
-                        t["serviceManager.assignmentPlaceholder"],
-                      empty: t["serviceManager.empty"],
-                      saveAssignment: t["serviceManager.saveAssignment"],
-                      assignmentSaved: t["serviceManager.assignmentSaved"],
-                      assignmentSaveError:
-                        t["serviceManager.assignmentSaveError"],
-                      catalogue: t["serviceManager.catalogue"],
-                      catalogueHint: t["serviceManager.catalogueHint"],
-                      catalogueEmpty: t["serviceManager.catalogueEmpty"],
-                      create: t["serviceManager.create"],
-                      createTitle: t["serviceManager.createTitle"],
-                      createHint: t["serviceManager.createHint"],
-                      createAndAssign: t["serviceManager.createAndAssign"],
-                      edit: t["serviceManager.edit"],
-                      editTitle: t["serviceManager.editTitle"],
-                      editHint: t["serviceManager.editHint"],
-                      save: t["serviceManager.save"],
-                      archive: t["serviceManager.archive"],
-                      archiveTitle: t["serviceManager.archiveTitle"],
-                      archiveHint: t["serviceManager.archiveHint"],
-                      archiveConfirm: t["serviceManager.archiveConfirm"],
-                      archived: t["serviceManager.archived"],
-                      restore: t["serviceManager.restore"],
-                      cancel: t["serviceManager.cancel"],
-                      category: t["serviceManager.category"],
-                      categoryPlaceholder:
-                        t["serviceManager.categoryPlaceholder"],
-                      noOptions: t["serviceManager.noOptions"],
-                      "name.fr": t["serviceManager.nameFr"],
-                      "name.en": t["serviceManager.nameEn"],
-                      "name.ar": t["serviceManager.nameAr"],
-                      "description.fr": t["serviceManager.descriptionFr"],
-                      "description.en": t["serviceManager.descriptionEn"],
-                      "description.ar": t["serviceManager.descriptionAr"],
-                      sourceNote: t["serviceManager.sourceNote"],
-                      sourceHint: t["serviceManager.sourceHint"],
-                      icon: t["serviceManager.icon"],
-                      iconHint: t["serviceManager.iconHint"],
-                      scope: t["serviceManager.scope"],
-                      scopeGlobal: t["scope.global"],
-                      scopeOrganization: t["scope.organization"],
-                    }}
-                    canManageGlobal={canManageGlobal}
-                    showCatalogue={false}
-                  />
-                </CardContent>
-              </Card>
+          {/* Keyed to the space this page has, not the window: the console's
+           * sidebar takes a few hundred pixels, so a viewport rule would leave
+           * the rail stacked underneath on an ordinary laptop. */}
+          <div className="@container">
+            <div className="@4xl:grid-cols-[minmax(0,1fr)_24rem] grid items-start gap-5">
+              <div className="@4xl:col-start-1 @4xl:row-start-1 grid min-w-0 gap-5">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      {t["activity.services"]}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ActivityServiceManager
+                      key={selected.id}
+                      activityId={selected.id}
+                      organizationId={selected.organizationId}
+                      locale={locale}
+                      assignedIds={[
+                        ...new Set(
+                          assignedServices.map((service) => service.id),
+                        ),
+                      ]}
+                      services={managedServices}
+                      categories={categoryRows.map((category) => ({
+                        value: category.id,
+                        label: category.label ?? category.code,
+                        icon: category.icon,
+                      }))}
+                      labels={{
+                        ...formMessageLabels(t),
+                        assignment: t["serviceManager.assignment"],
+                        assignmentPlaceholder:
+                          t["serviceManager.assignmentPlaceholder"],
+                        empty: t["serviceManager.empty"],
+                        saveAssignment: t["serviceManager.saveAssignment"],
+                        assignmentSaved: t["serviceManager.assignmentSaved"],
+                        assignmentSaveError:
+                          t["serviceManager.assignmentSaveError"],
+                        catalogue: t["serviceManager.catalogue"],
+                        catalogueHint: t["serviceManager.catalogueHint"],
+                        catalogueEmpty: t["serviceManager.catalogueEmpty"],
+                        create: t["serviceManager.create"],
+                        createTitle: t["serviceManager.createTitle"],
+                        createHint: t["serviceManager.createHint"],
+                        createAndAssign: t["serviceManager.createAndAssign"],
+                        edit: t["serviceManager.edit"],
+                        editTitle: t["serviceManager.editTitle"],
+                        editHint: t["serviceManager.editHint"],
+                        save: t["serviceManager.save"],
+                        archive: t["serviceManager.archive"],
+                        archiveTitle: t["serviceManager.archiveTitle"],
+                        archiveHint: t["serviceManager.archiveHint"],
+                        archiveConfirm: t["serviceManager.archiveConfirm"],
+                        archived: t["serviceManager.archived"],
+                        restore: t["serviceManager.restore"],
+                        cancel: t["serviceManager.cancel"],
+                        category: t["serviceManager.category"],
+                        categoryPlaceholder:
+                          t["serviceManager.categoryPlaceholder"],
+                        noOptions: t["serviceManager.noOptions"],
+                        "name.fr": t["serviceManager.nameFr"],
+                        "name.en": t["serviceManager.nameEn"],
+                        "name.ar": t["serviceManager.nameAr"],
+                        "description.fr": t["serviceManager.descriptionFr"],
+                        "description.en": t["serviceManager.descriptionEn"],
+                        "description.ar": t["serviceManager.descriptionAr"],
+                        sourceNote: t["serviceManager.sourceNote"],
+                        sourceHint: t["serviceManager.sourceHint"],
+                        icon: t["serviceManager.icon"],
+                        iconHint: t["serviceManager.iconHint"],
+                        scope: t["serviceManager.scope"],
+                        scopeGlobal: t["scope.global"],
+                        scopeOrganization: t["scope.organization"],
+                      }}
+                      canManageGlobal={canManageGlobal}
+                      showCatalogue={false}
+                    />
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CalendarClock className="size-4" aria-hidden />
-                    {t["activity.schedule"]}
-                  </CardTitle>
-                  <CardDescription>
-                    {t["activity.scheduleHint"]}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  <ActivityScheduleRules
-                    activityId={selected.id}
-                    locale={locale}
-                    rules={scheduleRows}
-                    labels={{
-                      empty: t["activity.scheduleEmpty"],
-                      remove: t["activity.scheduleRemove"],
-                      confirmTitle: t["activity.scheduleRemoveTitle"],
-                      confirmDescription:
-                        t["activity.scheduleRemoveDescription"],
-                      confirm: t["activity.scheduleRemoveConfirm"],
-                      cancel: t["activity.scheduleRemoveCancel"],
-                      weekdays: Object.fromEntries(
-                        weekdays.map((weekday) => [
-                          weekday,
-                          t[`weekday.${String(weekday)}` as keyof typeof t],
-                        ]),
-                      ),
-                      oneOff: t["activity.create.oneOff"],
-                      recurring: t["activity.create.recurring"],
-                      fixed: t["activity.create.fixedTime"],
-                      flexible: t["activity.create.flexibleTime"],
-                    }}
-                  />
-                  <ActivityScheduleForm
-                    key={selected.id}
-                    activityId={selected.id}
-                    locale={locale}
-                    schedules={scheduleRows}
-                    labels={{
-                      scheduleType: t["activity.create.scheduleType"],
-                      recurring: t["activity.create.recurring"],
-                      oneOff: t["activity.create.oneOff"],
-                      date: t["activity.create.date"],
-                      selectDate: t["activity.create.selectDate"],
-                      clearDate: t["activity.create.clearDate"],
-                      timingMode: t["activity.create.timingMode"],
-                      fixed: t["activity.create.fixedTime"],
-                      flexible: t["activity.create.flexibleTime"],
-                      weekday: t["activity.weekday"],
-                      startTime: t["activity.startTime"],
-                      endTime: t["activity.endTime"],
-                      addHours: t["activity.addHours"],
-                      cancel: t["activity.scheduleRemoveCancel"],
-                      invalidRange: t["activity.scheduleInvalidRange"],
-                      overlap: t["activity.scheduleOverlap"],
-                      invalid: t["activity.scheduleInvalid"],
-                      weekdays: Object.fromEntries(
-                        weekdays.map((weekday) => [
-                          weekday,
-                          t[`weekday.${String(weekday)}` as keyof typeof t],
-                        ]),
-                      ),
-                    }}
-                  />
-                </CardContent>
-              </Card>
-            </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarClock className="size-4" aria-hidden />
+                      {t["activity.schedule"]}
+                    </CardTitle>
+                    <CardDescription>
+                      {t["activity.scheduleHint"]}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4">
+                    <ActivityScheduleRules
+                      activityId={selected.id}
+                      locale={locale}
+                      rules={scheduleRows}
+                      labels={{
+                        empty: t["activity.scheduleEmpty"],
+                        remove: t["activity.scheduleRemove"],
+                        confirmTitle: t["activity.scheduleRemoveTitle"],
+                        confirmDescription:
+                          t["activity.scheduleRemoveDescription"],
+                        confirm: t["activity.scheduleRemoveConfirm"],
+                        cancel: t["activity.scheduleRemoveCancel"],
+                        weekdays: Object.fromEntries(
+                          weekdays.map((weekday) => [
+                            weekday,
+                            t[`weekday.${String(weekday)}` as keyof typeof t],
+                          ]),
+                        ),
+                        oneOff: t["activity.create.oneOff"],
+                        recurring: t["activity.create.recurring"],
+                        fixed: t["activity.create.fixedTime"],
+                        flexible: t["activity.create.flexibleTime"],
+                      }}
+                    />
+                    <ActivityScheduleForm
+                      key={selected.id}
+                      activityId={selected.id}
+                      locale={locale}
+                      schedules={scheduleRows}
+                      labels={{
+                        scheduleType: t["activity.create.scheduleType"],
+                        recurring: t["activity.create.recurring"],
+                        oneOff: t["activity.create.oneOff"],
+                        date: t["activity.create.date"],
+                        selectDate: t["activity.create.selectDate"],
+                        clearDate: t["activity.create.clearDate"],
+                        timingMode: t["activity.create.timingMode"],
+                        fixed: t["activity.create.fixedTime"],
+                        flexible: t["activity.create.flexibleTime"],
+                        weekday: t["activity.weekday"],
+                        startTime: t["activity.startTime"],
+                        endTime: t["activity.endTime"],
+                        addHours: t["activity.addHours"],
+                        cancel: t["activity.scheduleRemoveCancel"],
+                        required: t["form.required"],
+                        invalidRange: t["activity.scheduleInvalidRange"],
+                        overlap: t["activity.scheduleOverlap"],
+                        invalid: t["activity.scheduleInvalid"],
+                        weekdays: Object.fromEntries(
+                          weekdays.map((weekday) => [
+                            weekday,
+                            t[`weekday.${String(weekday)}` as keyof typeof t],
+                          ]),
+                        ),
+                      }}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
 
-            <div className="grid gap-5 xl:col-start-2 xl:row-start-1">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">
-                    {t["publication.heading"]}
-                  </CardTitle>
-                  <CardDescription>
-                    {t["detail.translationsHint"]}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pe-2">
-                  <ScrollArea
-                    className="h-[34rem] pe-3"
-                    aria-label={t["publication.heading"]}
-                  >
-                    <ActivityTranslationPanel
+              <div className="@4xl:col-start-2 @4xl:row-start-1 grid gap-5">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      {t["publication.heading"]}
+                    </CardTitle>
+                    <CardDescription>
+                      {t["detail.translationsHint"]}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ActivityTranslationInbox
                       key={selected.id}
                       locale={locale}
                       activityId={selected.id}
                       sourceLanguage={
                         selected.sourceLanguageCode as EditorialLanguage
                       }
-                      sourceWordCount={sourceWordCount}
                       languages={languageStatuses}
                       labels={{ ...translationLabels, ...t }}
                     />
-                  </ScrollArea>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">
-                    {t["media.title"]}
-                  </CardTitle>
-                  <CardDescription>{t["media.hint"]}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ActivityMediaManager
-                    key={`${selected.id}-${coverMedia?.assetId ?? "none"}`}
-                    locale={locale}
-                    activityId={selected.id}
-                    sourceLanguage={
-                      selected.sourceLanguageCode as EditorialLanguage
-                    }
-                    cover={coverMedia}
-                    downloads={downloadMedia}
-                    labels={{
-                      coverHeading: t["media.coverHeading"],
-                      coverHint: t["media.coverHint"],
-                      coverAttached: t["media.coverAttached"],
-                      altLabel: t["media.altLabel"],
-                      rights: t["media.rights"],
-                      select: t["media.select"],
-                      replace: t["media.replace"],
-                      remove: t["media.remove"],
-                      uploading: t["media.uploading"],
-                      uploadError: t["media.uploadError"],
-                      coverSaved: t["media.coverSaved"],
-                      coverRemoved: t["media.coverRemoved"],
-                      downloadsHeading: t["media.downloadsHeading"],
-                      downloadsHint: t["media.downloadsHint"],
-                      downloadsEmpty: t["media.downloadsEmpty"],
-                      downloadTitle: t["media.downloadTitle"],
-                      addDownload: t["media.addDownload"],
-                      downloadAdded: t["media.downloadAdded"],
-                      downloadRemoved: t["media.downloadRemoved"],
-                      removeError: t["media.removeError"],
-                      constraints: t["media.constraints"],
-                    }}
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Who to ask when this activity turns out to be wrong. Saved on
-               * its own, so recording a phone number never means re-submitting
-               * the whole record. */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">
-                    {t["steward.title"]}
-                  </CardTitle>
-                  <CardDescription>{t["steward.hint"]}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <StewardContactForm
-                    key={selected.id}
-                    action={updateActivitySteward}
-                    locale={locale}
-                    recordId={selected.id}
-                    values={selected}
-                    labels={t}
-                  />
-                </CardContent>
-              </Card>
+                {/* Who to ask when this activity turns out to be wrong. Saved on
+                 * its own, so recording a phone number never means re-submitting
+                 * the whole record. */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">
+                      {t["steward.title"]}
+                    </CardTitle>
+                    <CardDescription>{t["steward.hint"]}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <StewardContactForm
+                      key={selected.id}
+                      action={updateActivitySteward}
+                      locale={locale}
+                      recordId={selected.id}
+                      values={selected}
+                      members={stewardCandidates}
+                      labels={t}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </WorkspacePage>
   );
 }

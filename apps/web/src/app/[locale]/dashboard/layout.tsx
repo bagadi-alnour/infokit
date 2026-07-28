@@ -1,6 +1,9 @@
+// The console's stylesheet, kept off the public pages (src/styles/globals.css).
+import "~/styles/workspace.css";
+
 import { localeMetadata, type Locale } from "@infokit/shared/i18n";
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
@@ -13,7 +16,6 @@ import {
 import {
   AdminNotifications,
   type AttentionItem,
-  type AttentionKind,
 } from "~/components/admin/admin-notifications";
 import { AdminScopeIdentity } from "~/components/admin/admin-scope-controls";
 import {
@@ -27,8 +29,9 @@ import {
 } from "~/components/admin/sidebar-create-menu";
 import { SuperadminRoleSwitcher } from "~/components/admin/superadmin-role-switcher";
 import { Icon } from "~/components/icons";
-import { BrandMark } from "~/components/public/brand-mark";
+import { BrandMark, BrandWordmark } from "~/components/public/brand-mark";
 import { Toaster } from "~/components/ui/sonner";
+import { env } from "~/env";
 import {
   Sidebar,
   SidebarContent,
@@ -45,7 +48,7 @@ import {
 } from "~/components/ui/sidebar";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
-import { freshnessOf } from "~/lib/freshness";
+import { attentionKindOf, type AttentionKind } from "~/lib/freshness";
 import { requireEditor } from "~/server/auth/require";
 import { getRoleTestState, isPlatformAdmin } from "~/server/auth/authorization";
 import { db } from "~/server/db";
@@ -55,6 +58,7 @@ import {
   cities,
   cityTeams,
   cityTranslations,
+  organizationMembers,
   organizations,
   roles,
   scheduleRules,
@@ -118,6 +122,7 @@ export default async function DashboardLayout({
   const messages = await loadPageCatalog(locale, "dashboard-layout");
   const [
     organizationRows,
+    membershipRows,
     cityRows,
     teamRows,
     activityRows,
@@ -130,6 +135,18 @@ export default async function DashboardLayout({
       .select({ id: organizations.id, name: organizations.displayName })
       .from(organizations)
       .orderBy(asc(organizations.displayName)),
+    // Which associations this editor belongs to, so the directory entry can
+    // become a link to their own record. Offboarded rows stay in the table as
+    // history and must not count as a membership.
+    db
+      .select({ id: organizationMembers.organizationId })
+      .from(organizationMembers)
+      .where(
+        and(
+          eq(organizationMembers.userId, user.id),
+          ne(organizationMembers.status, "offboarded"),
+        ),
+      ),
     db
       .select({
         id: cities.id,
@@ -188,29 +205,43 @@ export default async function DashboardLayout({
     organizationId: organizationRows[0]?.id,
     cityId: teamRows[0]?.cityId ?? scopeCities[0]?.id,
   };
+  /**
+   * Who gets the directory, decided exactly as the directory page decides it
+   * (organizations/page.tsx): listing every association is administration, and
+   * a superadmin testing an organisation role is that organisation's member for
+   * the duration.
+   */
+  const directoryAccess =
+    platformAdmin && roleTest.assumedOrganizationId === null;
+  /**
+   * The one record a non-directory editor would be sent to anyway. With several
+   * memberships there is no "mine", so those editors keep the list — it is the
+   * only place that disambiguates.
+   */
+  const ownOrganizationId = directoryAccess
+    ? null
+    : (roleTest.assumedOrganizationId ??
+      (membershipRows.length === 1 ? (membershipRows[0]?.id ?? null) : null));
+  const organizationHref = ownOrganizationId
+    ? localizedPath(`/dashboard/organizations/${ownOrganizationId}`, locale)
+    : localizedPath("/dashboard/organizations", locale);
 
   /**
-   * The freshness queue, computed the same way the runbook computes it
-   * (`docs/DESIGN-BRIEF.md` §11) so the bell and the runbook never disagree.
+   * The freshness queue, classified by the one shared function the runbook also
+   * calls (`~/lib/freshness`, `docs/DESIGN-BRIEF.md` §11), so the bell and the
+   * runbook cannot disagree about why a record is waiting. The bell stays
+   * console-wide on purpose — it is reachable from pages that have no scope —
+   * while the runbook narrows the same queue to the city being worked.
    */
   const scheduledActivityIds = new Set(
     scheduledActivityRows.map((row) => row.activityId),
   );
   const attentionEntries = activityRows
     .map((activity) => {
-      const freshness = freshnessOf(activity);
-      const kind: AttentionKind | null =
-        activity.manualStatus === "uncertain"
-          ? "uncertain"
-          : !scheduledActivityIds.has(activity.id)
-            ? "noSchedule"
-            : freshness === "never"
-              ? "never"
-              : freshness === "overdue"
-                ? "overdue"
-                : freshness === "due_soon"
-                  ? "dueSoon"
-                  : null;
+      const kind = attentionKindOf({
+        ...activity,
+        hasSchedule: scheduledActivityIds.has(activity.id),
+      });
       return kind ? { activity, kind } : null;
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
@@ -310,19 +341,52 @@ export default async function DashboardLayout({
     {
       label: messages["nav.group.directory"],
       items: [
+        // One entry, two meanings. An operator gets the directory; a member of
+        // a single association gets their own record, named as theirs and
+        // linked straight to it — the list would only redirect them there.
         {
-          href: localizedPath("/dashboard/organizations", locale),
-          label: messages["nav.organizations"],
+          href: organizationHref,
+          label: ownOrganizationId
+            ? messages["nav.myOrganization"]
+            : messages["nav.organizations"],
           icon: "organization",
           // How many organisations exist is directory knowledge; a member of
           // one association goes to their own record from here, so the total
           // would be a number they cannot act on.
-          count: platformAdmin ? organizationRows.length : undefined,
+          count: directoryAccess ? organizationRows.length : undefined,
+          children: [
+            {
+              href: organizationHref,
+              label: messages["nav.organizationProfile"],
+              icon: "organization",
+              exact: ownOrganizationId !== null,
+            },
+            ...(ownOrganizationId
+              ? [
+                  {
+                    href: `${organizationHref}#organization-members`,
+                    label: messages["nav.members"],
+                    icon: "team" as const,
+                    exact: true,
+                  },
+                ]
+              : []),
+            ...(env.ENABLE_PHASE3_MEMBER_ASSIGNMENTS
+              ? [
+                  {
+                    href: localizedPath("/dashboard/team", locale),
+                    label: messages["nav.team"],
+                    icon: "team" as const,
+                  },
+                ]
+              : []),
+            {
+              href: localizedPath("/dashboard/places", locale),
+              label: messages["nav.places"],
+              icon: "place",
+            },
+          ],
         },
-        // Places and city teams keep their routes but leave the sidebar: a
-        // place is created inside the activity that needs it, and team
-        // management waits for its Phase 3 gate. Both come back here when they
-        // are a destination an editor goes to on purpose.
       ],
     },
     {
@@ -394,13 +458,18 @@ export default async function DashboardLayout({
     {
       label: messages["search.group.pages"],
       items: navigation.flatMap((group) =>
-        group.items.map((item) => ({
-          href: item.href,
-          label: item.label,
-          icon: item.icon,
-          hint: group.label,
-          keywords: [item.href.split("/").at(-1) ?? ""],
-        })),
+        group.items.flatMap((item) =>
+          (item.children ?? [item]).map((entry) => ({
+            href: entry.href,
+            label: entry.label,
+            icon: entry.icon,
+            hint: item.children ? item.label : group.label,
+            keywords: [
+              entry.href.split(/[/?#]/).filter(Boolean).at(-1) ?? "",
+              ...(item.children ? [item.label] : []),
+            ],
+          })),
+        ),
       ),
     },
     {
@@ -464,11 +533,14 @@ export default async function DashboardLayout({
               href={localizedPath("/dashboard", locale)}
               className="focus-visible:ring-brand/50 flex h-10 items-center gap-2.5 overflow-hidden rounded-lg outline-none focus-visible:ring-2 group-data-[collapsible=icon]:justify-center"
             >
-              <BrandMark size={32} />
+              {/* Collapsed to icons, the mark alone stands in for the logo;
+               * the full wordmark returns with the other labels. */}
+              <BrandMark
+                size={32}
+                className="hidden group-data-[collapsible=icon]:block"
+              />
               <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
-                <span className="truncate text-[1.0625rem] font-semibold leading-tight tracking-tight">
-                  InfoKit
-                </span>
+                <BrandWordmark className="text-[1.0625rem] leading-tight" />
                 <span className="text-copy-muted truncate text-[11px] font-medium leading-tight">
                   {messages["auth.dashboard.console"]}
                 </span>
@@ -580,7 +652,7 @@ export default async function DashboardLayout({
               className="focus-visible:ring-brand/50 flex items-center gap-2 rounded-lg font-semibold outline-none focus-visible:ring-2 md:hidden"
             >
               <BrandMark size={28} />
-              <span className="sr-only">InfoKit</span>
+              <span className="sr-only">infoKit</span>
             </Link>
             <AdminCommandSearch
               groups={searchGroups}

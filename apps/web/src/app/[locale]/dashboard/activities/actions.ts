@@ -18,25 +18,45 @@ import { z } from "zod";
 
 import { env } from "~/env";
 import { localizedPath } from "~/i18n/routing";
+import {
+  activityLocationModes,
+  activityScopes,
+  placePrecisions,
+  scheduleExceptionKinds,
+} from "~/lib/activity-rules";
 import { editorialLanguageCodes } from "~/lib/editorial-languages";
 import { EDITOR_CONTACT_OPTION_ID } from "~/lib/editor-contact";
+import { PLATFORM_OWNER_OPTION_ID } from "~/lib/platform-owner";
 import { recordAudit } from "~/server/audit";
 import { verifyAssetUpload } from "~/server/assets/s3";
-import { auth } from "~/server/auth";
 import {
   getRoleTestState,
   hasActualPlatformPermission,
   platformPermissionsForUser,
+  superadminPermission,
 } from "~/server/auth/authorization";
-import { protectedPermissionAction } from "~/server/auth/require";
+import {
+  hasPermission,
+  protectedPermissionAction,
+  requirePermission,
+} from "~/server/auth/require";
 import { catalogueScopeKey } from "~/server/content/catalogue-scope";
+import {
+  clearedLanguageReview,
+  platformCleared,
+  platformVerifyPermission,
+} from "~/server/content/language-review";
 import { sanitizeRichText } from "~/server/content/sanitize-rich-text";
 import { hashContent } from "~/server/content/editorial";
 import {
   classifyTranslation,
   translationPayloadHash,
 } from "~/server/translation/provenance";
-import { parseScheduledPublication } from "~/server/content/publication-schedule";
+import {
+  parseScheduledPublication,
+  publishesOnSave,
+  requestedReviewStage,
+} from "~/server/content/publication-schedule";
 import { db } from "~/server/db";
 import { sendMemberInvitation } from "~/server/invitations";
 import {
@@ -44,11 +64,17 @@ import {
   replaceMemberProfileFacets,
   validLanguageCodes,
 } from "~/server/members";
+import { scheduleRulesOverlap } from "~/lib/schedule-overlap";
 import {
-  hasScheduleRuleOverlap,
-  scheduleRulesOverlap,
-} from "~/lib/schedule-overlap";
+  scheduleRowSchema,
+  scheduleRowsIssue,
+  scheduleTimingModeSchema,
+  scheduleTypeSchema,
+  timeOfDayPattern,
+  weekdayNumberSchema,
+} from "~/lib/schedule-rules";
 import { uniqueSlug } from "~/lib/slug";
+import { optionalText, optionalUuid } from "~/lib/form-fields";
 import {
   activities,
   activityAssets,
@@ -82,20 +108,14 @@ import {
   users,
 } from "~/server/db/schema";
 
-const optional = z
-  .string()
-  .trim()
-  .transform((value) => (value === "" ? null : value));
-
 const editorialLanguageSchema = z.enum(editorialLanguageCodes);
-const publicationModeSchema = z.enum(["draft", "now", "scheduled"]);
-
-const scheduleRowSchema = z.object({
-  weekday: z.coerce.number().int().min(1).max(7),
-  timingMode: z.enum(["fixed", "flexible"]),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/),
-});
+const publicationModeSchema = z.enum([
+  "draft",
+  "team",
+  "platform",
+  "now",
+  "scheduled",
+]);
 
 function stringField(formData: FormData, name: string) {
   const value = formData.get(name);
@@ -108,40 +128,50 @@ function optionalStringField(formData: FormData, name: string) {
 }
 
 const createActivitySchema = z.object({
-  organizationId: z.string().uuid(),
+  /**
+   * The custodian, or the sentinel that stands for the platform itself. It
+   * travels as a sentinel rather than as an empty value so a lost or tampered
+   * field cannot quietly turn an association's activity into a platform one.
+   */
+  organizationId: z.union([
+    z.string().uuid(),
+    z.literal(PLATFORM_OWNER_OPTION_ID),
+  ]),
   /**
    * `global` is the rare case — a helpline or an online service that belongs to
    * no city. It carries no city, no city team, and no place.
    */
-  scope: z.enum(["city", "global"]).default("city"),
+  scope: z.enum(activityScopes).default("city"),
   cityId: z.string().uuid().nullable(),
   sourceLanguage: editorialLanguageSchema,
-  locationMode: z.enum(["existing", "new", "mobile"]),
-  placeId: optional,
-  placeName: optional,
-  addressLine: optional,
-  postalCode: optional,
-  lat: optional,
-  lng: optional,
-  precision: z.enum(["exact", "area_only", "contact_to_learn"]),
-  teamName: optional,
+  locationMode: z.enum(activityLocationModes),
+  placeId: optionalText,
+  placeName: optionalText,
+  addressLine: optionalText,
+  postalCode: optionalText,
+  lat: optionalText,
+  lng: optionalText,
+  /**
+   * Only a new place carries one — an existing place already has its own — so
+   * the form posts it with the address block or not at all.
+   */
+  precision: z.enum(placePrecisions).default("exact"),
+  teamName: optionalText,
   categoryId: z.string().uuid(),
   audienceCategoryId: z.string().uuid(),
-  sourceNote: optional,
-  scheduleType: z.enum(["recurring", "one_off"]),
-  occurrenceDate: optional,
-  validFrom: optional,
-  validTo: optional,
-  exceptionDate: optional,
-  exceptionKind: z
-    .enum(["closure", "cancellation", "exceptional_opening", "uncertain"])
-    .optional(),
-  exceptionStartTime: optional,
-  exceptionEndTime: optional,
-  exceptionReason: optional,
-  coverAssetId: optional,
+  sourceNote: optionalText,
+  scheduleType: scheduleTypeSchema,
+  occurrenceDate: optionalText,
+  validFrom: optionalText,
+  validTo: optionalText,
+  exceptionDate: optionalText,
+  exceptionKind: z.enum(scheduleExceptionKinds).optional(),
+  exceptionStartTime: optionalText,
+  exceptionEndTime: optionalText,
+  exceptionReason: optionalText,
+  coverAssetId: optionalText,
   publicationMode: publicationModeSchema.default("draft"),
-  publishAt: optional,
+  publishAt: optionalText,
 });
 
 function refresh(locale: Locale) {
@@ -151,7 +181,7 @@ function refresh(locale: Locale) {
 
 export const createActivity = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const scope = formData.get("scope") === "global" ? "global" : "city";
     const parsed = createActivitySchema.parse({
       organizationId: formData.get("organizationId"),
@@ -167,7 +197,7 @@ export const createActivity = protectedPermissionAction(
       postalCode: formData.get("postalCode") ?? "",
       lat: formData.get("lat") ?? "",
       lng: formData.get("lng") ?? "",
-      precision: formData.get("precision"),
+      precision: formData.get("precision") ?? undefined,
       teamName: formData.get("teamName") ?? "",
       categoryId: formData.get("categoryId"),
       audienceCategoryId: formData.get("audienceCategoryId"),
@@ -189,6 +219,8 @@ export const createActivity = protectedPermissionAction(
       parsed.publicationMode,
       parsed.publishAt,
     );
+    const publishes = publishesOnSave(parsed.publicationMode);
+    const requestedStage = requestedReviewStage(parsed.publicationMode);
     const weekdays = formData.getAll("scheduleWeekday");
     const timingModes = formData.getAll("scheduleTimingMode");
     const startTimes = formData.getAll("scheduleStartTime");
@@ -205,17 +237,14 @@ export const createActivity = protectedPermissionAction(
           endTime: endTimes[index],
         })),
       );
-    for (const row of scheduleRows) {
-      if (row.startTime >= row.endTime) {
-        throw new Error("The end time must be after the start time");
-      }
+    // The same check the form ran before posting, so a stale or tampered post
+    // fails on the rule the editor was shown rather than on a database error.
+    const scheduleIssue = scheduleRowsIssue(parsed.scheduleType, scheduleRows);
+    if (scheduleIssue === "invalidRange") {
+      throw new Error("The end time must be after the start time");
     }
-    if (parsed.scheduleType === "recurring") {
-      for (const [index, row] of scheduleRows.entries()) {
-        if (hasScheduleRuleOverlap(row, scheduleRows.slice(0, index))) {
-          throw new Error("Schedule windows cannot overlap");
-        }
-      }
+    if (scheduleIssue === "overlap") {
+      throw new Error("Schedule windows cannot overlap");
     }
     if (
       parsed.validFrom &&
@@ -323,70 +352,134 @@ export const createActivity = protectedPermissionAction(
           .parse(formData.getAll("providerOrganizationId")),
       ),
     ];
-    if (!creatorOrganizationIds.includes(parsed.organizationId)) {
-      creatorOrganizationIds.unshift(parsed.organizationId);
-    }
-    if (!providerOrganizationIds.includes(parsed.organizationId)) {
-      providerOrganizationIds.unshift(parsed.organizationId);
+    /**
+     * The custodian, or null when the platform holds the activity itself. The
+     * platform owns no `organizations` row, so a platform-held activity has no
+     * city team, no organisation catalogue entries, and — the point of the whole
+     * arrangement — no creator or provider claiming to speak for an association.
+     */
+    const ownerOrganizationId =
+      parsed.organizationId === PLATFORM_OWNER_OPTION_ID
+        ? null
+        : parsed.organizationId;
+    const ownedByPlatform = ownerOrganizationId === null;
+    if (ownerOrganizationId) {
+      if (!creatorOrganizationIds.includes(ownerOrganizationId)) {
+        creatorOrganizationIds.unshift(ownerOrganizationId);
+      }
+      if (!providerOrganizationIds.includes(ownerOrganizationId)) {
+        providerOrganizationIds.unshift(ownerOrganizationId);
+      }
     }
 
-    const session = await auth();
-    const actorId = session?.user.id;
-    if (!actorId) throw new Error("Authentication required");
     /**
      * What "reach me" publishes: the address the editor signs in with, which is
      * the only one the console knows. An account without one cannot stand in as
      * the contact for a whole activity.
      */
-    const editorContactValue = session.user.email?.trim() ?? "";
-    const editorContactLabel = session.user.name?.trim() ?? "";
+    const editorContactValue = user.email?.trim() ?? "";
+    const editorContactLabel = user.name?.trim() ?? "";
     if (wantsEditorContact && !editorContactValue) {
       throw new Error("Your account has no address to publish as a contact");
     }
+    if (wantsEditorContact && ownedByPlatform) {
+      throw new Error(
+        "A platform-held activity cannot publish your address as its contact",
+      );
+    }
     const [authorization, platformPermissions] = await Promise.all([
-      getRoleTestState(actorId, parsed.organizationId),
-      platformPermissionsForUser(actorId),
+      getRoleTestState(user.id, ownerOrganizationId ?? undefined),
+      platformPermissionsForUser(user.id),
     ]);
     const actingOrganizationId =
       authorization.assumedOrganizationId ??
       (platformPermissions.has("content.activity.manage")
         ? null
-        : parsed.organizationId);
+        : ownerOrganizationId);
     const createdByScope = actingOrganizationId ? "organization" : "platform";
-    const relationshipValues = (organizationId: string) => {
-      const confirmed = organizationId === actingOrganizationId;
-      return {
-        organizationId,
-        state: confirmed ? ("confirmed" as const) : ("proposed" as const),
-        proposedById: actorId,
-        confirmedById: confirmed ? actorId : null,
-        confirmedAt: confirmed ? new Date() : null,
-      };
-    };
-    if (parsed.publicationMode !== "draft") {
-      const confirmedProviderIds = actingOrganizationId
-        ? providerOrganizationIds.filter(
-            (organizationId) => organizationId === actingOrganizationId,
-          )
-        : [];
-      const verifiedProviders =
-        confirmedProviderIds.length === 0
-          ? []
-          : await db
+    /**
+     * Holding an activity for the platform is a platform editor's decision. An
+     * organisation's own editor is acting for that organisation, and a
+     * superadmin testing an organisation role is too, so for both of them the
+     * custodian is that organisation and the sentinel is not theirs to send.
+     */
+    if (
+      ownedByPlatform &&
+      (authorization.assumedOrganizationId !== null ||
+        !platformPermissions.has("content.activity.manage"))
+    ) {
+      throw new Error("Choose the organisation this activity belongs to");
+    }
+    /**
+     * Which of the named organisations could publish today: `verified`, not
+     * suspended. Both the relationship state and the publication gate below ask
+     * the same question, so it is asked once.
+     */
+    const relationshipOrganizationIds = [
+      ...new Set([...creatorOrganizationIds, ...providerOrganizationIds]),
+    ];
+    const publishableOrganizationIds = new Set(
+      relationshipOrganizationIds.length === 0
+        ? []
+        : (
+            await db
               .select({ id: organizations.id })
               .from(organizations)
               .where(
                 and(
-                  inArray(organizations.id, confirmedProviderIds),
+                  inArray(organizations.id, relationshipOrganizationIds),
                   eq(organizations.status, "verified"),
                   eq(organizations.publishingSuspended, false),
                 ),
-              );
-      if (verifiedProviders.length === 0) {
+              )
+          ).map((organization) => organization.id),
+    );
+    /**
+     * A relationship is confirmed by the organisation it names, which is why a
+     * platform editor normally only proposes one (PRODUCT.md §11.5).
+     *
+     * Temporary launch allowance: until associations sign in and confirm their
+     * own, nothing a platform editor enters on their behalf could ever be
+     * published, so a platform editor confirms for an organisation that is
+     * already verified — and is recorded as the actor who did. Drop this once
+     * organisation acceptance exists; the proposed state is the honest one.
+     */
+    const confirmedOrganizationIds = actingOrganizationId
+      ? new Set([actingOrganizationId])
+      : publishableOrganizationIds;
+    const relationshipValues = (organizationId: string) => {
+      const confirmed = confirmedOrganizationIds.has(organizationId);
+      return {
+        organizationId,
+        state: confirmed ? ("confirmed" as const) : ("proposed" as const),
+        proposedById: user.id,
+        confirmedById: confirmed ? user.id : null,
+        confirmedAt: confirmed ? new Date() : null,
+      };
+    };
+    /**
+     * Publication needs somebody answerable for the facts: a confirmed provider
+     * that is verified and not suspended, or the platform itself when it holds
+     * the activity and no association stands behind it yet.
+     */
+    if (publishes && !ownedByPlatform) {
+      const publishableProvider = providerOrganizationIds.some(
+        (organizationId) =>
+          confirmedOrganizationIds.has(organizationId) &&
+          publishableOrganizationIds.has(organizationId),
+      );
+      if (!publishableProvider) {
         throw new Error(
           "Publication requires at least one confirmed, verified provider",
         );
       }
+    }
+    if (publishes) {
+      // Nothing on a form that has never been saved has been reviewed by
+      // anyone, so going public straight from it belongs to whoever holds the
+      // platform's own check (server/content/language-review.ts). Everyone else
+      // saves a draft and sends it up the chain from the language panel.
+      await requirePermission(platformVerifyPermission, locale);
     }
     if (uniqueServiceIds.length > 0) {
       const validServices = await db
@@ -397,10 +490,14 @@ export const createActivity = protectedPermissionAction(
             inArray(services.id, uniqueServiceIds),
             eq(services.active, true),
             isNull(services.archivedAt),
-            or(
-              isNull(services.organizationId),
-              eq(services.organizationId, parsed.organizationId),
-            ),
+            // A platform-held activity has no organisation catalogue to draw
+            // on, so only the shared entries are available to it.
+            ownerOrganizationId
+              ? or(
+                  isNull(services.organizationId),
+                  eq(services.organizationId, ownerOrganizationId),
+                )
+              : isNull(services.organizationId),
           ),
         );
       if (validServices.length !== uniqueServiceIds.length) {
@@ -456,10 +553,12 @@ export const createActivity = protectedPermissionAction(
             inArray(tags.id, tagIds),
             eq(tags.active, true),
             eq(tags.visibility, "public"),
-            or(
-              isNull(tags.organizationId),
-              eq(tags.organizationId, parsed.organizationId),
-            ),
+            ownerOrganizationId
+              ? or(
+                  isNull(tags.organizationId),
+                  eq(tags.organizationId, ownerOrganizationId),
+                )
+              : isNull(tags.organizationId),
           ),
         );
       if (allowedTags.length !== tagIds.length) {
@@ -467,13 +566,18 @@ export const createActivity = protectedPermissionAction(
       }
     }
     if (contactIds.length > 0) {
+      // Every contact belongs to an organisation, so a platform-held activity
+      // has none of its own to publish.
+      if (!ownerOrganizationId) {
+        throw new Error("One or more contacts are unavailable");
+      }
       const allowedContacts = await db
         .select({ id: contacts.id })
         .from(contacts)
         .where(
           and(
             inArray(contacts.id, contactIds),
-            eq(contacts.organizationId, parsed.organizationId),
+            eq(contacts.organizationId, ownerOrganizationId),
             eq(contacts.active, true),
             eq(contacts.visibility, "public"),
           ),
@@ -494,7 +598,7 @@ export const createActivity = protectedPermissionAction(
         .where(
           and(
             eq(assets.id, parsed.coverAssetId),
-            eq(assets.uploaderId, actorId),
+            eq(assets.uploaderId, user.id),
             eq(assets.kind, "image"),
             eq(assets.rightsConfirmed, true),
             isNull(assets.archivedAt),
@@ -509,15 +613,19 @@ export const createActivity = protectedPermissionAction(
     const cityId = parsed.cityId;
 
     const activity = await db.transaction(async (tx) => {
-      // Teams are an organisation-and-city pair, so a global activity has none.
+      /**
+       * Teams are an organisation-and-city pair, so a global activity has none —
+       * and neither has one the platform holds, which the database enforces
+       * (`activities_team_requires_organization_check`).
+       */
       let teamId: string | null = null;
-      if (cityId) {
+      if (cityId && ownerOrganizationId) {
         let [team] = await tx
           .select({ id: cityTeams.id })
           .from(cityTeams)
           .where(
             and(
-              eq(cityTeams.organizationId, parsed.organizationId),
+              eq(cityTeams.organizationId, ownerOrganizationId),
               eq(cityTeams.cityId, cityId),
             ),
           );
@@ -530,7 +638,7 @@ export const createActivity = protectedPermissionAction(
           [team] = await tx
             .insert(cityTeams)
             .values({
-              organizationId: parsed.organizationId,
+              organizationId: ownerOrganizationId,
               cityId,
               name:
                 parsed.teamName ?? `${city?.code ?? "City"} publishing team`,
@@ -555,7 +663,7 @@ export const createActivity = protectedPermissionAction(
         const [createdPlace] = await tx
           .insert(places)
           .values({
-            organizationId: parsed.organizationId,
+            organizationId: ownerOrganizationId,
             cityId,
             addressLine: parsed.addressLine,
             postalCode: parsed.postalCode,
@@ -578,7 +686,7 @@ export const createActivity = protectedPermissionAction(
         .insert(activities)
         .values({
           slug: uniqueSlug(sourceName, "activity"),
-          organizationId: parsed.organizationId,
+          organizationId: ownerOrganizationId,
           cityId,
           teamId,
           placeId,
@@ -586,7 +694,7 @@ export const createActivity = protectedPermissionAction(
           audienceCategoryId: parsed.audienceCategoryId,
           sourceLanguageCode: parsed.sourceLanguage,
           sourceNote: parsed.sourceNote,
-          createdById: actorId,
+          createdById: user.id,
           createdByScope,
           provisionedByPlatform: createdByScope === "platform",
         })
@@ -611,7 +719,7 @@ export const createActivity = protectedPermissionAction(
       const [sourceVersion] = await tx
         .insert(translationSourceVersions)
         .values({
-          organizationId: parsed.organizationId,
+          organizationId: ownerOrganizationId,
           entityKind: "activity",
           entityId: created.id,
           version: 1,
@@ -619,7 +727,7 @@ export const createActivity = protectedPermissionAction(
           sourceContentJson: sourcePayload,
           sourceContentHash: hashContent(sourcePayload),
           impact: "initial",
-          createdById: actorId,
+          createdById: user.id,
         })
         .returning({ id: translationSourceVersions.id });
       if (!sourceVersion)
@@ -651,12 +759,28 @@ export const createActivity = protectedPermissionAction(
               ...payload,
             }),
             ...(isSource
-              ? { verifiedById: actorId, verifiedAt: new Date() }
+              ? { verifiedById: user.id, verifiedAt: new Date() }
+              : {}),
+            // Publishing from the creation form required the platform's own
+            // check above, so the chain records that rather than leaving a live
+            // language looking as though nobody had seen it.
+            ...(isSource && publishes
+              ? { reviewStage: "platform_verified" as const }
+              : {}),
+            // Asking for a read covers every language the form carried text
+            // for: a reviewer opening this record is meant to read it, not
+            // just the language it was drafted in.
+            ...(requestedStage
+              ? {
+                  reviewStage: requestedStage,
+                  reviewRequestedById: user.id,
+                  reviewRequestedAt: new Date(),
+                }
               : {}),
           };
         }),
       );
-      if (parsed.publicationMode !== "draft") {
+      if (publishes) {
         await tx.insert(activityPublications).values({
           activityId: created.id,
           languageCode: parsed.sourceLanguage,
@@ -667,7 +791,7 @@ export const createActivity = protectedPermissionAction(
             descriptionHtml: sourceTranslation.descriptionHtml,
             descriptionText: sourceTranslation.descriptionText,
           }),
-          publishedById: actorId,
+          publishedById: user.id,
           scheduledFor,
         });
         // The source language was already stamped verified on insert: it is
@@ -685,19 +809,29 @@ export const createActivity = protectedPermissionAction(
           }
         }
       }
-      await tx.insert(activityCreatorOrganizations).values(
-        creatorOrganizationIds.map((organizationId) => ({
-          activityId: created.id,
-          ...relationshipValues(organizationId),
-        })),
-      );
-      await tx.insert(activityProviders).values(
-        providerOrganizationIds.map((organizationId, displayOrder) => ({
-          activityId: created.id,
-          displayOrder,
-          ...relationshipValues(organizationId),
-        })),
-      );
+      /**
+       * Both lists are empty when the platform holds the activity and no
+       * association has been named yet: the platform is the publisher, and
+       * inserting it here would make it a factual creator or provider of
+       * something it only wrote down (PRODUCT.md §11.5).
+       */
+      if (creatorOrganizationIds.length > 0) {
+        await tx.insert(activityCreatorOrganizations).values(
+          creatorOrganizationIds.map((organizationId) => ({
+            activityId: created.id,
+            ...relationshipValues(organizationId),
+          })),
+        );
+      }
+      if (providerOrganizationIds.length > 0) {
+        await tx.insert(activityProviders).values(
+          providerOrganizationIds.map((organizationId, displayOrder) => ({
+            activityId: created.id,
+            displayOrder,
+            ...relationshipValues(organizationId),
+          })),
+        );
+      }
       if (uniqueServiceIds.length > 0) {
         await tx.insert(activityServices).values(
           uniqueServiceIds.map((serviceId, displayOrder) => ({
@@ -718,6 +852,13 @@ export const createActivity = protectedPermissionAction(
       }
       const linkedContactIds = [...contactIds];
       if (wantsEditorContact) {
+        // Refused before the transaction: a contact row always belongs to an
+        // organisation, so a platform-held activity cannot own one.
+        if (!ownerOrganizationId) {
+          throw new Error(
+            "A platform-held activity cannot publish your address as its contact",
+          );
+        }
         /**
          * The editor becomes a contact the organisation owns, reused on their
          * next activity instead of duplicated. The match is on the address, and
@@ -729,7 +870,7 @@ export const createActivity = protectedPermissionAction(
           .from(contacts)
           .where(
             and(
-              eq(contacts.organizationId, parsed.organizationId),
+              eq(contacts.organizationId, ownerOrganizationId),
               eq(contacts.kind, "email"),
               eq(contacts.value, editorContactValue),
               eq(contacts.active, true),
@@ -742,7 +883,7 @@ export const createActivity = protectedPermissionAction(
           const [insertedContact] = await tx
             .insert(contacts)
             .values({
-              organizationId: parsed.organizationId,
+              organizationId: ownerOrganizationId,
               kind: "email",
               value: editorContactValue,
             })
@@ -782,7 +923,7 @@ export const createActivity = protectedPermissionAction(
           .where(
             and(
               eq(assets.id, parsed.coverAssetId),
-              eq(assets.uploaderId, actorId),
+              eq(assets.uploaderId, user.id),
               eq(assets.kind, "image"),
               eq(assets.rightsConfirmed, true),
               isNull(assets.archivedAt),
@@ -864,7 +1005,7 @@ export const createActivity = protectedPermissionAction(
             kind: parsed.exceptionKind,
             startTime: parsed.exceptionStartTime,
             endTime: parsed.exceptionEndTime,
-            createdById: actorId,
+            createdById: user.id,
           })
           .returning({ id: scheduleExceptions.id });
         if (!exception)
@@ -884,7 +1025,7 @@ export const createActivity = protectedPermissionAction(
       action: "activity.created",
       subjectType: "activity",
       subjectId: activity.id,
-      organizationId: parsed.organizationId,
+      organizationId: ownerOrganizationId,
       metadata: {
         scope: parsed.scope,
         cityId: parsed.cityId,
@@ -898,14 +1039,28 @@ export const createActivity = protectedPermissionAction(
         scheduledFor: scheduledFor?.toISOString() ?? null,
       },
     });
-    if (parsed.publicationMode !== "draft") {
+    if (requestedStage) {
+      await recordAudit({
+        action: "translation.review_requested",
+        subjectType: "activity",
+        subjectId: activity.id,
+        organizationId: ownerOrganizationId,
+        metadata: {
+          stage: requestedStage,
+          languages: translations
+            .map((translation) => translation.languageCode)
+            .join(","),
+        },
+      });
+    }
+    if (publishes) {
       await recordAudit({
         action: scheduledFor
           ? "activity.language_scheduled"
           : "activity.language_published",
         subjectType: "activity",
         subjectId: activity.id,
-        organizationId: parsed.organizationId,
+        organizationId: ownerOrganizationId,
         metadata: {
           languageCode: parsed.sourceLanguage,
           scheduledFor: scheduledFor?.toISOString() ?? null,
@@ -922,12 +1077,12 @@ export const createActivity = protectedPermissionAction(
 const activityPublicationSchema = z.object({
   activityId: z.string().uuid(),
   languageCode: editorialLanguageSchema,
-  publishAt: optional,
+  publishAt: optionalText,
 });
 
 export const publishActivityLanguage = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = activityPublicationSchema.parse({
       activityId: formData.get("activityId"),
       languageCode: formData.get("languageCode"),
@@ -936,9 +1091,12 @@ export const publishActivityLanguage = protectedPermissionAction(
     const scheduledFor = parsed.publishAt
       ? parseScheduledPublication("scheduled", parsed.publishAt)
       : null;
-    const session = await auth();
-    const publisherId = session?.user.id;
-    if (!publisherId) throw new Error("A signed-in publisher is required");
+    /**
+     * The platform's own check is the last gate before a visitor reads this
+     * (server/content/language-review.ts). Whoever holds that grant *is* the
+     * check, so they are not asked to send the text to themselves first.
+     */
+    const asPlatformVerifier = await hasPermission(platformVerifyPermission);
 
     await db.transaction(async (tx) => {
       const [enabledLanguage] = await tx
@@ -971,28 +1129,101 @@ export const publishActivityLanguage = protectedPermissionAction(
       if (!translation.sourceVersionId || !translation.contentHash) {
         throw new Error("This translation is not tied to a source version");
       }
-
-      const verifiedProviders = await tx
-        .select({ id: organizations.id })
-        .from(activityProviders)
-        .innerJoin(
-          organizations,
-          eq(organizations.id, activityProviders.organizationId),
-        )
-        .where(
-          and(
-            eq(activityProviders.activityId, parsed.activityId),
-            eq(activityProviders.state, "confirmed"),
-            eq(activityProviders.active, true),
-            eq(organizations.status, "verified"),
-            eq(organizations.publishingSuspended, false),
-          ),
-        )
-        .limit(1);
-      if (verifiedProviders.length === 0) {
+      if (
+        !platformCleared({
+          stage: translation.reviewStage,
+          bypass: asPlatformVerifier,
+        })
+      ) {
         throw new Error(
-          "Publication requires at least one confirmed, verified provider",
+          "The platform must verify this language before it is published",
         );
+      }
+
+      /**
+       * Publication needs somebody answerable for the facts: a confirmed
+       * provider that is verified and not suspended, or the platform itself
+       * when it holds the activity and no association stands behind it
+       * (docs/PRODUCT.md §11.5). A platform-held activity has no custodian and
+       * no provider rows by design, so there is nothing here to require of it.
+       */
+      const [owner] = await tx
+        .select({ organizationId: activities.organizationId })
+        .from(activities)
+        .where(eq(activities.id, parsed.activityId))
+        .limit(1);
+      if (!owner) {
+        throw new Error("This activity no longer exists");
+      }
+      if (owner.organizationId) {
+        const publishableProviders = await tx
+          .select({
+            id: activityProviders.id,
+            organizationId: activityProviders.organizationId,
+            state: activityProviders.state,
+          })
+          .from(activityProviders)
+          .innerJoin(
+            organizations,
+            eq(organizations.id, activityProviders.organizationId),
+          )
+          .where(
+            and(
+              eq(activityProviders.activityId, parsed.activityId),
+              inArray(activityProviders.state, ["confirmed", "proposed"]),
+              eq(activityProviders.active, true),
+              eq(organizations.status, "verified"),
+              eq(organizations.publishingSuspended, false),
+            ),
+          );
+        const alreadyConfirmed = publishableProviders.some(
+          (provider) => provider.state === "confirmed",
+        );
+        if (!alreadyConfirmed) {
+          /**
+           * A relationship is confirmed by the organisation it names, so an
+           * organisation's own editor confirms their own row and nobody
+           * else's.
+           *
+           * Temporary launch allowance: until associations sign in and accept
+           * what was entered for them, a platform editor's proposals could
+           * never be published, so publishing as the platform confirms the
+           * proposals naming an organisation that is already verified — and
+           * records who did. Drop this once organisation acceptance exists;
+           * `proposed` is the honest state for a claim nobody agreed to.
+           */
+          const [authorization, platformPermissions] = await Promise.all([
+            getRoleTestState(user.id, owner.organizationId),
+            platformPermissionsForUser(user.id),
+          ]);
+          const actingOrganizationId =
+            authorization.assumedOrganizationId ??
+            (platformPermissions.has("content.activity.manage")
+              ? null
+              : owner.organizationId);
+          const promotable = publishableProviders
+            .filter(
+              (provider) =>
+                provider.state === "proposed" &&
+                (actingOrganizationId === null ||
+                  provider.organizationId === actingOrganizationId),
+            )
+            .map((provider) => provider.id);
+          if (promotable.length === 0) {
+            throw new Error(
+              "Publication requires at least one confirmed, verified provider",
+            );
+          }
+          await tx
+            .update(activityProviders)
+            .set({
+              state: "confirmed",
+              confirmedById: user.id,
+              confirmedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(inArray(activityProviders.id, promotable));
+        }
       }
 
       const attachedAssets = await tx
@@ -1021,7 +1252,7 @@ export const publishActivityLanguage = protectedPermissionAction(
 
       await tx
         .update(activityPublications)
-        .set({ unpublishedAt: new Date(), unpublishedById: publisherId })
+        .set({ unpublishedAt: new Date(), unpublishedById: user.id })
         .where(
           and(
             eq(activityPublications.activityId, parsed.activityId),
@@ -1034,14 +1265,15 @@ export const publishActivityLanguage = protectedPermissionAction(
         languageCode: parsed.languageCode,
         sourceVersionId: translation.sourceVersionId,
         translationContentHash: translation.contentHash,
-        publishedById: publisherId,
+        publishedById: user.id,
         scheduledFor,
       });
       await tx
         .update(activityTranslations)
         .set({
           state: "verified",
-          verifiedById: publisherId,
+          reviewStage: "platform_verified",
+          verifiedById: user.id,
           verifiedAt: new Date(),
         })
         .where(
@@ -1086,20 +1318,17 @@ export const publishActivityLanguage = protectedPermissionAction(
 
 export const unpublishActivityLanguage = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = activityPublicationSchema.parse({
       activityId: formData.get("activityId"),
       languageCode: formData.get("languageCode"),
       publishAt: "",
     });
-    const session = await auth();
-    const publisherId = session?.user.id;
-    if (!publisherId) throw new Error("A signed-in publisher is required");
 
     await db.transaction(async (tx) => {
       await tx
         .update(activityPublications)
-        .set({ unpublishedAt: new Date(), unpublishedById: publisherId })
+        .set({ unpublishedAt: new Date(), unpublishedById: user.id })
         .where(
           and(
             eq(activityPublications.activityId, parsed.activityId),
@@ -1139,6 +1368,79 @@ export const unpublishActivityLanguage = protectedPermissionAction(
   },
 );
 
+const activitySchema = z.object({ activityId: z.string().uuid() });
+
+/**
+ * Take an activity out of the workspace. Two conditions, both checked here and
+ * not only in the menu that offers it:
+ *
+ * - Nothing of it may be published. What the public has been told stays true
+ *   until someone takes each language down deliberately, so a deletion cannot
+ *   be the thing that quietly unpublishes it. A language waiting for its date is
+ *   a promise too.
+ * - The person who entered it, or a platform administrator, is who may do it —
+ *   the second because an activity outlives the account that created it, and a
+ *   seeded activity was created by nobody at all.
+ *
+ * The row is archived rather than erased: the list reads `archived_at is null`,
+ * so it disappears from the workspace while its publication history, audit
+ * trail and translations stay intact for whoever asks later.
+ */
+export const deleteActivity = protectedPermissionAction(
+  "content.activity.manage",
+  async (formData, locale, user) => {
+    const parsed = activitySchema.parse({
+      activityId: formData.get("activityId"),
+    });
+    const [activity] = await db
+      .select({
+        createdById: activities.createdById,
+        organizationId: activities.organizationId,
+      })
+      .from(activities)
+      .where(
+        and(
+          eq(activities.id, parsed.activityId),
+          isNull(activities.archivedAt),
+        ),
+      )
+      .limit(1);
+    if (!activity) throw new Error("Unknown activity");
+
+    const isPlatformAdministrator = await hasActualPlatformPermission(
+      user.id,
+      superadminPermission,
+    );
+    if (activity.createdById !== user.id && !isPlatformAdministrator) {
+      throw new Error("Forbidden");
+    }
+
+    const [live] = await db
+      .select({ id: activityPublications.id })
+      .from(activityPublications)
+      .where(
+        and(
+          eq(activityPublications.activityId, parsed.activityId),
+          isNull(activityPublications.unpublishedAt),
+        ),
+      )
+      .limit(1);
+    if (live) throw new Error("Unpublish every language first");
+
+    await db
+      .update(activities)
+      .set({ archivedAt: new Date(), published: false, updatedAt: new Date() })
+      .where(eq(activities.id, parsed.activityId));
+    await recordAudit({
+      action: "activity.archived",
+      subjectType: "activity",
+      subjectId: parsed.activityId,
+      organizationId: activity.organizationId,
+    });
+    refresh(locale);
+  },
+);
+
 const updateActivityContentSchema = z.object({
   activityId: z.string().uuid(),
   sourceLanguage: editorialLanguageSchema,
@@ -1155,7 +1457,7 @@ const updateActivityContentSchema = z.object({
  */
 export const updateActivityContent = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = updateActivityContentSchema.parse({
       activityId: formData.get("activityId"),
       sourceLanguage: formData.get("sourceLanguage"),
@@ -1194,10 +1496,6 @@ export const updateActivityContent = protectedPermissionAction(
       throw new Error("The source language needs a title");
     }
     const keptCodes = submitted.map((translation) => translation.languageCode);
-
-    const session = await auth();
-    const actorId = session?.user.id;
-    if (!actorId) throw new Error("Authentication required");
 
     await db.transaction(async (tx) => {
       const [activity] = await tx
@@ -1256,7 +1554,7 @@ export const updateActivityContent = protectedPermissionAction(
             sourceContentJson: sourcePayload,
             sourceContentHash: sourceHash,
             impact: latest ? "review_required" : "initial",
-            createdById: actorId,
+            createdById: user.id,
           })
           .returning({ id: translationSourceVersions.id });
         if (!created) throw new Error("Source version insert returned no row");
@@ -1271,6 +1569,7 @@ export const updateActivityContent = protectedPermissionAction(
           state: activityTranslations.state,
           method: activityTranslations.method,
           providerCode: activityTranslations.providerCode,
+          contentHash: activityTranslations.contentHash,
         })
         .from(activityTranslations)
         .where(eq(activityTranslations.activityId, activity.id));
@@ -1314,6 +1613,10 @@ export const updateActivityContent = protectedPermissionAction(
             : null,
           isSource: translation.languageCode === parsed.sourceLanguage,
         });
+        const contentHash = translationPayloadHash({
+          languageCode: translation.languageCode,
+          ...payload,
+        });
         const row = {
           name: translation.name,
           descriptionHtml: translation.descriptionHtml,
@@ -1323,13 +1626,16 @@ export const updateActivityContent = protectedPermissionAction(
           method: provenance.method,
           providerCode: provenance.providerCode,
           sourceVersionId,
-          contentHash: translationPayloadHash({
-            languageCode: translation.languageCode,
-            ...payload,
-          }),
+          contentHash,
+          // Words that moved lose the approvals that were about the old ones
+          // (server/content/language-review.ts); a language nobody touched keeps
+          // its place in the queue.
+          ...(existing?.contentHash === contentHash
+            ? {}
+            : clearedLanguageReview),
           ...(provenance.state === "verified" &&
           translation.languageCode === parsed.sourceLanguage
-            ? { verifiedById: actorId, verifiedAt: new Date() }
+            ? { verifiedById: user.id, verifiedAt: new Date() }
             : {}),
         };
         await tx
@@ -1362,6 +1668,7 @@ export const updateActivityContent = protectedPermissionAction(
             verifiedById: null,
             verifiedAt: null,
             carriedForwardFromSourceVersionId: latest.id,
+            ...clearedLanguageReview,
           })
           .where(
             and(
@@ -1433,18 +1740,16 @@ export const updateActivityContent = protectedPermissionAction(
 );
 
 const createServiceSchema = z.object({
-  organizationId: z
-    .union([z.literal(""), z.string().uuid()])
-    .transform((value) => value || null),
+  organizationId: optionalUuid,
   categoryId: z.string().uuid(),
   icon: z.string().trim().min(1).max(50).default("help"),
   nameFr: z.string().trim().min(2),
-  nameEn: optional,
-  nameAr: optional,
-  descriptionFr: optional,
-  descriptionEn: optional,
-  descriptionAr: optional,
-  sourceNote: optional,
+  nameEn: optionalText,
+  nameAr: optionalText,
+  descriptionFr: optionalText,
+  descriptionEn: optionalText,
+  descriptionAr: optionalText,
+  sourceNote: optionalText,
 });
 
 function reusableServiceCode(name: string) {
@@ -1459,10 +1764,27 @@ function reusableServiceCode(name: string) {
   return normalized || `service-${hashContent(name).slice(0, 10)}`;
 }
 
+/**
+ * A service with no owning organisation is platform-wide, so only an actual
+ * superadmin grant may create, edit or retire one — a role test that merely
+ * selected the role may not. Organisation-owned services are already covered by
+ * the action's own permission gate, so they pass straight through.
+ */
+async function assertGlobalServiceAccess(
+  organizationId: string | null,
+  actorId: string,
+  verb: "create" | "edit" | "manage" = "manage",
+) {
+  if (organizationId) return;
+  if (!(await hasActualPlatformPermission(actorId, "support.superadmin"))) {
+    throw new Error(`Only a superadmin can ${verb} global services`);
+  }
+}
+
 /** Create a reusable capability and attach it to one activity immediately. */
 export const createAndAssignService = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const activityId = z.string().uuid().parse(formData.get("activityId"));
     const parsed = createServiceSchema.parse({
       organizationId: formData.get("organizationId"),
@@ -1489,18 +1811,7 @@ export const createAndAssignService = protectedPermissionAction(
         "The service and activity must belong to one organisation",
       );
     }
-    if (!parsed.organizationId) {
-      const actor = await auth();
-      if (
-        !actor?.user.id ||
-        !(await hasActualPlatformPermission(
-          actor.user.id,
-          "support.superadmin",
-        ))
-      ) {
-        throw new Error("Only a superadmin can create global services");
-      }
-    }
+    await assertGlobalServiceAccess(parsed.organizationId, user.id, "create");
 
     const service = await db.transaction(async (tx) => {
       const [created] = await tx
@@ -1571,7 +1882,7 @@ const updateServiceSchema = createServiceSchema.extend({
 /** Update an organisation-owned reusable service and its authored languages. */
 export const updateReusableService = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = updateServiceSchema.parse({
       serviceId: formData.get("serviceId"),
       organizationId: formData.get("organizationId"),
@@ -1594,18 +1905,7 @@ export const updateReusableService = protectedPermissionAction(
     if (owned.organizationId !== parsed.organizationId) {
       throw new Error("The service scope cannot be changed");
     }
-    if (!owned.organizationId) {
-      const actor = await auth();
-      if (
-        !actor?.user.id ||
-        !(await hasActualPlatformPermission(
-          actor.user.id,
-          "support.superadmin",
-        ))
-      ) {
-        throw new Error("Only a superadmin can edit global services");
-      }
-    }
+    await assertGlobalServiceAccess(owned.organizationId, user.id, "edit");
 
     await db.transaction(async (tx) => {
       await tx
@@ -1696,30 +1996,17 @@ export const updateReusableService = protectedPermissionAction(
 
 const serviceLifecycleSchema = z.object({
   serviceId: z.string().uuid(),
-  organizationId: z
-    .union([z.literal(""), z.string().uuid()])
-    .transform((value) => value || null),
+  organizationId: optionalUuid,
 });
-
-async function assertGlobalServiceAccess(organizationId: string | null) {
-  if (organizationId) return;
-  const actor = await auth();
-  if (
-    !actor?.user.id ||
-    !(await hasActualPlatformPermission(actor.user.id, "support.superadmin"))
-  ) {
-    throw new Error("Only a superadmin can manage global services");
-  }
-}
 
 export const archiveReusableService = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = serviceLifecycleSchema.parse({
       serviceId: formData.get("serviceId"),
       organizationId: formData.get("organizationId"),
     });
-    await assertGlobalServiceAccess(parsed.organizationId);
+    await assertGlobalServiceAccess(parsed.organizationId, user.id);
     const [archived] = await db
       .update(services)
       .set({ active: false, archivedAt: new Date(), updatedAt: new Date() })
@@ -1750,12 +2037,12 @@ export const archiveReusableService = protectedPermissionAction(
 
 export const restoreReusableService = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = serviceLifecycleSchema.parse({
       serviceId: formData.get("serviceId"),
       organizationId: formData.get("organizationId"),
     });
-    await assertGlobalServiceAccess(parsed.organizationId);
+    await assertGlobalServiceAccess(parsed.organizationId, user.id);
     const [restored] = await db
       .update(services)
       .set({ active: true, archivedAt: null, updatedAt: new Date() })
@@ -1891,12 +2178,12 @@ export const assignServiceToActivity = protectedPermissionAction(
 
 const addScheduleSchema = z.object({
   activityId: z.string().uuid(),
-  scheduleType: z.enum(["recurring", "one_off"]),
-  weekday: z.coerce.number().int().min(1).max(7).optional(),
+  scheduleType: scheduleTypeSchema,
+  weekday: weekdayNumberSchema.optional(),
   occurrenceDate: z.string().date().optional(),
-  timingMode: z.enum(["fixed", "flexible"]),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  timingMode: scheduleTimingModeSchema,
+  startTime: z.string().regex(timeOfDayPattern),
+  endTime: z.string().regex(timeOfDayPattern),
 });
 
 type ScheduleValues = z.infer<typeof addScheduleSchema>;
@@ -2064,19 +2351,18 @@ export const deleteActivitySchedule = protectedPermissionAction(
 const exceptionalClosureSchema = z.object({
   activityId: z.string().uuid(),
   date: z.string().date(),
-  reasonFr: optional,
+  reasonFr: optionalText,
 });
 
 /** Add a date-scoped closure without changing the recurring activity. */
 export const addExceptionalClosure = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = exceptionalClosureSchema.parse({
       activityId: formData.get("activityId"),
       date: formData.get("date"),
       reasonFr: formData.get("reasonFr") ?? "",
     });
-    const session = await auth();
     const [activity] = await db
       .select({ organizationId: activities.organizationId })
       .from(activities)
@@ -2100,7 +2386,7 @@ export const addExceptionalClosure = protectedPermissionAction(
       if (existing) {
         return tx
           .update(scheduleExceptions)
-          .set({ createdById: session?.user.id ?? null })
+          .set({ createdById: user.id })
           .where(eq(scheduleExceptions.id, existing.id))
           .returning({ id: scheduleExceptions.id });
       }
@@ -2110,7 +2396,7 @@ export const addExceptionalClosure = protectedPermissionAction(
           activityId: parsed.activityId,
           date: parsed.date,
           kind: "closure",
-          createdById: session?.user.id ?? null,
+          createdById: user.id,
         })
         .returning({ id: scheduleExceptions.id });
     });
@@ -2145,14 +2431,14 @@ const assignMemberSchema = z
   .object({
     activityId: z.string().uuid(),
     email: z.string().trim().toLowerCase().email(),
-    displayName: optional,
-    title: optional,
-    skills: optional,
+    displayName: optionalText,
+    title: optionalText,
+    skills: optionalText,
     languages: z.array(z.string().min(2).max(35)).max(30),
     expertise: z.string().trim().min(2).max(160),
     visibility: z.enum(["workspace", "public"]),
-    publicDisplayName: optional,
-    publicExpertise: optional,
+    publicDisplayName: optionalText,
+    publicExpertise: optionalText,
   })
   .superRefine((value, context) => {
     if (
@@ -2173,7 +2459,7 @@ const assignMemberSchema = z
  */
 export const assignMemberToActivity = protectedPermissionAction(
   "content.activity.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     if (!env.ENABLE_PHASE3_MEMBER_ASSIGNMENTS) {
       throw new Error("Phase 3 member assignments are not enabled");
     }
@@ -2315,17 +2601,15 @@ export const assignMemberToActivity = protectedPermissionAction(
     });
 
     if (!account && created) {
-      const session = await auth();
       await sendMemberInvitation({
         organizationId: activityOrganizationId,
         email: parsed.email,
         memberId: member.id,
-        invitedById: session?.user.id ?? null,
+        invitedById: user.id,
         locale,
         organizationName: activity.organizationName,
         teamName: activity.teamName,
-        inviterName:
-          session?.user.name ?? session?.user.email ?? activity.teamName,
+        inviterName: user.name ?? user.email ?? activity.teamName,
       });
     }
 

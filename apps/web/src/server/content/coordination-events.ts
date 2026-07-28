@@ -24,6 +24,7 @@ import {
   organizations,
   placeTranslations,
   places,
+  users,
 } from "~/server/db/schema";
 
 export const COORDINATION_MANAGE_PERMISSION = "coordination.event.manage";
@@ -48,6 +49,16 @@ export interface CoordinationEventText {
  */
 export interface CoordinationEventDetail
   extends CoordinationEventRecord, StewardContactValues {}
+
+/**
+ * A row as the console agenda lists it: the record plus who entered it. The
+ * creator is a person's name, so it is not part of `CoordinationEventRecord` —
+ * that type is what the public agenda returns, and it must not be able to
+ * carry a member of staff.
+ */
+export interface CoordinationEventListRecord extends CoordinationEventRecord {
+  createdByName: string | null;
+}
 
 export interface CoordinationEventRecord extends CoordinationEventText {
   id: string;
@@ -245,6 +256,15 @@ const stewardColumns = {
   stewardEmail: coordinationEvents.stewardEmail,
 } as const;
 
+/**
+ * Who entered the event. Selected only by the console list, for the same reason
+ * as the steward contact: the name of a person who works here is not part of an
+ * event, and the public queries cannot return what they do not select.
+ */
+const creatorColumns = {
+  createdByName: users.name,
+} as const;
+
 /** The columns every read returns, before the authored text is attached. */
 interface EventRow {
   id: string;
@@ -360,6 +380,36 @@ function workspaceQuery(locale: string) {
     );
 }
 
+/**
+ * The same query with the creator's name — the console list, where "who entered
+ * this" is part of answering for the agenda.
+ */
+function consoleListQuery(locale: string) {
+  return (
+    db
+      .select({ ...eventColumns, ...creatorColumns })
+      .from(coordinationEvents)
+      .leftJoin(
+        organizations,
+        eq(organizations.id, coordinationEvents.hostOrganizationId),
+      )
+      .leftJoin(
+        organizationProfiles,
+        eq(organizationProfiles.organizationId, organizations.id),
+      )
+      .leftJoin(places, eq(places.id, coordinationEvents.placeId))
+      .leftJoin(
+        placeTranslations,
+        and(
+          eq(placeTranslations.placeId, places.id),
+          eq(placeTranslations.languageCode, locale),
+        ),
+      )
+      // Outer: the creator may have been removed, and seeded events never had one.
+      .leftJoin(users, eq(users.id, coordinationEvents.createdById))
+  );
+}
+
 /** The workspace agenda for one person, newest schedule first. */
 export async function listCoordinationEvents({
   viewer,
@@ -371,8 +421,8 @@ export async function listCoordinationEvents({
   locale: PublicLocale;
   cityId?: string;
   includeArchived?: boolean;
-}): Promise<CoordinationEventRecord[]> {
-  const rows = await baseQuery(locale)
+}): Promise<CoordinationEventListRecord[]> {
+  const rows = await consoleListQuery(locale)
     .where(
       and(
         visibleTo(viewer),

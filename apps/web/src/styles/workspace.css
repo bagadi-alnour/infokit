@@ -1,0 +1,86 @@
+/* The member surfaces: the editor console and the translation workspace. This
+   is the public sheet plus the vocabulary it leaves out, loaded only by the
+   layouts that need it — a signed-in editor on a laptop can afford the whole
+   design system, a reader on a phone should not have to download it to read a
+   page of opening hours. */
+@import "./globals.css";
+
+@source "../app/*/dashboard/**/*.tsx";
+@source "../app/*/translate/**/*.tsx";
+@source "../app/*/simulator-editor-preview/**/*.tsx";
+@source "../components/admin/**/*.tsx";
+@source "../components/editor/**/*.tsx";
+@source "../components/ui/**/*.tsx";
+
+/* InkPilot is an editing engine; InfoKit remains responsible for its visual
+   language and deliberately disables media in public activity descriptions. */
+.infokit-rich-text-editor {
+  --wf-color-primary: var(--infokit-accent);
+  --wf-color-bg: var(--infokit-surface);
+  --wf-color-fg: var(--infokit-ink);
+  --wf-color-border: var(--infokit-border);
+  --wf-color-muted: var(--infokit-surface-subtle);
+  --wf-color-muted-fg: var(--infokit-text-muted);
+  --wf-color-error: var(--infokit-danger);
+  --wf-color-warning: var(--infokit-warning);
+  --wf-color-success: var(--infokit-success);
+  --wf-radius-sm: var(--infokit-radius-chip);
+  --wf-radius-md: var(--infokit-radius-control);
+}
+
+.infokit-rich-text-editor .wf-toolbar {
+  position: static;
+}
+
+.infokit-rich-text-editor .wf-toolbar-btn.is-active {
+  color: var(--infokit-accent-contrast);
+}
+
+.infokit-rich-text-editor .wf-toolbar-btn[hidden] {
+  display: none;
+}
+
+.infokit-rich-text-editor .ProseMirror {
+  min-height: 11rem;
+  max-width: none;
+}
+
+/* In the translation workspace the text *is* the work — a source pane and a
+   target pane are read against each other — so its editors get noticeably more
+   room than an ordinary description field. */
+[data-translation-workspace] .infokit-rich-text-editor .ProseMirror {
+  min-height: 20rem;
+}
+
+/* React Flow supplies graph behavior; the workspace tokens own its visuals. */
+.react-flow {
+  --xy-background-color: var(--infokit-surface-subtle);
+  --xy-edge-stroke: var(--infokit-border-strong);
+  --xy-edge-stroke-selected: var(--infokit-accent);
+  --xy-connectionline-stroke: var(--infokit-accent);
+  --xy-minimap-background-color: var(--infokit-surface);
+  --xy-minimap-mask-background-color: color-mix(
+    in oklch,
+    var(--infokit-surface-subtle) 72%,
+    transparent
+  );
+  --xy-controls-button-background-color: var(--infokit-surface);
+  --xy-controls-button-background-color-hover: var(--infokit-accent-soft);
+  --xy-controls-button-color: var(--infokit-ink);
+  --xy-controls-button-border-color: var(--infokit-border);
+}
+
+.react-flow__node {
+  font-family: var(--infokit-font-body);
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--infokit-accent);
+}
+
+.simulator-handle {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 2px solid var(--infokit-surface);
+  background: var(--infokit-accent);
+}

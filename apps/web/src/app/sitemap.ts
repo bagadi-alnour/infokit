@@ -1,26 +1,42 @@
 import type { MetadataRoute } from "next";
-import { supportedLocales } from "@infokit/shared/i18n";
+import { publicSupportedLocales } from "@infokit/shared/i18n";
 
 import { languageAlternates, localizedPath } from "~/i18n/routing";
 import { absoluteUrl } from "~/seo/site";
+import { listPublicRoutes } from "~/server/content/public-routes";
 
 /**
- * Only public, indexable read surfaces belong here. Auth and dashboard routes
- * are deliberately excluded; future content pages should be sourced from the
- * verified public read model and add their localized alternates here.
+ * Every public page, in all eleven reading languages.
+ *
+ * What belongs here is decided in `public-routes.ts`, which reads the published
+ * record and nothing else; this file only turns those entries into the XML
+ * shape. Each page appears once per locale with the full set of alternates
+ * attached, so a crawler that finds the Pashto URL learns the other ten exist
+ * and treats them as one page rather than eleven near-duplicates. Auth and
+ * console routes are absent by construction — they are never public routes.
  */
-export default function sitemap(): MetadataRoute.Sitemap {
-  const languages = Object.fromEntries(
-    Object.entries(languageAlternates("/")).map(([locale, path]) => [
-      locale,
-      absoluteUrl(path),
-    ]),
-  );
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const routes = await listPublicRoutes();
 
-  return supportedLocales.map((locale) => ({
-    url: absoluteUrl(localizedPath("/", locale)),
-    changeFrequency: "weekly",
-    priority: 1,
-    alternates: { languages },
-  }));
+  return routes.flatMap((route) => {
+    const languages = Object.fromEntries(
+      Object.entries(languageAlternates(route.paths.fr, route.paths)).map(
+        ([locale, path]) => [locale, absoluteUrl(path)],
+      ),
+    );
+    return publicSupportedLocales.map((locale) => ({
+      url: absoluteUrl(localizedPath(route.paths[locale], locale)),
+      lastModified: route.lastModified,
+      changeFrequency: route.changeFrequency,
+      priority: route.priority,
+      alternates: { languages },
+    }));
+  });
 }
+
+/**
+ * Rebuilt on the same cadence as the pages it lists: often enough that a new
+ * activity is announced the day it is published, rarely enough that a crawler
+ * hitting this route cannot turn it into a query storm.
+ */
+export const revalidate = 3600;

@@ -250,6 +250,8 @@ The current organisation name and user role remain visible in the workspace shel
 
 Build every Phase 1 P0 screen before designing later phases. Open Design produces single-page artifacts, so treat each row as one focused artifact or one tightly related interactive state set.
 
+"Required content" means required when the record has it: provider logos and names appear on every activity an association provides, while an activity the platform publishes itself names no provider, so that row is omitted rather than shown empty (`PRODUCT.md` §14.1).
+
 | ID   | Phase | Phase priority | Screen/artifact                          | Required content and states                                                                                                                                                                                                                                                                        |
 | ---- | ----- | -------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | P-01 | 1     | P0             | Public service finder                    | Multilingual grouped autocomplete for location/association/need, audience/category filters, list/map switch, provider logos/names, low-bandwidth list default                                                                                                                                      |

@@ -1,12 +1,15 @@
 "use client";
 
-import { ImageUp, Trash2, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { FileText, ImageUp, LoaderCircle, Trash2, Upload } from "lucide-react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import {
+  addArticleDownload,
+  createArticleDocumentUpload,
   createArticleImageUpload,
   removeArticleCoverImage,
+  removeArticleDownload,
   setArticleCoverImage,
 } from "~/app/[locale]/dashboard/articles/image-actions";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
@@ -14,12 +17,12 @@ import {
   CoverImagePreview,
   useCoverImagePreview,
 } from "~/components/admin/cover-image-preview";
-import { PendingButton } from "~/components/pending-button";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import type { EditorialLanguage } from "~/lib/editorial-languages";
+import { cn } from "~/lib/utils";
 
 export function ArticleMediaManager({
   locale,
@@ -36,6 +39,7 @@ export function ArticleMediaManager({
 }) {
   const showActionError = useActionErrorToast();
   const [busy, setBusy] = useState(false);
+  const [removing, startRemoving] = useTransition();
   const [altText, setAltText] = useState("");
   const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,51 +82,243 @@ export function ArticleMediaManager({
     }
   };
 
-  const remove = async (formData: FormData) => {
-    try {
-      await removeArticleCoverImage(formData);
-      clearPreview();
-      toast.success(labels["image.removed"]);
-    } catch (error) {
-      showActionError(error, labels["image.removeError"] ?? "");
-    }
+  /**
+   * Removing the photo posts on its own, from a button rather than a form of
+   * its own: this manager sits inside the article's editor form, and a form
+   * cannot contain another one.
+   */
+  const remove = () => {
+    startRemoving(async () => {
+      try {
+        const request = new FormData();
+        request.set("locale", locale);
+        request.set("entryId", entryId);
+        await removeArticleCoverImage(request);
+        clearPreview();
+        toast.success(labels["image.removed"]);
+      } catch (error) {
+        showActionError(error, labels["image.removeError"] ?? "");
+      }
+    });
   };
   const previewAlt = altText.trim()
     ? altText
     : (cover?.altText ?? labels["image.attached"] ?? "");
 
   return (
-    <div className="grid gap-3">
-      {previewSrc ? (
-        <CoverImagePreview src={previewSrc} alt={previewAlt} />
-      ) : null}
-      {cover ? (
-        <div className="border-line bg-subtle flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
-          <span className="inline-flex items-center gap-2">
-            <ImageUp className="size-4" aria-hidden />
-            {labels["image.attached"]}
-          </span>
-          <form action={remove}>
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="entryId" value={entryId} />
-            <PendingButton variant="ghost" className="text-danger">
-              <Trash2 aria-hidden />
+    // The photo beside what describes it, once there is a photo to show. Keyed
+    // to this card's own width: it is a narrow column on some screens and the
+    // full width of the editor on others.
+    <div
+      className={cn(
+        "@container grid items-start gap-4",
+        previewSrc ? "@2xl:grid-cols-2" : null,
+      )}
+    >
+      <div className="grid min-w-0 gap-3">
+        {previewSrc ? (
+          <CoverImagePreview src={previewSrc} alt={previewAlt} />
+        ) : null}
+        {cover ? (
+          <div className="border-line bg-subtle flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
+            <span className="inline-flex items-center gap-2">
+              <ImageUp className="size-4" aria-hidden />
+              {labels["image.attached"]}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-danger"
+              disabled={removing}
+              onClick={remove}
+            >
+              {removing ? (
+                <LoaderCircle className="animate-spin" aria-hidden />
+              ) : (
+                <Trash2 aria-hidden />
+              )}
               {labels["image.remove"]}
-            </PendingButton>
-          </form>
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      <div className="grid min-w-0 gap-3">
+        <Field>
+          <FieldLabel htmlFor="article-cover-alt">
+            {labels["image.alt"]}
+          </FieldLabel>
+          <Input
+            id="article-cover-alt"
+            value={altText}
+            onChange={(event) => {
+              setAltText(event.target.value);
+            }}
+            maxLength={500}
+          />
+        </Field>
+        <label className="border-line bg-subtle flex items-start gap-3 rounded-lg border p-3 text-sm">
+          <Checkbox
+            className="mt-0.5 shrink-0"
+            checked={rightsConfirmed}
+            onCheckedChange={setRightsConfirmed}
+          />
+          <span>{labels["image.rights"]}</span>
+        </label>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/avif"
+          className="hidden"
+          onChange={(event) => void upload(event.target.files?.[0])}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy || !rightsConfirmed || altText.trim().length === 0}
+            onClick={() => inputRef.current?.click()}
+          >
+            <Upload aria-hidden />
+            {cover ? labels["image.replace"] : labels["image.select"]}
+          </Button>
+          <span className="text-copy-muted text-xs">
+            {busy ? labels["image.uploading"] : labels["image.constraints"]}
+          </span>
         </div>
-      ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The documents offered with the article — a form to fill in, a printable
+ * guide. It sits beside the tags field, so it is shaped like one: a label, what
+ * is already attached, and a single way to add another.
+ *
+ * Every action posts from a button rather than a form of its own: this manager
+ * lives inside the article's editor form, and a form cannot contain another.
+ */
+export function ArticleDownloadsManager({
+  locale,
+  entryId,
+  sourceLanguage,
+  downloads,
+  labels,
+}: {
+  locale: string;
+  entryId: string;
+  sourceLanguage: EditorialLanguage;
+  downloads: { assetId: string; title: string }[];
+  labels: Record<string, string>;
+}) {
+  const showActionError = useActionErrorToast();
+  const [busy, setBusy] = useState(false);
+  const [removing, startRemoving] = useTransition();
+  const [title, setTitle] = useState("");
+  const [rightsConfirmed, setRightsConfirmed] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const upload = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const request = new FormData();
+      request.set("locale", locale);
+      request.set("byteSize", String(file.size));
+      request.set("languageCode", sourceLanguage);
+      request.set("rightsConfirmed", rightsConfirmed ? "true" : "false");
+      const signed = await createArticleDocumentUpload(request);
+      const response = await fetch(signed.uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": "application/pdf" },
+      });
+      if (!response.ok) throw new Error("Upload failed");
+      const attach = new FormData();
+      attach.set("locale", locale);
+      attach.set("entryId", entryId);
+      attach.set("assetId", signed.assetId);
+      attach.set("languageCode", sourceLanguage);
+      attach.set("title", title);
+      await addArticleDownload(attach);
+      toast.success(labels["download.added"]);
+      setTitle("");
+      setRightsConfirmed(false);
+    } catch (error) {
+      showActionError(error, labels["download.error"] ?? "");
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const remove = (assetId: string) => {
+    startRemoving(async () => {
+      try {
+        const request = new FormData();
+        request.set("locale", locale);
+        request.set("entryId", entryId);
+        request.set("assetId", assetId);
+        await removeArticleDownload(request);
+        toast.success(labels["download.removed"]);
+      } catch (error) {
+        showActionError(error, labels["download.removeError"] ?? "");
+      }
+    });
+  };
+
+  return (
+    <section className="grid min-w-0 content-start gap-3">
+      <div>
+        <h3 className="text-sm font-medium">{labels["download.heading"]}</h3>
+        <p className="text-copy-muted mt-0.5 text-xs">
+          {labels["download.hint"]}
+        </p>
+      </div>
+      {downloads.length > 0 ? (
+        <ul className="grid gap-2">
+          {downloads.map((download) => (
+            <li
+              key={download.assetId}
+              className="border-line bg-subtle flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm"
+            >
+              <span className="inline-flex min-w-0 items-center gap-2">
+                <FileText className="size-4 shrink-0" aria-hidden />
+                <span className="truncate">{download.title}</span>
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-danger shrink-0"
+                disabled={removing}
+                onClick={() => {
+                  remove(download.assetId);
+                }}
+              >
+                {removing ? (
+                  <LoaderCircle className="animate-spin" aria-hidden />
+                ) : (
+                  <Trash2 aria-hidden />
+                )}
+                {labels["download.remove"]}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-copy-muted text-sm">{labels["download.empty"]}</p>
+      )}
       <Field>
-        <FieldLabel htmlFor="article-cover-alt">
-          {labels["image.alt"]}
+        <FieldLabel htmlFor="article-download-title">
+          {labels["download.title"]}
         </FieldLabel>
         <Input
-          id="article-cover-alt"
-          value={altText}
+          id="article-download-title"
+          value={title}
           onChange={(event) => {
-            setAltText(event.target.value);
+            setTitle(event.target.value);
           }}
-          maxLength={500}
+          maxLength={200}
         />
       </Field>
       <label className="border-line bg-subtle flex items-start gap-3 rounded-lg border p-3 text-sm">
@@ -131,12 +327,12 @@ export function ArticleMediaManager({
           checked={rightsConfirmed}
           onCheckedChange={setRightsConfirmed}
         />
-        <span>{labels["image.rights"]}</span>
+        <span>{labels["download.rights"]}</span>
       </label>
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/avif"
+        accept="application/pdf"
         className="hidden"
         onChange={(event) => void upload(event.target.files?.[0])}
       />
@@ -144,16 +340,16 @@ export function ArticleMediaManager({
         <Button
           type="button"
           variant="outline"
-          disabled={busy || !rightsConfirmed || altText.trim().length === 0}
+          disabled={busy || !rightsConfirmed || title.trim().length < 2}
           onClick={() => inputRef.current?.click()}
         >
           <Upload aria-hidden />
-          {cover ? labels["image.replace"] : labels["image.select"]}
+          {labels["download.add"]}
         </Button>
         <span className="text-copy-muted text-xs">
-          {busy ? labels["image.uploading"] : labels["image.constraints"]}
+          {busy ? labels["download.uploading"] : labels["download.constraints"]}
         </span>
       </div>
-    </div>
+    </section>
   );
 }

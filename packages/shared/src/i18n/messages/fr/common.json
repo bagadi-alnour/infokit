@@ -17,5 +17,14 @@
   "fresh.overdue": "Vérification en retard",
   "fresh.never": "Jamais vérifié",
   "today.scheduled": "Aujourd’hui",
-  "action.confirmToday": "Confirmer aujourd’hui"
+  "action.confirmToday": "Confirmer aujourd’hui",
+  "form.required": "Requis",
+  "form.invalid": "Vérifiez cette valeur.",
+  "form.saveFailed": "L’enregistrement a échoué. Réessayez.",
+  "form.tooLong": "Ce texte dépasse la longueur autorisée.",
+  "form.tooShort": "Ce texte est plus court que la longueur autorisée.",
+  "form.endBeforeStart": "La fin doit suivre le début.",
+  "form.invalidDate": "Saisissez une date valide.",
+  "form.invalidTime": "Saisissez une heure valide.",
+  "form.reviewFields": "Certains champs demandent une correction avant l’enregistrement."
 }

@@ -8,38 +8,21 @@ import { type Locale } from "@infokit/shared/i18n";
 
 import { localizedPath } from "~/i18n/routing";
 import { parseStewardContact } from "~/lib/steward-contact";
+import { optionalNumber, optionalText } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { db } from "~/server/db";
 import { places, placeTranslations } from "~/server/db/schema";
 
-const optional = z
-  .string()
-  .trim()
-  .transform((v) => (v === "" ? null : v));
-
-const optionalNumber = z
-  .string()
-  .trim()
-  .transform((v, ctx) => {
-    if (v === "") return null;
-    const n = Number(v);
-    if (!Number.isFinite(n)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Not a number" });
-      return z.NEVER;
-    }
-    return n;
-  });
-
 const placeFieldsSchema = z.object({
   nameFr: z.string().trim().min(2),
-  nameEn: optional,
-  nameAr: optional,
-  organizationId: optional,
+  nameEn: optionalText,
+  nameAr: optionalText,
+  organizationId: optionalText,
   cityId: z.string().uuid(),
-  cityAreaId: optional,
-  addressLine: optional,
-  postalCode: optional,
+  cityAreaId: optionalText,
+  addressLine: optionalText,
+  postalCode: optionalText,
   lat: optionalNumber,
   lng: optionalNumber,
   precision: z.enum(["exact", "area_only", "contact_to_learn"]),

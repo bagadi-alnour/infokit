@@ -13,34 +13,30 @@ import {
 import { Field, Notice, Select, TextInput } from "~/components/admin/workspace";
 
 import {
-  ActiveToggle,
+  actionsColumn,
+  scopeColumn,
+  stateColumn,
+  usageColumn,
+} from "./catalogue-columns";
+import {
   CatalogueCreateDialog,
   NewRowScopeFields,
-  ScopeChip,
   ScopeFilter,
   StateFilter,
 } from "./catalogue-row-controls";
-import type {
-  CatalogueLabels,
-  CatalogueRights,
-  CatalogueTagRow,
+import {
+  hasMixedScopes,
+  matchesScope,
+  matchesState,
+  tagColorTokens,
+  visibilityText,
+  type CatalogueLabels,
+  type CatalogueRights,
+  type CatalogueTagRow,
 } from "./catalogue-rows";
 import { DataTable } from "./data-table";
-import { DeleteButton } from "./delete-button";
 import { EditTagButton } from "./edit-tag-button";
 import { SelectControl } from "./select-control";
-
-const COLOR_TOKENS = ["neutral", "accent", "ok", "warn", "danger"] as const;
-
-/** "Public" or "Workspace only" — the words a reader sees for a stored value. */
-function visibilityText(
-  labels: CatalogueLabels,
-  value: CatalogueTagRow["visibility"],
-) {
-  return value === "public"
-    ? labels["catalogue.tags.visibility.public"]
-    : labels["catalogue.tags.visibility.workspace"];
-}
 
 /**
  * Tags — free labels for search and filters. They never grant access, so the
@@ -67,9 +63,7 @@ export function CatalogueTagsPanel({
     () => [...new Set(rows.map((row) => row.namespace))].sort(),
     [rows],
   );
-  const mixedScopes =
-    rows.some((row) => row.organizationId === null) &&
-    rows.some((row) => row.organizationId !== null);
+  const mixedScopes = hasMixedScopes(rows);
 
   const filtered = useMemo(
     () =>
@@ -77,33 +71,14 @@ export function CatalogueTagsPanel({
         (row) =>
           (namespace === "" || row.namespace === namespace) &&
           (visibility === "" || row.visibility === visibility) &&
-          (scope === "" ||
-            (scope === "global"
-              ? row.organizationId === null
-              : row.organizationId !== null)) &&
-          (state === "" || String(row.active) === state),
+          matchesScope(scope, row.organizationId) &&
+          matchesState(state, row.active),
       ),
     [namespace, rows, scope, state, visibility],
   );
 
-  const columns = useMemo<ColumnDef<CatalogueTagRow>[]>(() => {
-    const editLabels = {
-      edit: labels["catalogue.tags.edit"],
-      name: labels["catalogue.tags.labelFr"],
-      namespace: labels["catalogue.tags.namespace"],
-      color: labels["catalogue.tags.color"],
-      visibility: labels["catalogue.tags.visibility"],
-      visibilityPublic: labels["catalogue.tags.visibility.public"],
-      visibilityWorkspace: labels["catalogue.tags.visibility.workspace"],
-      save: labels["catalogue.save"],
-    };
-    const deleteLabels = {
-      delete: labels["catalogue.delete"],
-      confirm: labels["catalogue.deleteConfirm"],
-      hint: labels["catalogue.deleteHint"],
-      cancel: labels["catalogue.cancel"],
-    };
-    return [
+  const columns = useMemo<ColumnDef<CatalogueTagRow>[]>(
+    () => [
       {
         id: "name",
         accessorFn: (row) => row.label,
@@ -139,79 +114,37 @@ export function CatalogueTagsPanel({
           </span>
         ),
       },
-      {
-        id: "scope",
-        accessorFn: (row) => (row.organizationId === null ? 0 : 1),
-        header: () => labels["catalogue.tags.scope"],
-        meta: { label: labels["catalogue.tags.scope"] },
-        cell: ({ row }) => (
-          <ScopeChip
-            organizationId={row.original.organizationId}
-            labels={labels}
-          />
-        ),
-      },
-      {
-        id: "usage",
-        accessorFn: (row) => row.usageCount,
-        header: () => labels["catalogue.column.usage"],
-        meta: { label: labels["catalogue.column.usage"], align: "end" },
-      },
-      {
-        id: "state",
-        accessorFn: (row) => (row.active ? 0 : 1),
-        header: () => labels["catalogue.status.active"],
-        meta: { label: labels["catalogue.status.active"] },
-        cell: ({ row }) => (
-          <ActiveToggle
-            action={setTagActive}
-            idName="tagId"
-            id={row.original.id}
-            active={row.original.active}
-            organizationId={row.original.organizationId}
-            canEdit={row.original.canEdit}
+      scopeColumn<CatalogueTagRow>(labels, labels["catalogue.tags.scope"]),
+      usageColumn<CatalogueTagRow>(labels),
+      stateColumn<CatalogueTagRow>({
+        labels,
+        locale,
+        action: setTagActive,
+        idName: "tagId",
+        value: (row) => row.active,
+      }),
+      actionsColumn<CatalogueTagRow>({
+        labels,
+        locale,
+        action: deleteTag,
+        idName: "tagId",
+        edit: (row) => (
+          <EditTagButton
+            action={updateTag}
             locale={locale}
+            tagId={row.id}
+            organizationId={row.organizationId}
+            name={row.labelFr}
+            namespace={row.namespace}
+            colorToken={row.colorToken}
+            visibility={row.visibility}
             labels={labels}
-            onLabel={labels["catalogue.status.active"]}
-            offLabel={labels["catalogue.status.inactive"]}
           />
         ),
-      },
-      {
-        id: "actions",
-        header: () => labels["catalogue.column.actions"],
-        meta: { label: labels["catalogue.column.actions"], align: "end" },
-        enableSorting: false,
-        enableHiding: false,
-        cell: ({ row }) =>
-          row.original.canEdit ? (
-            <span className="inline-flex items-center justify-end gap-1">
-              <EditTagButton
-                action={updateTag}
-                locale={locale}
-                tagId={row.original.id}
-                organizationId={row.original.organizationId}
-                name={row.original.labelFr}
-                namespace={row.original.namespace}
-                colorToken={row.original.colorToken}
-                visibility={row.original.visibility}
-                labels={editLabels}
-              />
-              {row.original.canDelete ? (
-                <DeleteButton
-                  action={deleteTag}
-                  idName="tagId"
-                  id={row.original.id}
-                  organizationId={row.original.organizationId}
-                  locale={locale}
-                  labels={deleteLabels}
-                />
-              ) : null}
-            </span>
-          ) : null,
-      },
-    ];
-  }, [labels, locale]);
+      }),
+    ],
+    [labels, locale],
+  );
 
   return (
     <div className="grid gap-4">
@@ -265,16 +198,10 @@ export function CatalogueTagsPanel({
             {mixedScopes ? (
               <ScopeFilter scope={scope} onChange={setScope} labels={labels} />
             ) : null}
-            <StateFilter
-              state={state}
-              onChange={setState}
-              labels={labels}
-              onLabel={labels["catalogue.status.active"]}
-              offLabel={labels["catalogue.status.inactive"]}
-            />
+            <StateFilter state={state} onChange={setState} labels={labels} />
           </>
         }
-        toolbarExtra={
+        createAction={
           rights.canManageGlobal || rights.canManageOrg ? (
             <CatalogueCreateDialog
               action={createTag}
@@ -319,7 +246,7 @@ export function CatalogueTagsPanel({
               </Field>
               <Field label={labels["catalogue.tags.color"]}>
                 <Select name="colorToken" defaultValue="neutral">
-                  {COLOR_TOKENS.map((tone) => (
+                  {tagColorTokens.map((tone) => (
                     <option key={tone} value={tone}>
                       {tone}
                     </option>

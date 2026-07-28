@@ -8,8 +8,8 @@ import { type Locale } from "@infokit/shared/i18n";
 
 import { localizedPath } from "~/i18n/routing";
 import { editorialLanguageCodes } from "~/lib/editorial-languages";
+import { optionalText } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
-import { auth } from "~/server/auth";
 import {
   hasActualPlatformPermission,
   superadminPermission,
@@ -41,11 +41,6 @@ import {
   sendRepresentativeInvitation,
 } from "~/server/invitations";
 
-const optional = z
-  .string()
-  .trim()
-  .transform((v) => (v === "" ? null : v));
-
 const orgIdSchema = z.string().uuid();
 const optionalFoundedYear = z.preprocess(
   (value) => (value === "" || value === null ? null : value),
@@ -62,17 +57,6 @@ function refresh(locale: Locale, organizationId?: string) {
   revalidatePath(localizedPath("/dashboard", locale));
 }
 
-/**
- * Enforce the claim rule for a mutation on an existing organisation: platform
- * admins are read-only once the organisation is claimed, while its own members
- * may always edit it. Throws when the actor may not write.
- */
-async function guardOrganizationWrite(organizationId: string) {
-  const session = await auth();
-  if (!session?.user.id) throw new Error("Authentication required");
-  await assertOrganizationWritable(session.user.id, organizationId);
-}
-
 function slugify(input: string): string {
   return input
     .normalize("NFKD")
@@ -87,7 +71,7 @@ function slugify(input: string): string {
 
 const createOrganizationSchema = z.object({
   displayName: z.string().trim().min(2),
-  legalName: optional,
+  legalName: optionalText,
   foundedYear: optionalFoundedYear,
   status: z.enum(["draft", "verified"]),
 });
@@ -150,20 +134,20 @@ export const createOrganization = protectedPermissionAction(
 const updateOrganizationSchema = z.object({
   organizationId: orgIdSchema,
   displayName: z.string().trim().min(2),
-  legalName: optional,
+  legalName: optionalText,
   foundedYear: optionalFoundedYear,
   /** `archived` is never offered in the form; it round-trips so an actor who
    * cannot change status (an org member) does not silently restore a record. */
   status: z.enum(["draft", "verified", "suspended", "archived"]),
-  website: optional,
-  sourceUrl: optional,
-  sourceCheckedOn: optional,
+  website: optionalText,
+  sourceUrl: optionalText,
+  sourceCheckedOn: optionalText,
   published: z.literal("on").nullable(),
 });
 
 export const updateOrganization = protectedPermissionAction(
   "organization.profile.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = updateOrganizationSchema.parse({
       organizationId: formData.get("organizationId"),
       displayName: formData.get("displayName"),
@@ -175,7 +159,7 @@ export const updateOrganization = protectedPermissionAction(
       sourceCheckedOn: formData.get("sourceCheckedOn") ?? "",
       published: formData.get("published"),
     });
-    await guardOrganizationWrite(parsed.organizationId);
+    await assertOrganizationWritable(user.id, parsed.organizationId);
     await db
       .update(organizations)
       .set({
@@ -302,14 +286,12 @@ async function sealNarrativeSource(organizationId: string, actorId: string) {
  */
 export const setOrganizationNarrativeLanguage = protectedPermissionAction(
   "organization.profile.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
     const sourceLanguage = z
       .enum(editorialLanguageCodes)
       .parse(formData.get("sourceLanguage"));
-    await guardOrganizationWrite(organizationId);
-    const session = await auth();
-    if (!session?.user.id) throw new Error("Authentication required");
+    await assertOrganizationWritable(user.id, organizationId);
     await db
       .insert(organizationProfiles)
       .values({ organizationId, narrativeSourceLanguage: sourceLanguage })
@@ -317,7 +299,7 @@ export const setOrganizationNarrativeLanguage = protectedPermissionAction(
         target: organizationProfiles.organizationId,
         set: { narrativeSourceLanguage: sourceLanguage },
       });
-    await sealNarrativeSource(organizationId, session.user.id);
+    await sealNarrativeSource(organizationId, user.id);
     await recordAudit({
       action: "organization.updated",
       subjectType: "organization",
@@ -334,15 +316,15 @@ export const setOrganizationNarrativeLanguage = protectedPermissionAction(
 
 const purposeSchema = z.object({
   organizationId: orgIdSchema,
-  languageCode: z.enum(["fr", "en", "ar"]),
+  languageCode: z.enum(editorialLanguageCodes),
   purpose: z.string().trim().min(1),
-  goals: optional,
-  values: optional,
+  goals: optionalText,
+  values: optionalText,
 });
 
 export const upsertOrganizationPurpose = protectedPermissionAction(
   "organization.profile.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = purposeSchema.parse({
       organizationId: formData.get("organizationId"),
       languageCode: formData.get("languageCode"),
@@ -350,9 +332,7 @@ export const upsertOrganizationPurpose = protectedPermissionAction(
       goals: formData.get("goals") ?? "",
       values: formData.get("values") ?? "",
     });
-    await guardOrganizationWrite(parsed.organizationId);
-    const session = await auth();
-    if (!session?.user.id) throw new Error("Authentication required");
+    await assertOrganizationWritable(user.id, parsed.organizationId);
     await db
       .insert(organizationProfiles)
       .values({ organizationId: parsed.organizationId })
@@ -371,7 +351,7 @@ export const upsertOrganizationPurpose = protectedPermissionAction(
           values: parsed.values,
         },
       });
-    await sealNarrativeSource(parsed.organizationId, session.user.id);
+    await sealNarrativeSource(parsed.organizationId, user.id);
     await recordAudit({
       action: "organization.updated",
       subjectType: "organization",
@@ -390,9 +370,9 @@ export const upsertOrganizationPurpose = protectedPermissionAction(
 
 export const addOrganizationSpeciality = protectedPermissionAction(
   "organization.profile.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
-    await guardOrganizationWrite(organizationId);
+    await assertOrganizationWritable(user.id, organizationId);
     const specialityId = z.string().uuid().parse(formData.get("specialityId"));
     await db
       .insert(organizationSpecialities)
@@ -410,9 +390,9 @@ export const addOrganizationSpeciality = protectedPermissionAction(
 
 export const retireOrganizationSpeciality = protectedPermissionAction(
   "organization.profile.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
-    await guardOrganizationWrite(organizationId);
+    await assertOrganizationWritable(user.id, organizationId);
     const assignmentId = z.string().uuid().parse(formData.get("assignmentId"));
     await db
       .update(organizationSpecialities)
@@ -433,12 +413,12 @@ export const retireOrganizationSpeciality = protectedPermissionAction(
   },
 );
 
-/** Primary is optional (PRODUCT.md §14.3): empty value clears it (co-equal). */
+/** Primary is optionalText (PRODUCT.md §14.3): empty value clears it (co-equal). */
 export const setPrimarySpeciality = protectedPermissionAction(
   "organization.profile.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
-    await guardOrganizationWrite(organizationId);
+    await assertOrganizationWritable(user.id, organizationId);
     const raw = z.string().parse(formData.get("assignmentId") ?? "");
     const assignmentId = raw === "" ? null : z.string().uuid().parse(raw);
     await db
@@ -477,9 +457,9 @@ export const setPrimarySpeciality = protectedPermissionAction(
 
 export const toggleOrganizationLanguage = protectedPermissionAction(
   "organization.profile.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
-    await guardOrganizationWrite(organizationId);
+    await assertOrganizationWritable(user.id, organizationId);
     const languageCode = z.string().min(2).parse(formData.get("languageCode"));
     const enabled = formData.get("enabled") === "true";
     if (enabled) {
@@ -506,20 +486,20 @@ export const toggleOrganizationLanguage = protectedPermissionAction(
 const contactSchema = z.object({
   organizationId: orgIdSchema,
   kind: z.enum(["phone", "whatsapp", "email", "on_site", "url"]),
-  value: optional,
-  labelFr: optional,
+  value: optionalText,
+  labelFr: optionalText,
 });
 
 export const addOrganizationContact = protectedPermissionAction(
   "organization.profile.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = contactSchema.parse({
       organizationId: formData.get("organizationId"),
       kind: formData.get("kind"),
       value: formData.get("value") ?? "",
       labelFr: formData.get("labelFr") ?? "",
     });
-    await guardOrganizationWrite(parsed.organizationId);
+    await assertOrganizationWritable(user.id, parsed.organizationId);
     const [contact] = await db
       .insert(contacts)
       .values({
@@ -547,9 +527,9 @@ export const addOrganizationContact = protectedPermissionAction(
 
 export const toggleOrganizationContact = protectedPermissionAction(
   "organization.profile.manage",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
-    await guardOrganizationWrite(organizationId);
+    await assertOrganizationWritable(user.id, organizationId);
     const contactId = z.string().uuid().parse(formData.get("contactId"));
     const active = formData.get("active") === "true";
     await db
@@ -581,9 +561,9 @@ export const toggleOrganizationContact = protectedPermissionAction(
  */
 export const setOrganizationArchived = protectedPermissionAction(
   "organization.verify",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
-    await guardOrganizationWrite(organizationId);
+    await assertOrganizationWritable(user.id, organizationId);
     const archive = formData.get("archive") === "true";
     await db
       .update(organizations)
@@ -611,7 +591,7 @@ export const setOrganizationArchived = protectedPermissionAction(
 const inviteRepresentativeSchema = z.object({
   organizationId: orgIdSchema,
   email: z.string().trim().toLowerCase().email(),
-  displayName: optional,
+  displayName: optionalText,
   roleCode: z.enum(INVITABLE_ROLE_CODES),
 });
 
@@ -656,19 +636,18 @@ async function requireRoleTemplate(code: string) {
  */
 export const inviteOrganizationRepresentative = protectedPermissionAction(
   "organization.verify",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = inviteRepresentativeSchema.parse({
       organizationId: formData.get("organizationId"),
       email: formData.get("email"),
       displayName: formData.get("displayName") ?? "",
       roleCode: formData.get("roleCode"),
     });
-    await guardOrganizationWrite(parsed.organizationId);
+    await assertOrganizationWritable(user.id, parsed.organizationId);
 
-    const [organization, role, session] = await Promise.all([
+    const [organization, role] = await Promise.all([
       requireOrganization(parsed.organizationId),
       requireRoleTemplate(parsed.roleCode),
-      auth(),
     ]);
     const [account] = await db
       .select({ id: users.id, name: users.name })
@@ -740,7 +719,7 @@ export const inviteOrganizationRepresentative = protectedPermissionAction(
         .values({
           memberId,
           roleId: role.id,
-          grantedById: session?.user.id ?? null,
+          grantedById: user.id,
         })
         .onConflictDoNothing();
       await claimOrganizationIfSteward(memberId, parsed.organizationId);
@@ -758,11 +737,10 @@ export const inviteOrganizationRepresentative = protectedPermissionAction(
         memberId,
         kind: invitationKindForRole(parsed.roleCode),
         roleIds: [role.id],
-        invitedById: session?.user.id ?? null,
+        invitedById: user.id,
         locale,
         organizationName: organization.displayName,
-        inviterName:
-          session?.user.name ?? session?.user.email ?? organization.displayName,
+        inviterName: user.name ?? user.email ?? organization.displayName,
       });
     }
     refresh(locale, parsed.organizationId);
@@ -776,9 +754,9 @@ export const inviteOrganizationRepresentative = protectedPermissionAction(
  */
 export const resendOrganizationInvitation = protectedPermissionAction(
   "organization.verify",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
-    await guardOrganizationWrite(organizationId);
+    await assertOrganizationWritable(user.id, organizationId);
     const invitationId = invitationIdSchema.parse(formData.get("invitationId"));
 
     const [invitation] = await db
@@ -802,7 +780,7 @@ export const resendOrganizationInvitation = protectedPermissionAction(
       throw new Error("Team invitations are resent from the team console");
     }
 
-    const [roleRows, memberRow, organization, session] = await Promise.all([
+    const [roleRows, memberRow, organization] = await Promise.all([
       db
         .select({ roleId: invitationRoles.roleId })
         .from(invitationRoles)
@@ -818,7 +796,6 @@ export const resendOrganizationInvitation = protectedPermissionAction(
         )
         .limit(1),
       requireOrganization(organizationId),
-      auth(),
     ]);
     const memberId = memberRow[0]?.id;
     if (!memberId) throw new Error("The invited membership no longer exists");
@@ -829,11 +806,10 @@ export const resendOrganizationInvitation = protectedPermissionAction(
       memberId,
       kind: invitation.kind,
       roleIds: roleRows.map((row) => row.roleId),
-      invitedById: session?.user.id ?? null,
+      invitedById: user.id,
       locale,
       organizationName: organization.displayName,
-      inviterName:
-        session?.user.name ?? session?.user.email ?? organization.displayName,
+      inviterName: user.name ?? user.email ?? organization.displayName,
     });
     refresh(locale, organizationId);
   },
@@ -847,9 +823,9 @@ export const resendOrganizationInvitation = protectedPermissionAction(
  */
 export const revokeOrganizationInvitation = protectedPermissionAction(
   "organization.verify",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
-    await guardOrganizationWrite(organizationId);
+    await assertOrganizationWritable(user.id, organizationId);
     const invitationId = invitationIdSchema.parse(formData.get("invitationId"));
 
     const now = new Date();
@@ -895,16 +871,9 @@ export const revokeOrganizationInvitation = protectedPermissionAction(
  */
 export const releaseOrganizationClaim = protectedPermissionAction(
   superadminPermission,
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
-    const session = await auth();
-    if (!session?.user.id) throw new Error("Authentication required");
-    if (
-      !(await hasActualPlatformPermission(
-        session.user.id,
-        superadminPermission,
-      ))
-    ) {
+    if (!(await hasActualPlatformPermission(user.id, superadminPermission))) {
       throw new Error("Support access required to release a claim");
     }
     const reason = z

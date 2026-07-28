@@ -19,6 +19,17 @@
  */
 const color = (name) => `var(--infokit-${name})`;
 
+/**
+ * A colour that survives a runtime which does not know the variable yet — an app
+ * still running a bundle from before the role existed, or a provider from an
+ * older `@infokit/ui`. Without the fallback such a variable resolves to nothing
+ * and the text is painted in no colour at all, which on a dark canvas means
+ * invisible. Legibility is never allowed to depend on a fresh bundle
+ * (docs/DESIGN-SYSTEM.md rule 7: colour is a layer that may drop, text is not).
+ */
+const colorOr = (name, fallback) =>
+  `var(--infokit-${name}, var(--infokit-${fallback}))`;
+
 module.exports = {
   theme: {
     extend: {
@@ -46,6 +57,17 @@ module.exports = {
         "danger-soft": color("danger-soft"),
         neutral: color("neutral-status"),
         "neutral-soft": color("neutral-status-soft"),
+        // Content families (docs/DESIGN-SYSTEM.md §5): one hue per kind of card,
+        // so a reader recognises an agenda entry, an article and a guide apart
+        // before reading them. Structural only — never a state.
+        // They fall back to plain ink on plain surface, so the worst a stale
+        // bundle can do is lose the hue — never the words.
+        event: colorOr("event-accent", "ink"),
+        "event-wash": colorOr("event-wash", "surface-subtle"),
+        article: colorOr("article-accent", "ink"),
+        "article-wash": colorOr("article-wash", "surface-subtle"),
+        guide: colorOr("guide-accent", "ink"),
+        "guide-wash": colorOr("guide-wash", "surface-subtle"),
       },
       fontFamily: {
         // Loaded by the app with expo-font under exactly these names

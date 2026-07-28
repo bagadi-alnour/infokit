@@ -34,10 +34,13 @@ export function PublicSimulatorCollection({
       ) : (
         <ul className="grid gap-5 md:grid-cols-2">
           {simulators.map((simulator) => (
+            // The one washed card on the site (docs/DESIGN-SYSTEM.md §5): a
+            // guide is an invitation to spend a few minutes, not a fact to
+            // check in passing, so it does not look like the page it sits on.
             <SurfaceCard
               as="li"
               key={simulator.id}
-              className="focus-within:border-brand hover:border-brand hover:shadow-lift group relative flex flex-col gap-3 p-5 transition-shadow md:p-6"
+              className="border-guide bg-guide-wash focus-within:border-guide hover:border-guide group relative flex flex-col gap-3 p-5 transition-colors md:p-6"
             >
               <h2 className="font-display text-ink text-xl font-bold leading-snug">
                 <a
@@ -73,7 +76,7 @@ export function PublicSimulatorCollection({
                 </MetaRow>
               </dl>
 
-              <p className="text-brand-deep inline-flex items-center gap-1.5 text-sm font-semibold">
+              <p className="text-guide inline-flex items-center gap-1.5 text-sm font-semibold">
                 {labels.open}
                 <ArrowRight
                   className="size-4 transition-transform group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1"

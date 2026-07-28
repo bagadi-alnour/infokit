@@ -57,3 +57,27 @@ export function freshnessOf(record: {
   }
   return "current";
 }
+
+/** Why a record is waiting on an editor — the freshness mechanic, verbatim. */
+export type AttentionKind =
+  "never" | "overdue" | "uncertain" | "noSchedule" | "dueSoon";
+
+/**
+ * The one classifier behind the notification bell, the runbook's attention
+ * rail, and the runbook calendar's attention dot. It lives beside `freshnessOf`
+ * so those three readings of the same record cannot drift apart.
+ */
+export function attentionKindOf(record: {
+  manualStatus: string | null;
+  lastVerifiedAt: Date | null;
+  reviewDueAt: Date | null;
+  hasSchedule: boolean;
+}): AttentionKind | null {
+  if (record.manualStatus === "uncertain") return "uncertain";
+  if (!record.hasSchedule) return "noSchedule";
+  const freshness = freshnessOf(record);
+  if (freshness === "never") return "never";
+  if (freshness === "overdue") return "overdue";
+  if (freshness === "due_soon") return "dueSoon";
+  return null;
+}

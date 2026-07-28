@@ -19,6 +19,18 @@ export function requestedPublicLocale(request: Request): PublicLocale {
 }
 
 /**
+ * The month a calendar client asked for, as `YYYY-MM`. Anything else is
+ * ignored rather than rejected: a malformed month means "show me the current
+ * one", never an error page in place of the agenda.
+ */
+export function requestedMonth(request: Request): string | undefined {
+  const requested = new URL(request.url).searchParams.get("month");
+  return requested && /^\d{4}-(0[1-9]|1[0-2])$/.test(requested)
+    ? requested
+    : undefined;
+}
+
+/**
  * Public payloads are the same for every reader of a language, so a shared
  * cache may hold them briefly — short enough that a schedule correction reaches
  * phones within the minute, since a stale opening time sends someone across
@@ -34,6 +46,29 @@ export function publicJson(payload: unknown): NextResponse {
       Vary: "Accept-Language",
     },
   });
+}
+
+/**
+ * Member payloads belong to one person and one session, so nothing may hold
+ * them: no shared cache, no browser cache, no "back" restoring a colleague's
+ * agenda. `Vary: Authorization` says out loud what the store directive already
+ * enforces.
+ */
+export function memberJson(payload: unknown, status = 200): NextResponse {
+  return NextResponse.json(payload, {
+    status,
+    headers: {
+      "Cache-Control": "private, no-store",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "authorization, content-type",
+      Vary: "Authorization, Accept-Language",
+    },
+  });
+}
+
+/** The device session is missing, expired or revoked — sign in again. */
+export function memberUnauthorized(): NextResponse {
+  return memberJson({ error: "unauthorized" }, 401);
 }
 
 export function publicNotFound(): NextResponse {

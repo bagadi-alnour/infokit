@@ -1,0 +1,11 @@
+{
+  "form.required": "Barbaachisa",
+  "form.invalid": "Gatii kana mirkaneessi.",
+  "form.saveFailed": "Hin olkaa'amne. Irra deebi'ii yaali.",
+  "form.tooLong": "Barreeffamni kun dheerina hayyamamu caalaa dheerata.",
+  "form.tooShort": "Barreeffamni kun dheerina hayyamamu gadi gabaabbata.",
+  "form.endBeforeStart": "Xumurri jalqaba booda ta'uu qaba.",
+  "form.invalidDate": "Guyyaa sirrii galchi.",
+  "form.invalidTime": "Sa'aatii sirrii galchi.",
+  "form.reviewFields": "Olkaa'uu dura iddoowwan tokko tokko sirreeffama barbaadu."
+}

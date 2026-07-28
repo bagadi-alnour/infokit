@@ -9,8 +9,15 @@ import { WorkspacePage } from "~/components/admin/workspace";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { EDITOR_CONTACT_OPTION_ID } from "~/lib/editor-contact";
+import { PLATFORM_OWNER_OPTION_ID } from "~/lib/platform-owner";
+import { buildWorkspaceLabels } from "~/lib/workspace-labels";
 import { hasAiTranslationProvider } from "~/server/ai/provider";
+import {
+  getRoleTestState,
+  platformPermissionsForUser,
+} from "~/server/auth/authorization";
 import { requireEditor } from "~/server/auth/require";
+import { platformVerifyPermission } from "~/server/content/language-review";
 import { db } from "~/server/db";
 import {
   audienceCategories,
@@ -41,6 +48,31 @@ export default async function NewActivityPage({
     loadPageCatalog(locale, "dashboard-console"),
     loadPageCatalog(locale, "dashboard-overview"),
   ]);
+  /**
+   * Whether this editor may keep an activity for the platform: a platform
+   * editor, working platform-wide. An association's own editor is acting for
+   * that association, and so is a superadmin testing an organisation role — the
+   * action applies the same rule to the post.
+   */
+  const [authorization, platformPermissions] = await Promise.all([
+    getRoleTestState(editor.id),
+    platformPermissionsForUser(editor.id),
+  ]);
+  const mayHoldForPlatform =
+    authorization.assumedOrganizationId === null &&
+    platformPermissions.has("content.activity.manage");
+  /**
+   * Whether the two publishing choices are offered at all.
+   *
+   * Nothing on a form that has never been saved has been read by anyone, so
+   * publishing from it is the platform's own check being applied by the person
+   * who holds it — the create action asks for exactly this grant. Everyone else
+   * sends the text up the review chain instead, and is not shown a choice the
+   * server would refuse.
+   */
+  const canPublish =
+    authorization.assumedOrganizationId === null &&
+    platformPermissions.has(platformVerifyPermission);
   const [
     organizationRows,
     cityRows,
@@ -197,12 +229,7 @@ export default async function NewActivityPage({
       .orderBy(contacts.displayOrder),
   ]);
 
-  const editorLabels: Record<string, string> = {};
-  for (const [key, value] of Object.entries(overviewLabels)) {
-    if (key.startsWith("create.")) {
-      editorLabels[key.replace(/^create\./, "")] = value;
-    }
-  }
+  const editorLabels = buildWorkspaceLabels(overviewLabels, labels);
 
   /**
    * The editor themselves, first in the contacts list.
@@ -226,6 +253,23 @@ export default async function NewActivityPage({
       }
     : null;
 
+  /**
+   * The platform itself, first in the owner list.
+   *
+   * Some information has no association behind it — a public source the platform
+   * gathered, or an offering whose association is not onboarded yet. The
+   * platform holds those and answers for them, which is what lets them be
+   * published at all; every other activity belongs to its association, so the
+   * option sits at the top of the list without being the default.
+   */
+  const platformOwner: ActivityFormOption | null = mayHoldForPlatform
+    ? {
+        id: PLATFORM_OWNER_OPTION_ID,
+        label: labels["activity.platformOwner"],
+        description: labels["activity.platformOwnerHint"],
+      }
+    : null;
+
   const option = (row: {
     id: string;
     label: string | null;
@@ -242,7 +286,10 @@ export default async function NewActivityPage({
       <ActivityCreateForm
         locale={locale}
         activitiesPath={localizedPath("/dashboard/activities", locale)}
-        organizations={organizationRows}
+        organizations={[
+          ...(platformOwner ? [platformOwner] : []),
+          ...organizationRows,
+        ]}
         cities={cityRows.map((row) => ({
           id: row.id,
           label: row.label ?? row.code,
@@ -286,6 +333,7 @@ export default async function NewActivityPage({
         labels={labels}
         editorLabels={editorLabels}
         aiEnabled={hasAiTranslationProvider()}
+        canPublish={canPublish}
       />
     </WorkspacePage>
   );

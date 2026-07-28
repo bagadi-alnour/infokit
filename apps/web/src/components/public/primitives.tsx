@@ -1,6 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import {
-  CheckCircle2,
   CircleAlert,
   Clock,
   Info,
@@ -9,7 +8,12 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import type { ComponentProps, ElementType, ReactNode } from "react";
+import type {
+  ComponentProps,
+  ComponentType,
+  ElementType,
+  ReactNode,
+} from "react";
 
 import type { PublicActivityStatus } from "@infokit/shared/public-content";
 import { cn } from "~/lib/utils";
@@ -91,13 +95,31 @@ export function ActionButton({
   );
 }
 
+/** The link that swallows its whole card, so the card is the touch target. */
+export const cardLink =
+  "rounded-control after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2";
+
+/**
+ * A card's own frame: the padding, the column, and the position that lets
+ * `cardLink` cover it. It does not move under the pointer — an answer that
+ * shifts as the cursor crosses it is chrome competing with what it says.
+ */
+export const cardShell = "relative flex flex-col p-5";
+
+/**
+ * The same frame, answering the pointer by rising 2px. Kept for the shelves
+ * where a card is one of several routes onward rather than the answer itself.
+ * No shadow moves: shadows are the second thing this site drops (§2 rule 7).
+ */
+export const liftCard = `${cardShell} transition-all hover:-translate-y-0.5`;
+
 /** Card surface: ring first, shadow second (docs/DESIGN-SYSTEM.md §4). */
 export function SurfaceCard({
   className,
   as: As = "div",
   ...props
 }: Omit<ComponentProps<"div">, "ref"> & {
-  as?: "div" | "article" | "section" | "li";
+  as?: "div" | "article" | "section" | "li" | "ul";
 }) {
   // Polymorphic on a closed set of block elements; the props we accept are the
   // common HTML attributes, so a single loose element type is enough here.
@@ -105,7 +127,8 @@ export function SurfaceCard({
   return (
     <Component
       className={cn(
-        "bg-surface border-line rounded-card shadow-ring border",
+        // A card is one thing: on paper it is never split across two sheets.
+        "bg-surface border-line rounded-card shadow-ring border print:break-inside-avoid",
         className,
       )}
       {...props}
@@ -113,17 +136,91 @@ export function SurfaceCard({
   );
 }
 
+/**
+ * The four kinds of content the public site carries (docs/DESIGN-SYSTEM.md §5).
+ * Activities are the subject of the site and keep the accent; the agenda is
+ * indigo, articles plum, guides copper — the same four hues the app uses, so a
+ * reader who came in through one of them recognises the other.
+ */
+export type ContentFamily = "activity" | "event" | "article" | "guide";
+
+/**
+ * Where a family hue is allowed to appear. Exactly one element per surface
+ * carries it: the eyebrow of a section opening, and the one element named per
+ * family on a card. A hue is never the only thing saying what something is.
+ */
+export const familyStyles: Record<
+  ContentFamily,
+  {
+    /** Label and affordance text. */
+    text: string;
+    /** The eyebrow's dot. */
+    dot: string;
+    /** Fill behind family text — a block, a bubble, a whole card. */
+    wash: string;
+    border: string;
+    /** Ring on hover and while a child holds focus. */
+    hoverBorder: string;
+    /**
+     * The same ring for focus only. A keyboard reader has no hover, so the ring
+     * is the only thing telling them which card they are on: a card that drops
+     * the pointer affordance keeps this one.
+     */
+    focusBorder: string;
+  }
+> = {
+  activity: {
+    text: "text-brand-deep",
+    dot: "bg-brand",
+    wash: "bg-brand-soft",
+    border: "border-brand",
+    hoverBorder: "hover:border-brand focus-within:border-brand",
+    focusBorder: "focus-within:border-brand",
+  },
+  event: {
+    text: "text-event",
+    dot: "bg-event",
+    wash: "bg-event-wash",
+    border: "border-event",
+    hoverBorder: "hover:border-event focus-within:border-event",
+    focusBorder: "focus-within:border-event",
+  },
+  article: {
+    text: "text-article",
+    dot: "bg-article",
+    wash: "bg-article-wash",
+    border: "border-article",
+    hoverBorder: "hover:border-article focus-within:border-article",
+    focusBorder: "focus-within:border-article",
+  },
+  guide: {
+    text: "text-guide",
+    dot: "bg-guide",
+    wash: "bg-guide-wash",
+    border: "border-guide",
+    hoverBorder: "hover:border-guide focus-within:border-guide",
+    focusBorder: "focus-within:border-guide",
+  },
+};
+
 export function Eyebrow({
   children,
+  family = "activity",
   className,
 }: {
   children: ReactNode;
+  /** Tints the eyebrow — the one element that carries the family on an opening. */
+  family?: ContentFamily;
   className?: string;
 }) {
+  const tone = familyStyles[family];
   return (
-    <p className={cn("text-eyebrow", className)}>
+    <p className={cn("text-eyebrow", tone.text, className)}>
       <span
-        className="bg-brand me-2 inline-block size-2 rounded-full align-middle"
+        className={cn(
+          "me-2 inline-block size-2 rounded-full align-middle",
+          tone.dot,
+        )}
         aria-hidden
       />
       {children}
@@ -159,11 +256,47 @@ export function Chip({
   );
 }
 
+/**
+ * The glyph an "open now" pill wears instead of a check: a dot with a beat.
+ *
+ * A check says "this was verified", which is the freshness marker's job and the
+ * wrong claim on a state that is only true at this minute — a live dot is what a
+ * reader already reads as "now". The dot takes the pill's own colour and the beat
+ * is the halo behind it, so a reader who has asked for less motion keeps the dot
+ * and loses only the pulse (docs/DESIGN-SYSTEM.md §2 rule 7). The word beside it
+ * still says "Open", which is what carries the state (rule 1).
+ */
+function LiveDot({
+  className,
+}: {
+  className?: string;
+  "aria-hidden"?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "relative inline-flex items-center justify-center",
+        className,
+      )}
+      aria-hidden
+    >
+      <span className="absolute size-2.5 animate-ping rounded-full bg-current opacity-60" />
+      <span className="relative size-2.5 rounded-full bg-current" />
+    </span>
+  );
+}
+
+/** An icon, or the beating dot: sized and hidden by the pill that draws it. */
+type StatusGlyph = ComponentType<{
+  className?: string;
+  "aria-hidden"?: boolean;
+}>;
+
 const STATUS_PRESENTATION: Record<
   PublicActivityStatus,
-  { className: string; Icon: typeof CheckCircle2 }
+  { className: string; Icon: StatusGlyph }
 > = {
-  open: { className: "bg-ok-soft text-ok", Icon: CheckCircle2 },
+  open: { className: "bg-ok-soft text-ok", Icon: LiveDot },
   closed: { className: "bg-neutral-soft text-neutral", Icon: Clock },
   cancelled: { className: "bg-danger-soft text-danger", Icon: XCircle },
   uncertain: { className: "bg-warn-soft text-warn", Icon: TriangleAlert },
@@ -220,15 +353,26 @@ export function StatusPill({
   );
 }
 
-/** "Checked <date>" — freshness is content, not chrome (§5). */
+/**
+ * "Checked 3 days ago" — freshness is content, not chrome (§5).
+ *
+ * The value is worded by the server, as an age: `dateTime` carries the instant
+ * itself so a machine reads the claim exactly, and `title` gives a pointer the
+ * calendar date behind the wording. Both are optional — a record that has never
+ * been checked has no instant to name.
+ */
 export function FreshnessNote({
   label,
   value,
+  dateTime,
+  title,
   tone = "ok",
   className,
 }: {
   label: string;
   value: string;
+  dateTime?: string | null;
+  title?: string;
   tone?: "ok" | "warn" | "neutral";
   className?: string;
 }) {
@@ -246,9 +390,16 @@ export function FreshnessNote({
         className,
       )}
     >
-      <ShieldCheck className="size-4" aria-hidden />
+      <ShieldCheck className="size-4 shrink-0" aria-hidden />
       <span>
-        {label} <span className="font-semibold">{value}</span>
+        {label}{" "}
+        {dateTime ? (
+          <time dateTime={dateTime} title={title} className="font-semibold">
+            {value}
+          </time>
+        ) : (
+          <span className="font-semibold">{value}</span>
+        )}
       </span>
     </p>
   );

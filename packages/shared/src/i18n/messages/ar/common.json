@@ -17,5 +17,14 @@
   "fresh.overdue": "تأخر التحقق",
   "fresh.never": "لم يتم التحقق",
   "today.scheduled": "اليوم",
-  "action.confirmToday": "تأكيد اليوم"
+  "action.confirmToday": "تأكيد اليوم",
+  "form.required": "مطلوب",
+  "form.invalid": "تحقّق من هذه القيمة.",
+  "form.saveFailed": "لم يتم الحفظ. أعد المحاولة.",
+  "form.tooLong": "هذا النص أطول من المسموح في هذا الحقل.",
+  "form.tooShort": "هذا النص أقصر من المسموح في هذا الحقل.",
+  "form.endBeforeStart": "يجب أن تكون النهاية بعد البداية.",
+  "form.invalidDate": "أدخل تاريخاً صحيحاً.",
+  "form.invalidTime": "أدخل وقتاً صحيحاً.",
+  "form.reviewFields": "بعض الحقول تحتاج إلى تصحيح قبل الحفظ."
 }

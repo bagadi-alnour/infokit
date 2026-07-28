@@ -266,7 +266,7 @@ This publishing capability is intentionally narrower than the Phase 2 associatio
 - Map/list, articles, simulator, fixed information, basic information, and association directory are usable on mobile.
 - A person can reach matching service information within two minutes without an account.
 - Autocomplete groups relevant location, association, and need suggestions in the selected language without requiring location permission.
-- Each service/event shows one audience category and at least one verified provider logo plus text name.
+- Each service/event shows one audience category and at least one verified provider logo plus text name, or omits the provider line when the platform publishes the record itself.
 - Association profiles group separate service offerings, and search/detail/profile views show only the verified features assigned to the selected offering.
 - Every public record has ownership, source, freshness, and translation metadata.
 - Uncertain, outdated, cancelled, offline, missing-translation, and no-results states are designed and tested.

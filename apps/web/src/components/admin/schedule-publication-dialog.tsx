@@ -30,14 +30,25 @@ export function SchedulePublicationDialog({
   action,
   disabled,
   labels,
+  open: controlledOpen,
+  onOpenChange,
 }: {
   locale: Locale;
   fields: Record<string, string>;
   action: ScheduleAction;
   disabled: boolean;
   labels: Record<string, string>;
+  /**
+   * Set together where a menu item opens this instead of a button: the menu is
+   * gone by the time the dialog is on screen, so it cannot be the trigger.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const controlled = controlledOpen !== undefined && onOpenChange !== undefined;
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = controlled ? controlledOpen : ownOpen;
+  const setOpen = controlled ? onOpenChange : setOwnOpen;
   const [publicationDate, setPublicationDate] = useState("");
   const [publicationTime, setPublicationTime] = useState("");
   const showActionError = useActionErrorToast();
@@ -65,19 +76,21 @@ export function SchedulePublicationDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled}
-            className="min-h-10 w-full min-w-0 whitespace-normal"
-          />
-        }
-      >
-        <CalendarClock aria-hidden />
-        {labels["publication.scheduleAction"]}
-      </DialogTrigger>
+      {controlled ? null : (
+        <DialogTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              disabled={disabled}
+              className="min-h-10 w-full min-w-0 whitespace-normal"
+            />
+          }
+        >
+          <CalendarClock aria-hidden />
+          {labels["publication.scheduleAction"]}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{labels["publication.scheduleAction"]}</DialogTitle>

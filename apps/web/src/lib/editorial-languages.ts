@@ -25,3 +25,12 @@ const rtlLanguages = new Set<EditorialLanguage>([
 export function isRtlEditorialLanguage(language: EditorialLanguage) {
   return rtlLanguages.has(language);
 }
+
+/**
+ * The `dir` an authoring field, a preview or a translator's own text is written
+ * with. Every such element asks the same question, so it is answered here: a
+ * language added to `rtlLanguages` starts reading correctly everywhere at once.
+ */
+export function editorialTextDirection(language: EditorialLanguage) {
+  return isRtlEditorialLanguage(language) ? "rtl" : "ltr";
+}

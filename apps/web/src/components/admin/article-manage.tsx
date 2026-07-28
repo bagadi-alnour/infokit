@@ -1,19 +1,16 @@
 "use client";
 
-import type { Locale } from "@infokit/shared/i18n";
+import { formatMessage, type Locale } from "@infokit/shared/i18n";
 import {
   Archive,
-  CalendarClock,
   CheckCircle2,
   Eye,
-  Globe,
-  MailPlus,
   Plus,
   Send,
   Trash2,
   Undo2,
 } from "lucide-react";
-import { useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -31,13 +28,21 @@ import {
   requestArticleTranslation,
   reviewArticleTranslation,
 } from "~/app/[locale]/dashboard/articles/translation-actions";
-import {
-  ArticleContentFields,
-  type ArticleContentValue,
-} from "~/components/admin/article-content-fields";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
+import type { LanguageMenuAbilities } from "~/components/admin/language-actions-menu";
+import {
+  LanguageStateSummary,
+  TranslationReviewDialog,
+  type TranslationSubmission,
+} from "~/components/admin/language-publication";
 import { SearchableMultiSelect } from "~/components/admin/searchable-select";
-import { SchedulePublicationDialog } from "~/components/admin/schedule-publication-dialog";
+import { isAwaitingReview } from "~/components/admin/translation-assignment";
+import {
+  articleFieldNames,
+  TranslationWorkspace,
+  type WorkspaceTranslation,
+  type WorkspaceWorkflow,
+} from "~/components/admin/translation-workspace";
 import { PendingButton } from "~/components/pending-button";
 import {
   AlertDialog,
@@ -49,7 +54,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { DatePicker } from "~/components/ui/date-picker";
@@ -72,23 +76,16 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "~/components/ui/sheet";
 import { Textarea } from "~/components/ui/textarea";
-import type { EditorialLanguage } from "~/lib/editorial-languages";
+import {
+  editorialTextDirection,
+  type EditorialLanguage,
+} from "~/lib/editorial-languages";
+import type { LanguageReviewStage } from "~/lib/language-review";
 
 type Language = EditorialLanguage;
 type Labels = Record<string, string>;
-
-function format(
-  template: string | undefined,
-  values: Record<string, string | undefined>,
-) {
-  return (template ?? "").replace(
-    /\{(\w+)\}/g,
-    (_, key: string) => values[key] ?? "",
-  );
-}
 
 /* ------------------------------------------------------------------ */
 /* Content editor                                                     */
@@ -97,23 +94,48 @@ function format(
 export function ArticleEditorForm({
   locale,
   entryId,
+  organizationId,
   sourceLanguage,
   articleDate,
   featured,
   tags,
   initialTagIds,
-  content,
+  languages,
+  archived,
+  abilities,
+  aiEnabled,
+  canVerify,
+  returnPath,
+  media,
+  downloads,
   labels,
+  editorLabels,
 }: {
   locale: string;
   entryId: string;
+  /** The association answering for the entry, when one does. */
+  organizationId?: string;
   sourceLanguage: Language;
   articleDate: string | null;
   featured: boolean;
   tags: { value: string; label: string; description?: string }[];
   initialTagIds: string[];
-  content: ArticleContentValue;
+  /** Every language: its saved text, and where it stands on the server. */
+  languages: ArticleLanguageStatus[];
+  archived: boolean;
+  abilities: Omit<LanguageMenuAbilities, "aiEnabled">;
+  /** False when the deployment has no translation provider configured. */
+  aiEnabled: boolean;
+  canVerify: boolean;
+  /** Dashboard path to revalidate after a per-language action. */
+  returnPath: string;
+  /** The cover image, laid out below both editor columns. */
+  media?: React.ReactNode;
+  /** The downloadable documents, laid out beside the tags field. */
+  downloads?: React.ReactNode;
   labels: Labels;
+  /** The workspace's own vocabulary; see `~/lib/workspace-labels`. */
+  editorLabels: Labels;
 }) {
   const [selectedTagIds, setSelectedTagIds] = useState(initialTagIds);
   const showActionError = useActionErrorToast();
@@ -125,34 +147,110 @@ export function ArticleEditorForm({
       showActionError(error, labels["toast.saveError"] ?? "");
     }
   };
+
+  /**
+   * What each language's pane opens with. A language nobody has written yet
+   * seeds nothing, so an empty row stays empty rather than posting a blank
+   * title the save path would read as an authored language.
+   */
+  const initial = useMemo(() => {
+    const seeds: Partial<Record<Language, WorkspaceTranslation>> = {};
+    for (const language of languages) {
+      if (!language.saved) continue;
+      seeds[language.code] = {
+        title: language.title ?? "",
+        summary: language.summary ?? "",
+        html: language.bodyHtml ?? "",
+        text: language.plainText ?? "",
+        state: language.state,
+        method: language.method,
+        verifiedByName: language.verifiedBy?.name ?? null,
+      };
+    }
+    return seeds;
+  }, [languages]);
+
+  /**
+   * The per-language menu's world: publication, review stage, and the three
+   * actions it can fire. Every one of them re-checks on the server — this only
+   * decides what is worth offering.
+   */
+  const workflow = useMemo<WorkspaceWorkflow>(
+    () => ({
+      ownerField: "entryId",
+      languages: Object.fromEntries(
+        languages.map((language) => [
+          language.code,
+          {
+            saved: language.saved,
+            published: Boolean(language.publishedAt),
+            scheduled: Boolean(language.scheduledFor),
+            reviewStage: language.reviewStage,
+            // Words an outside translator sent back and nobody has read yet.
+            submitted: isAwaitingReview(language.assignment),
+          },
+        ]),
+      ),
+      abilities,
+      actions: {
+        requestTranslation: requestArticleTranslation,
+        publish: publishArticleLanguage,
+        unpublish: unpublishArticleLanguage,
+      },
+      frozen: archived,
+    }),
+    [abilities, archived, languages],
+  );
+
   return (
     <form action={submit} className="grid gap-5">
       <input type="hidden" name="locale" value={locale} />
       <input type="hidden" name="entryId" value={entryId} />
-      <ArticleContentFields
+      <TranslationWorkspace
+        entityKind="editorial_entry"
+        entityId={entryId}
+        organizationId={organizationId}
         interfaceLocale={locale}
         sourceLanguage={sourceLanguage}
-        initial={content}
-        labels={labels}
+        initial={initial}
+        labels={editorLabels}
+        names={articleFieldNames}
+        fields={{ summary: true }}
+        canVerify={canVerify}
+        aiEnabled={aiEnabled}
+        returnPath={returnPath}
+        workflow={workflow}
+        media={media}
       />
-      <Field>
-        <FieldLabel>{labels["field.tags"]}</FieldLabel>
-        {tags.length > 0 ? (
-          <SearchableMultiSelect
-            name="tagIds"
-            maxSelections={3}
-            options={tags}
-            value={selectedTagIds}
-            onValueChange={setSelectedTagIds}
-            label={labels["field.tags"]}
-            placeholder={labels["field.tagsPlaceholder"]}
-            emptyLabel={labels.noMatch}
-          />
-        ) : (
-          <p className="text-copy-muted text-sm">{labels["field.tagsEmpty"]}</p>
-        )}
-        <FieldDescription>{labels["field.tagsHint"]}</FieldDescription>
-      </Field>
+      {/* Tags and the downloadable documents side by side: both are things
+       * attached to the article rather than words in it, and each is short
+       * enough that stacking them only adds scrolling. Keyed to this row's own
+       * width, which the console's sidebar narrows. */}
+      <div className="@container">
+        <div className="@xl:grid-cols-2 grid items-start gap-4">
+          <Field>
+            <FieldLabel>{labels["field.tags"]}</FieldLabel>
+            {tags.length > 0 ? (
+              <SearchableMultiSelect
+                name="tagIds"
+                maxSelections={3}
+                options={tags}
+                value={selectedTagIds}
+                onValueChange={setSelectedTagIds}
+                label={labels["field.tags"]}
+                placeholder={labels["field.tagsPlaceholder"]}
+                emptyLabel={labels.noMatch}
+              />
+            ) : (
+              <p className="text-copy-muted text-sm">
+                {labels["field.tagsEmpty"]}
+              </p>
+            )}
+            <FieldDescription>{labels["field.tagsHint"]}</FieldDescription>
+          </Field>
+          {downloads}
+        </div>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field>
           <FieldLabel htmlFor="edit-article-date">
@@ -430,513 +528,197 @@ export function ArticleSources({
 
 export interface ArticleLanguageStatus {
   code: Language;
+  /** A row for this language exists in the current revision. */
+  saved: boolean;
   title: string | null;
   summary: string | null;
   bodyHtml: string | null;
-  state: string;
-  method: string;
+  /** The body as plain text — what a translator is quoted a word count on. */
+  plainText: string | null;
+  state: NonNullable<WorkspaceTranslation["state"]>;
+  method: NonNullable<WorkspaceTranslation["method"]>;
+  /** Who this language is still waiting on before it may face the public. */
+  reviewStage: LanguageReviewStage;
   publishedAt: string | null;
   scheduledFor: string | null;
   verifiedBy: { name: string | null } | null;
   assignment: ArticleTranslationAssignment | null;
 }
 
-export interface ArticleTranslationAssignment {
-  id: string;
-  state: string;
-  translatorEmail: string;
-  translatorName: string | null;
-  expiresAt: string;
-  submittedContent: unknown;
-  reviewNote: string | null;
-}
+export type ArticleTranslationAssignment = TranslationSubmission;
 
-const stateBadgeVariant: Record<string, "default" | "secondary" | "outline"> = {
-  verified: "default",
-  needs_review: "secondary",
-  machine_generated: "secondary",
-  draft: "outline",
-  rejected: "outline",
-};
-
-export function ArticlePublication({
+/**
+ * What is left to say about a language once its own menu carries the actions:
+ * how far along it is, the article as a reader would receive it, and a
+ * translator's submission waiting to be accepted.
+ *
+ * Publishing, scheduling, unpublishing and inviting a translator all live in
+ * the accordion beside the text they act on — offering them twice would mean
+ * two controls for one decision. Reviewing what an outside translator sent back
+ * is not one of those: it is reading someone else's words, so it stays here.
+ */
+export function ArticleTranslationInbox({
   locale,
   entryId,
   sourceLanguage,
   languages,
-  archived,
   labels,
-  compact = false,
 }: {
   locale: string;
   entryId: string;
   sourceLanguage: Language;
   languages: ArticleLanguageStatus[];
-  archived: boolean;
   labels: Labels;
-  compact?: boolean;
 }) {
-  const showActionError = useActionErrorToast();
-  const publish = async (formData: FormData) => {
-    try {
-      await publishArticleLanguage(formData);
-      toast.success(
-        formData.get("publishAt")
-          ? labels["toast.scheduled"]
-          : labels["toast.published"],
-      );
-    } catch (error) {
-      showActionError(error, labels["toast.publishError"] ?? "");
-    }
-  };
-  const unpublish = async (formData: FormData) => {
-    try {
-      await unpublishArticleLanguage(formData);
-      toast.success(labels["toast.unpublished"]);
-    } catch (error) {
-      showActionError(error, labels["toast.actionError"] ?? "");
-    }
-  };
-
-  return (
-    <ul className="grid gap-2.5">
-      {languages.map((language) => {
-        const authored = Boolean(language.title);
-        const published = Boolean(language.publishedAt);
-        const scheduled = Boolean(language.scheduledFor);
-        const isSource = language.code === sourceLanguage;
-        return (
-          <li
-            key={language.code}
-            className={
-              compact
-                ? "border-line grid min-w-0 gap-3 border-b py-4 first:pt-0 last:border-b-0 last:pb-0"
-                : "border-line bg-surface grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_auto] sm:items-center"
-            }
-          >
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold">
-                  {labels[`language.${language.code}`]}
-                </span>
-                {isSource ? (
-                  <Badge variant="outline" className="text-brand">
-                    ★
-                  </Badge>
-                ) : null}
-                {authored ? (
-                  <Badge
-                    variant={stateBadgeVariant[language.state] ?? "outline"}
-                  >
-                    {labels[`translation.state.${language.state}`] ??
-                      language.state}
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-copy-muted">
-                    {labels["translation.missing"]}
-                  </Badge>
-                )}
-                {!published ? (
-                  <span className="text-copy-muted text-xs">
-                    {scheduled
-                      ? labels["publication.scheduled"]
-                      : labels["translation.notPublished"]}
-                  </span>
-                ) : null}
-              </div>
-              {authored && !isSource && language.method === "ai" ? (
-                <p className="text-copy-muted mt-1 text-xs">
-                  {format(labels["translation.aiNote"], {
-                    source: labels[`language.${sourceLanguage}`],
-                    target: labels[`language.${language.code}`],
-                  })}
-                </p>
-              ) : null}
-              {published ||
-              scheduled ||
-              language.verifiedBy ||
-              language.assignment ? (
-                <dl className="border-line mt-3 grid gap-2 border-s-2 ps-3 text-xs">
-                  {published ? (
-                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
-                      <dt className="text-copy-muted">
-                        {labels["translation.publishedAt"]}
-                      </dt>
-                      <dd className="text-success inline-flex min-w-0 items-start gap-1 font-medium tabular-nums">
-                        <CheckCircle2
-                          className="mt-0.5 size-3.5 shrink-0"
-                          aria-hidden
-                        />
-                        <time>{language.publishedAt}</time>
-                      </dd>
-                    </div>
-                  ) : null}
-                  {scheduled ? (
-                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
-                      <dt className="text-copy-muted">
-                        {labels["publication.scheduledFor"]}
-                      </dt>
-                      <dd className="text-brand inline-flex min-w-0 items-start gap-1 font-medium tabular-nums">
-                        <CalendarClock
-                          className="mt-0.5 size-3.5 shrink-0"
-                          aria-hidden
-                        />
-                        <time>{language.scheduledFor}</time>
-                      </dd>
-                    </div>
-                  ) : null}
-                  {language.verifiedBy ? (
-                    <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
-                      <dt className="text-copy-muted">
-                        {labels["translation.verifiedBy"]}
-                      </dt>
-                      <dd className="text-ink font-medium">
-                        {language.verifiedBy.name ??
-                          labels["translation.verifierNameUnavailable"]}
-                      </dd>
-                    </div>
-                  ) : null}
-                  {language.assignment ? (
-                    <div className="grid min-w-0 grid-cols-[7rem_minmax(0,1fr)] gap-2">
-                      <dt className="text-copy-muted">
-                        {labels["translation.translatedBy"]}
-                      </dt>
-                      <dd className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                        {language.assignment.translatorName ? (
-                          <span className="text-ink font-medium">
-                            {language.assignment.translatorName}
-                          </span>
-                        ) : null}
-                        <a
-                          className="text-brand focus-visible:ring-ring w-fit max-w-full break-all underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2"
-                          href={`mailto:${language.assignment.translatorEmail}`}
-                          dir="ltr"
-                        >
-                          {language.assignment.translatorName
-                            ? `(${language.assignment.translatorEmail})`
-                            : language.assignment.translatorEmail}
-                        </a>
-                      </dd>
-                    </div>
-                  ) : null}
-                </dl>
-              ) : null}
-            </div>
-            <div
-              className={
-                compact
-                  ? "grid min-w-0 grid-cols-1 gap-2 [&>button]:min-h-10 [&>button]:w-full [&>button]:justify-center [&>form>button]:min-h-10 [&>form>button]:w-full [&>form>button]:justify-center [&>form]:w-full"
-                  : "flex items-center gap-2 sm:justify-end"
-              }
-            >
-              {!isSource &&
-              (!language.assignment ||
-                ["expired", "rejected", "published"].includes(
-                  language.assignment.state,
-                )) ? (
-                <TranslationRequestDialog
-                  locale={locale}
-                  entryId={entryId}
-                  language={language.code}
-                  labels={labels}
-                  disabled={archived}
-                />
-              ) : null}
-              {language.assignment?.state === "submitted" ? (
-                <TranslationReviewDialog
-                  locale={locale}
-                  entryId={entryId}
-                  language={language.code}
-                  assignment={language.assignment}
-                  labels={labels}
-                />
-              ) : null}
-              {authored ? (
-                <ArticlePreview
-                  language={language}
-                  sourceLanguage={sourceLanguage}
-                  published={published}
-                  labels={labels}
-                />
-              ) : null}
-              {published || scheduled ? (
-                <form action={unpublish}>
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="entryId" value={entryId} />
-                  <input
-                    type="hidden"
-                    name="languageCode"
-                    value={language.code}
-                  />
-                  <PendingButton variant="ghost" className="text-danger">
-                    {scheduled
-                      ? labels["publication.cancelSchedule"]
-                      : labels["translation.unpublish"]}
-                  </PendingButton>
-                </form>
-              ) : (
-                <ArticlePublicationActions
-                  locale={locale}
-                  entryId={entryId}
-                  language={language.code}
-                  authored={authored}
-                  archived={archived}
-                  labels={labels}
-                  publish={publish}
-                />
-              )}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+  // A language with neither text nor a translator has nothing to report; its
+  // row in the accordion already says it is empty.
+  const rows = languages.filter(
+    (language) => language.saved || language.assignment,
   );
-}
-
-function ArticlePublicationActions({
-  locale,
-  entryId,
-  language,
-  authored,
-  archived,
-  labels,
-  publish,
-}: {
-  locale: string;
-  entryId: string;
-  language: Language;
-  authored: boolean;
-  archived: boolean;
-  labels: Labels;
-  publish: (formData: FormData) => Promise<void>;
-}) {
-  const disabled = !authored || archived;
-
+  if (rows.length === 0) {
+    return (
+      <p className="text-copy-muted text-sm">{labels["translation.missing"]}</p>
+    );
+  }
   return (
-    <div className="grid w-full min-w-0 grid-cols-2 gap-2">
-      <form action={publish}>
-        <input type="hidden" name="locale" value={locale} />
-        <input type="hidden" name="entryId" value={entryId} />
-        <input type="hidden" name="languageCode" value={language} />
-        <PendingButton
-          variant="secondary"
-          className="min-h-10 w-full min-w-0 whitespace-normal"
-          disabled={disabled}
-        >
-          <Globe aria-hidden />
-          {labels["publication.now"]}
-        </PendingButton>
-      </form>
-      <SchedulePublicationDialog
-        locale={locale as Locale}
-        fields={{ locale, entryId, languageCode: language }}
-        action={publishArticleLanguage}
-        disabled={disabled}
+    <div className="grid min-w-0 gap-4">
+      <ArticlePreviewLauncher
+        sourceLanguage={sourceLanguage}
+        languages={languages}
         labels={labels}
       />
+      <ul className="grid gap-2.5">
+        {rows.map((language) => (
+          <li
+            key={language.code}
+            className="border-line grid min-w-0 gap-3 border-b py-4 first:pt-0 last:border-b-0 last:pb-0"
+          >
+            <LanguageStateSummary
+              language={language}
+              authored={language.saved}
+              sourceLanguage={sourceLanguage}
+              labels={labels}
+            />
+            {isAwaitingReview(language.assignment) && language.assignment ? (
+              <TranslationReviewDialog
+                action={reviewArticleTranslation}
+                locale={locale}
+                ownerField="entryId"
+                ownerId={entryId}
+                language={language.code}
+                assignment={language.assignment}
+                labels={labels}
+              />
+            ) : null}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-function TranslationRequestDialog({
-  locale,
-  entryId,
-  language,
+/**
+ * One preview button for the whole article: it asks which language to read
+ * before it opens.
+ *
+ * A button per language turned the card into a column of near-identical
+ * controls, and reading is one intention — the language is a parameter of it,
+ * not a different action. Only languages with text are offered, so the choice
+ * can never lead to an empty sheet.
+ */
+function ArticlePreviewLauncher({
+  sourceLanguage,
+  languages,
   labels,
-  disabled,
 }: {
-  locale: string;
-  entryId: string;
-  language: Language;
+  sourceLanguage: Language;
+  languages: ArticleLanguageStatus[];
   labels: Labels;
-  disabled: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const showActionError = useActionErrorToast();
-  const request = async (formData: FormData) => {
-    try {
-      await requestArticleTranslation(formData);
-      toast.success(labels["translation.requested"] ?? "");
-      setOpen(false);
-    } catch (error) {
-      showActionError(error, labels["translation.requestError"] ?? "");
-    }
-  };
+  const readable = languages.filter((language) => language.saved);
+  const [asking, setAsking] = useState(false);
+  const [choice, setChoice] = useState<Language>(
+    readable.find((language) => language.code === sourceLanguage)?.code ??
+      readable[0]?.code ??
+      sourceLanguage,
+  );
+  /** Set when the sheet is open, so closing it does not reopen the question. */
+  const [reading, setReading] = useState<Language | null>(null);
+  const fieldId = useId();
+
+  const fallback = readable[0];
+  if (!fallback) return null;
+  const chosen =
+    readable.find((language) => language.code === reading) ?? fallback;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={<Button variant="outline" size="sm" disabled={disabled} />}
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="w-fit gap-1.5"
+        onClick={() => {
+          setAsking(true);
+        }}
       >
-        <MailPlus aria-hidden />
-        {labels["translation.request"]}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {format(labels["translation.requestTitle"], {
-              language: labels[`language.${language}`],
-            })}
-          </DialogTitle>
-          <DialogDescription>
-            {labels["translation.requestHint"]}
-          </DialogDescription>
-        </DialogHeader>
-        <form action={request} className="grid gap-4">
-          <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="entryId" value={entryId} />
-          <input type="hidden" name="targetLanguageCode" value={language} />
+        <Eye className="size-4" aria-hidden />
+        {labels["preview.open"]}
+      </Button>
+      <Dialog open={asking} onOpenChange={setAsking}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{labels["preview.chooseTitle"]}</DialogTitle>
+            <DialogDescription>
+              {labels["preview.chooseHint"]}
+            </DialogDescription>
+          </DialogHeader>
           <Field>
-            <FieldLabel htmlFor={`translator-email-${language}`}>
-              {labels["translation.translatorEmail"]}
-            </FieldLabel>
-            <Input
-              id={`translator-email-${language}`}
-              name="translatorEmail"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              required
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`translator-name-${language}`}>
-              {labels["translation.translatorName"]}
-            </FieldLabel>
-            <Input
-              id={`translator-name-${language}`}
-              name="translatorName"
-              autoComplete="name"
-              maxLength={200}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`translator-expiry-${language}`}>
-              {labels["translation.expiry"]}
+            <FieldLabel htmlFor={fieldId}>
+              {labels["preview.chooseLabel"]}
             </FieldLabel>
             <SelectField
-              id={`translator-expiry-${language}`}
-              name="lifetimeHours"
-              defaultValue="72"
+              id={fieldId}
+              value={choice}
+              onValueChange={(value) => {
+                setChoice(value as Language);
+              }}
             >
-              <option value="24">{labels["translation.expiry.24"]}</option>
-              <option value="72">{labels["translation.expiry.72"]}</option>
-              <option value="168">{labels["translation.expiry.168"]}</option>
+              {readable.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {labels[`language.${language.code}`] ?? language.code}
+                </option>
+              ))}
             </SelectField>
           </Field>
-          <Field>
-            <FieldLabel htmlFor={`translator-instructions-${language}`}>
-              {labels["translation.instructions"]}
-            </FieldLabel>
-            <Textarea
-              id={`translator-instructions-${language}`}
-              name="instructions"
-              rows={3}
-              maxLength={2000}
-            />
-          </Field>
           <DialogFooter>
-            <DialogClose render={<Button variant="outline" type="button" />}>
+            <DialogClose render={<Button type="button" variant="ghost" />}>
               {labels["action.cancel"]}
             </DialogClose>
-            <PendingButton>
-              <MailPlus aria-hidden />
-              {labels["translation.sendRequest"]}
-            </PendingButton>
+            <Button
+              type="button"
+              onClick={() => {
+                setAsking(false);
+                setReading(choice);
+              }}
+            >
+              <Eye aria-hidden />
+              {labels["preview.read"]}
+            </Button>
           </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function TranslationReviewDialog({
-  locale,
-  entryId,
-  language,
-  assignment,
-  labels,
-}: {
-  locale: string;
-  entryId: string;
-  language: Language;
-  assignment: ArticleTranslationAssignment;
-  labels: Labels;
-}) {
-  const [open, setOpen] = useState(false);
-  const showActionError = useActionErrorToast();
-  const submitted = assignment.submittedContent as {
-    title?: unknown;
-    summary?: unknown;
-    plainText?: unknown;
-  } | null;
-  const review = async (formData: FormData) => {
-    try {
-      await reviewArticleTranslation(formData);
-      toast.success(labels["translation.reviewed"] ?? "");
-      setOpen(false);
-    } catch (error) {
-      showActionError(error, labels["translation.reviewError"] ?? "");
-    }
-  };
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="secondary" size="sm" />}>
-        <CheckCircle2 aria-hidden />
-        {labels["translation.review"]}
-      </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>
-            {format(labels["translation.reviewTitle"], {
-              language: labels[`language.${language}`],
-            })}
-          </DialogTitle>
-          <DialogDescription>
-            {assignment.translatorName ?? assignment.translatorEmail}
-          </DialogDescription>
-        </DialogHeader>
-        <div
-          className="border-line bg-subtle grid gap-3 rounded-lg border p-4"
-          dir={language === "ar" ? "rtl" : "ltr"}
-        >
-          <h3 className="text-lg font-semibold">
-            {typeof submitted?.title === "string" ? submitted.title : ""}
-          </h3>
-          {typeof submitted?.summary === "string" && submitted.summary ? (
-            <p className="text-copy-muted">{submitted.summary}</p>
-          ) : null}
-          {typeof submitted?.plainText === "string" ? (
-            <p className="whitespace-pre-wrap leading-relaxed">
-              {submitted.plainText}
-            </p>
-          ) : null}
-        </div>
-        <form action={review} className="grid gap-4">
-          <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="entryId" value={entryId} />
-          <input type="hidden" name="assignmentId" value={assignment.id} />
-          <Field>
-            <FieldLabel htmlFor={`translation-review-note-${language}`}>
-              {labels["translation.reviewNote"]}
-            </FieldLabel>
-            <Textarea
-              id={`translation-review-note-${language}`}
-              name="reviewNote"
-              rows={3}
-              maxLength={2000}
-            />
-          </Field>
-          <DialogFooter>
-            <PendingButton variant="danger" name="decision" value="reject">
-              {labels["translation.reject"]}
-            </PendingButton>
-            <PendingButton name="decision" value="accept">
-              {labels["translation.accept"]}
-            </PendingButton>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      <ArticlePreview
+        language={chosen}
+        sourceLanguage={sourceLanguage}
+        published={Boolean(chosen.publishedAt)}
+        open={reading !== null}
+        onOpenChange={(next) => {
+          if (!next) setReading(null);
+        }}
+        labels={labels}
+      />
+    </>
   );
 }
 
@@ -944,48 +726,47 @@ function ArticlePreview({
   language,
   sourceLanguage,
   published,
+  open,
+  onOpenChange,
   labels,
 }: {
   language: ArticleLanguageStatus;
   sourceLanguage: Language;
   published: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   labels: Labels;
 }) {
-  const rtl = language.code === "ar";
+  /* The sheet opens from the side the language is read from. */
+  const dir = editorialTextDirection(language.code);
   return (
-    <Sheet>
-      <SheetTrigger
-        render={<Button variant="ghost" size="sm" className="gap-1.5" />}
-      >
-        <Eye className="size-4" aria-hidden />
-        {labels["preview.open"]}
-      </SheetTrigger>
+    <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side={rtl ? "left" : "right"}
+        side={dir === "rtl" ? "left" : "right"}
         className="w-full overflow-y-auto sm:max-w-lg"
       >
         <SheetHeader>
           <SheetTitle>
-            {format(labels["preview.title"], {
-              language: labels[`language.${language.code}`],
+            {formatMessage(labels["preview.title"] ?? "", {
+              language: labels[`language.${language.code}`] ?? "",
             })}
           </SheetTitle>
           <SheetDescription>
             {!published && language.code !== sourceLanguage
-              ? format(labels["preview.fallback"], {
-                  source: labels[`language.${sourceLanguage}`],
-                  target: labels[`language.${language.code}`],
+              ? formatMessage(labels["preview.fallback"] ?? "", {
+                  source: labels[`language.${sourceLanguage}`] ?? "",
+                  target: labels[`language.${language.code}`] ?? "",
                 })
               : language.method === "ai"
-                ? format(labels["preview.aiTranslated"], {
-                    source: labels[`language.${sourceLanguage}`],
+                ? formatMessage(labels["preview.aiTranslated"] ?? "", {
+                    source: labels[`language.${sourceLanguage}`] ?? "",
                   })
                 : ""}
           </SheetDescription>
         </SheetHeader>
         <article
           className="infokit-article-preview grid gap-4 px-4 pb-8"
-          dir={rtl ? "rtl" : "ltr"}
+          dir={dir}
         >
           <h2 className="text-2xl font-semibold tracking-tight">
             {language.title}
@@ -1027,12 +808,19 @@ export function ArticleWorkflowBar({
   entryId,
   workflowState,
   archived,
+  canArchive,
   labels,
 }: {
   locale: string;
   entryId: string;
   workflowState: string;
   archived: boolean;
+  /**
+   * Whether archiving is available at all: only for whoever wrote the article,
+   * and only once nothing of it is published. Decided on the server, and offered
+   * nowhere else — a button that answers with an error is not an explanation.
+   */
+  canArchive: boolean;
   labels: Labels;
 }) {
   const showActionError = useActionErrorToast();
@@ -1082,38 +870,40 @@ export function ArticleWorkflowBar({
           </PendingButton>
         </form>
       ) : null}
-      <AlertDialog>
-        <AlertDialogTrigger
-          render={<Button variant="ghost" className="text-danger gap-2" />}
-        >
-          <Archive className="size-4" aria-hidden />
-          {labels["action.archive"]}
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {labels["action.archiveConfirmTitle"]}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {labels["action.archiveConfirmBody"]}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{labels["action.cancel"]}</AlertDialogCancel>
-            <form
-              action={(formData) =>
-                run(archiveArticle, formData, labels["toast.archived"])
-              }
-            >
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="entryId" value={entryId} />
-              <PendingButton variant="danger" className="w-full">
-                {labels["action.archiveConfirm"]}
-              </PendingButton>
-            </form>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {canArchive ? (
+        <AlertDialog>
+          <AlertDialogTrigger
+            render={<Button variant="ghost" className="text-danger gap-2" />}
+          >
+            <Archive className="size-4" aria-hidden />
+            {labels["action.archive"]}
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {labels["action.archiveConfirmTitle"]}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {labels["action.archiveConfirmBody"]}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{labels["action.cancel"]}</AlertDialogCancel>
+              <form
+                action={(formData) =>
+                  run(archiveArticle, formData, labels["toast.archived"])
+                }
+              >
+                <input type="hidden" name="locale" value={locale} />
+                <input type="hidden" name="entryId" value={entryId} />
+                <PendingButton variant="danger" className="w-full">
+                  {labels["action.archiveConfirm"]}
+                </PendingButton>
+              </form>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
     </div>
   );
 }

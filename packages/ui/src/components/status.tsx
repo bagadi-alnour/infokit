@@ -1,4 +1,5 @@
 import type { StatusRole } from "@infokit/tokens";
+import type { ReactNode } from "react";
 import { View } from "react-native";
 
 import { cn } from "../lib/cn";
@@ -61,21 +62,29 @@ export function StatusPill({
   );
 }
 
-/** Neutral chip: the word identifies the service, not a per-category hue. */
+/**
+ * Neutral chip: the word identifies the service, not a per-category hue
+ * (docs/DESIGN-SYSTEM.md §5). `icon` is a glyph that repeats what the word
+ * already says — it makes a list of services scannable to someone reading a
+ * language they are still learning, and it is never the only thing shown.
+ */
 export function Chip({
   label,
+  icon,
   className,
 }: {
   label: string;
+  icon?: ReactNode;
   className?: string;
 }) {
   return (
     <View
       className={cn(
-        "bg-subtle border-line rounded-chip border px-2.5 py-1.5",
+        "bg-subtle border-line rounded-chip flex-row items-center gap-1.5 border px-2.5 py-1.5",
         className,
       )}
     >
+      {icon}
       <Text className="text-sm font-semibold">{label}</Text>
     </View>
   );

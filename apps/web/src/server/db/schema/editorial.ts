@@ -29,6 +29,7 @@ import {
   stewardContact,
   timestamps,
   translationMethod,
+  translationReviewStage,
   translationState,
 } from "./schemas";
 import { services } from "./services";
@@ -98,7 +99,12 @@ export const editorialEntryTags = content.table(
   (t) => [primaryKey({ columns: [t.entryId, t.tagId] })],
 );
 
-/** Images/media attached to an article, including one optional cover image. */
+/**
+ * Media attached to an article: one optional cover image, images placed in the
+ * body, and the documents offered for download — a form to fill in, a timetable
+ * to print. `attachment` is the same word `activity_assets` uses for a PDF, so
+ * the two content types are read the same way.
+ */
 export const editorialEntryAssets = content.table(
   "editorial_entry_assets",
   {
@@ -108,7 +114,9 @@ export const editorialEntryAssets = content.table(
     assetId: uuid("asset_id")
       .notNull()
       .references(() => assets.id, { onDelete: "restrict" }),
-    role: varchar("role", { length: 20 }).$type<"cover" | "inline">().notNull(),
+    role: varchar("role", { length: 20 })
+      .$type<"cover" | "inline" | "attachment">()
+      .notNull(),
     displayOrder: integer("display_order").notNull().default(0),
   },
   (t) => [
@@ -180,6 +188,25 @@ export const editorialRevisionTranslations = content.table(
     carriedForwardFromRevisionId: uuid(
       "carried_forward_from_revision_id",
     ).references(() => editorialRevisions.id, { onDelete: "restrict" }),
+    /**
+     * The review chain this language is in the middle of. `state` says what the
+     * text is; these say who has been asked to look at it and who has already
+     * said yes. `verifiedById` / `verifiedAt` below are the platform stage's own
+     * record — the last link in the chain, already in this table.
+     */
+    reviewStage: translationReviewStage("review_stage")
+      .notNull()
+      .default("none"),
+    reviewRequestedById: varchar("review_requested_by_id", {
+      length: 255,
+    }).references(() => users.id),
+    reviewRequestedAt: timestamp("review_requested_at", { withTimezone: true }),
+    teamValidatedById: varchar("team_validated_by_id", {
+      length: 255,
+    }).references(() => users.id),
+    teamValidatedAt: timestamp("team_validated_at", { withTimezone: true }),
+    /** Why it came back, in the words of whoever sent it back. */
+    reviewNote: text("review_note"),
     verifiedById: varchar("verified_by_id", { length: 255 }).references(
       () => users.id,
     ),

@@ -9,7 +9,6 @@ import { localizedPath } from "~/i18n/routing";
 import { eventLanguages } from "~/lib/event-languages";
 import { recordAudit } from "~/server/audit";
 import { createAssetUploadUrl, verifyAssetUpload } from "~/server/assets/s3";
-import { auth } from "~/server/auth";
 import {
   protectedPermissionAction,
   requireEditor,
@@ -72,9 +71,11 @@ async function assertMayManage(id: string) {
 }
 
 /** The uploader's own fresh, rights-confirmed file — nobody else's. */
-async function claimUpload(id: string, kind: "image" | "document") {
-  const session = await auth();
-  if (!session?.user.id) throw new Error("Authentication required");
+async function claimUpload(
+  id: string,
+  kind: "image" | "document",
+  uploaderId: string,
+) {
   const [asset] = await db
     .select({
       storageKey: assets.storageKey,
@@ -85,7 +86,7 @@ async function claimUpload(id: string, kind: "image" | "document") {
     .where(
       and(
         eq(assets.id, id),
-        eq(assets.uploaderId, session.user.id),
+        eq(assets.uploaderId, uploaderId),
         eq(assets.kind, kind),
         eq(assets.rightsConfirmed, true),
         isNull(assets.archivedAt),
@@ -117,7 +118,7 @@ const imageUploadSchema = z.object({
 
 export const createEventImageUpload = protectedPermissionAction(
   COORDINATION_MANAGE_PERMISSION,
-  async (formData) => {
+  async (formData, _locale, user) => {
     const parsed = imageUploadSchema.parse({
       mimeType: formData.get("mimeType"),
       byteSize: formData.get("byteSize"),
@@ -126,8 +127,6 @@ export const createEventImageUpload = protectedPermissionAction(
       rightsConfirmed: formData.get("rightsConfirmed"),
     });
     await assertMayManage(eventId.parse(formData.get("eventId")));
-    const session = await auth();
-    if (!session?.user.id) throw new Error("Authentication required");
 
     const id = crypto.randomUUID();
     const storageKey = `uploads/events/${id}/original`;
@@ -140,7 +139,7 @@ export const createEventImageUpload = protectedPermissionAction(
     await db.transaction(async (tx) => {
       await tx.insert(assets).values({
         id,
-        uploaderId: session.user.id,
+        uploaderId: user.id,
         languageCode: parsed.languageCode,
         storageKey,
         mimeType: parsed.mimeType,
@@ -165,11 +164,11 @@ export const createEventImageUpload = protectedPermissionAction(
 /** Attach (or replace) the event's one cover image. */
 export const setEventCoverImage = protectedPermissionAction(
   COORDINATION_MANAGE_PERMISSION,
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const id = eventId.parse(formData.get("eventId"));
     const uploaded = assetId.parse(formData.get("assetId"));
     const event = await assertMayManage(id);
-    await claimUpload(uploaded, "image");
+    await claimUpload(uploaded, "image", user.id);
 
     await db.transaction(async (tx) => {
       // One cover: replacing it detaches the previous file, which stays in
@@ -235,15 +234,13 @@ const flyerUploadSchema = z.object({
 /** Signed upload for a printable flyer — a PDF, so it prints the same anywhere. */
 export const createEventFlyerUpload = protectedPermissionAction(
   COORDINATION_MANAGE_PERMISSION,
-  async (formData) => {
+  async (formData, _locale, user) => {
     const parsed = flyerUploadSchema.parse({
       byteSize: formData.get("byteSize"),
       languageCode: formData.get("languageCode"),
       rightsConfirmed: formData.get("rightsConfirmed"),
     });
     await assertMayManage(eventId.parse(formData.get("eventId")));
-    const session = await auth();
-    if (!session?.user.id) throw new Error("Authentication required");
 
     const id = crypto.randomUUID();
     const storageKey = `uploads/events/${id}/flyer.pdf`;
@@ -255,7 +252,7 @@ export const createEventFlyerUpload = protectedPermissionAction(
     });
     await db.insert(assets).values({
       id,
-      uploaderId: session.user.id,
+      uploaderId: user.id,
       languageCode: parsed.languageCode,
       storageKey,
       mimeType: "application/pdf",
@@ -281,7 +278,7 @@ const addFlyerSchema = z.object({
  */
 export const addEventFlyer = protectedPermissionAction(
   COORDINATION_MANAGE_PERMISSION,
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const id = eventId.parse(formData.get("eventId"));
     const uploaded = assetId.parse(formData.get("assetId"));
     const parsed = addFlyerSchema.parse({
@@ -289,7 +286,7 @@ export const addEventFlyer = protectedPermissionAction(
       title: formData.get("title"),
     });
     const event = await assertMayManage(id);
-    await claimUpload(uploaded, "document");
+    await claimUpload(uploaded, "document", user.id);
 
     await db.transaction(async (tx) => {
       const existing = await tx

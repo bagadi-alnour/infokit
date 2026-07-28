@@ -1,17 +1,29 @@
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
-import { and, desc, eq } from "drizzle-orm";
-import { CalendarClock, GitBranch, Plus, Search } from "lucide-react";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 
-import { SimulatorRowActions } from "~/components/admin/simulator-row-actions";
-import { WorkspacePage } from "~/components/admin/workspace";
-import { Badge } from "~/components/ui/badge";
+import {
+  SIMULATOR_STATES,
+  type SimulatorStateValue,
+} from "~/components/admin/content-states";
+import {
+  SimulatorTable,
+  type SimulatorTableLabels,
+  type SimulatorTableRow,
+} from "~/components/admin/simulator-table";
+import {
+  PageHeader,
+  Stat,
+  StatGrid,
+  WorkspacePage,
+} from "~/components/admin/workspace";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { Input } from "~/components/ui/input";
-import { SelectField } from "~/components/ui/select-field";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
+import { auth } from "~/server/auth";
+import { hasActualPlatformPermission } from "~/server/auth/authorization";
 import { requirePermission } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
@@ -22,78 +34,100 @@ import {
   nodes,
   nodeTranslations,
   organizations,
+  users,
+  versionPublications,
 } from "~/server/db/schema";
-
-const statusVariant = {
-  draft: "outline",
-  published: "default",
-  retired: "secondary",
-  archived: "outline",
-} as const;
-
-const listStates = ["draft", "published", "retired", "archived"] as const;
 
 export default async function SimulatorPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ q?: string; status?: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
   await requirePermission("content.simulator.review", locale);
-  const search = await searchParams;
   const t = await loadPageCatalog(locale, "dashboard-simulator");
-  const [flowRows, versionRows, nodeRows, translationRows] = await Promise.all([
-    db
-      .select({
-        id: flows.id,
-        slug: flows.slug,
-        internalName: flows.internalName,
-        updatedAt: flows.updatedAt,
-        archivedAt: flows.archivedAt,
-        ownerName: organizations.displayName,
-        cityCode: cities.code,
-        cityName: cityTranslations.name,
-      })
-      .from(flows)
-      .leftJoin(organizations, eq(organizations.id, flows.ownerOrganizationId))
-      .leftJoin(cities, eq(cities.id, flows.cityId))
-      .leftJoin(
-        cityTranslations,
-        and(
-          eq(cityTranslations.cityId, cities.id),
-          eq(cityTranslations.languageCode, locale),
-        ),
-      )
-      .orderBy(desc(flows.updatedAt)),
-    db
-      .select({
-        id: flowVersions.id,
-        flowId: flowVersions.flowId,
-        versionNumber: flowVersions.versionNumber,
-        sourceLanguage: flowVersions.sourceLanguageCode,
-        status: flowVersions.status,
-        lastReviewedAt: flowVersions.lastReviewedAt,
-        reviewDueAt: flowVersions.reviewDueAt,
-      })
-      .from(flowVersions)
-      .orderBy(desc(flowVersions.versionNumber)),
-    db.select({ id: nodes.id, versionId: nodes.versionId }).from(nodes),
-    db
-      .select({
-        nodeId: nodeTranslations.nodeId,
-        languageCode: nodeTranslations.languageCode,
-        prompt: nodeTranslations.prompt,
-      })
-      .from(nodeTranslations),
-  ]);
+  const session = await auth();
+  const viewerId = session?.user.id ?? null;
+  // A platform administrator answers for a path whose author has left, and for
+  // the seeded paths nobody built.
+  const canManageGlobal = Boolean(
+    viewerId &&
+    (await hasActualPlatformPermission(viewerId, "support.superadmin")),
+  );
+
+  const [flowRows, versionRows, nodeRows, translationRows, publicationRows] =
+    await Promise.all([
+      db
+        .select({
+          id: flows.id,
+          slug: flows.slug,
+          internalName: flows.internalName,
+          updatedAt: flows.updatedAt,
+          archivedAt: flows.archivedAt,
+          ownerName: organizations.displayName,
+          cityCode: cities.code,
+          cityName: cityTranslations.name,
+          // Who built it. The organisation answers for the facts; this is the
+          // person to ask what a branch meant.
+          createdByName: users.name,
+          // Who may operate on it from the list. Compared on the server; the
+          // browser is told the answer, not the identity it came from.
+          createdById: flows.createdById,
+        })
+        .from(flows)
+        .leftJoin(
+          organizations,
+          eq(organizations.id, flows.ownerOrganizationId),
+        )
+        .leftJoin(cities, eq(cities.id, flows.cityId))
+        .leftJoin(
+          cityTranslations,
+          and(
+            eq(cityTranslations.cityId, cities.id),
+            eq(cityTranslations.languageCode, locale),
+          ),
+        )
+        .leftJoin(users, eq(users.id, flows.createdById))
+        .orderBy(desc(flows.updatedAt)),
+      db
+        .select({
+          id: flowVersions.id,
+          flowId: flowVersions.flowId,
+          versionNumber: flowVersions.versionNumber,
+          sourceLanguage: flowVersions.sourceLanguageCode,
+          status: flowVersions.status,
+          lastReviewedAt: flowVersions.lastReviewedAt,
+          reviewDueAt: flowVersions.reviewDueAt,
+        })
+        .from(flowVersions)
+        .orderBy(desc(flowVersions.versionNumber)),
+      db.select({ id: nodes.id, versionId: nodes.versionId }).from(nodes),
+      db
+        .select({
+          nodeId: nodeTranslations.nodeId,
+          languageCode: nodeTranslations.languageCode,
+          prompt: nodeTranslations.prompt,
+        })
+        .from(nodeTranslations),
+      // What a visitor can reach right now, and the version to take down again:
+      // the version's own status says what it was, publication says what it is.
+      db
+        .select({
+          flowId: versionPublications.flowId,
+          versionId: versionPublications.versionId,
+        })
+        .from(versionPublications)
+        .where(isNull(versionPublications.unpublishedAt)),
+    ]);
 
   const latestByFlow = new Map<string, (typeof versionRows)[number]>();
   for (const version of versionRows) {
     if (!latestByFlow.has(version.flowId))
       latestByFlow.set(version.flowId, version);
   }
+  const publishedVersionByFlow = new Map(
+    publicationRows.map((row) => [row.flowId, row.versionId]),
+  );
   const nodeCountByVersion = new Map<string, number>();
   const versionByNode = new Map<string, string>();
   for (const node of nodeRows) {
@@ -113,67 +147,152 @@ export default async function SimulatorPage({
     languagesByVersion.set(versionId, languages);
   }
 
+  const now = new Date();
   const rows = flowRows.flatMap((flow) => {
     const version = latestByFlow.get(flow.id);
     if (!version) return [];
+    const publishedVersionId = publishedVersionByFlow.get(flow.id) ?? null;
+    /**
+     * A path that is out of the workspace says so first. Otherwise publication
+     * answers — a live version is published whatever a newer draft is doing —
+     * and only then the latest version's own status.
+     */
+    const state: SimulatorStateValue = flow.archivedAt
+      ? "archived"
+      : publishedVersionId
+        ? "published"
+        : version.status;
     return [
       {
         ...flow,
         version,
-        displayStatus: flow.archivedAt ? ("archived" as const) : version.status,
+        publishedVersionId,
+        state,
         nodeCount: nodeCountByVersion.get(version.id) ?? 0,
         languages: [...(languagesByVersion.get(version.id) ?? [])],
+        reviewDue: version.reviewDueAt !== null && version.reviewDueAt <= now,
       },
     ];
   });
-  const query = search.q?.trim().toLocaleLowerCase(locale) ?? "";
-  const requestedStatus = listStates.includes(
-    search.status as (typeof listStates)[number],
-  )
-    ? search.status
-    : "";
-  const filteredRows = rows.filter((row) => {
-    const searchable =
-      `${row.internalName} ${row.slug} ${row.ownerName ?? t.platformOwner} ${row.cityName ?? row.cityCode ?? ""}`.toLocaleLowerCase(
-        locale,
-      );
-    return (
-      (!requestedStatus || row.displayStatus === requestedStatus) &&
-      (!query || searchable.includes(query))
-    );
-  });
-  const draftCount = rows.filter((row) => row.displayStatus === "draft").length;
-  const reviewCount = rows.filter(
-    (row) => row.version.reviewDueAt && row.version.reviewDueAt <= new Date(),
-  ).length;
+
+  const draftCount = rows.filter((row) => row.state === "draft").length;
+  const reviewCount = rows.filter((row) => row.reviewDue).length;
   const dateFormatter = new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeZone: "Europe/Paris",
   });
+  const languageName = (code: string) =>
+    code === "fr" || code === "en" || code === "ar"
+      ? t[`language.${code}`]
+      : code;
+
+  /**
+   * Who may change a path from the list: whoever built it, and a platform
+   * administrator. Everyone else with the review permission reads it.
+   */
+  const mayEdit = (createdById: string | null) =>
+    canManageGlobal || (viewerId !== null && createdById === viewerId);
+
+  const tableRows: SimulatorTableRow[] = rows.map((flow) => {
+    const canEdit = mayEdit(flow.createdById);
+    return {
+      id: flow.id,
+      href: localizedPath(`/dashboard/simulator/${flow.id}`, locale),
+      title: flow.internalName,
+      sub: `/${flow.slug} · ${t.version.replace(
+        "{number}",
+        String(flow.version.versionNumber),
+      )} · ${t.nodes.replace("{count}", String(flow.nodeCount))}`,
+      // A path with no organisation is one the platform holds itself, so the
+      // owner column names the platform rather than leaving the cell empty.
+      owner: flow.ownerName ?? t.platformOwner,
+      scopeLabel: flow.cityName ?? flow.cityCode ?? t.allCities,
+      createdBy: flow.createdByName,
+      state: flow.state,
+      languages: flow.languages.map(languageName),
+      updatedAtIso: flow.updatedAt.toISOString(),
+      updatedLabel: dateFormatter.format(flow.updatedAt),
+      reviewDue: flow.reviewDue,
+      visitorHref: localizedPath(
+        flow.publishedVersionId
+          ? `/simulator/${flow.slug}`
+          : `/simulator/preview/${flow.id}`,
+        locale,
+      ),
+      publishedVersionId: flow.publishedVersionId,
+      canEdit,
+      // Publishing is a promise to a visitor: a path keeps it until someone
+      // takes it down, and only then can it leave the list.
+      canArchive: canEdit && !flow.publishedVersionId && !flow.archivedAt,
+      canRestore: canEdit && flow.archivedAt !== null,
+    };
+  });
+
+  const tableLabels: SimulatorTableLabels = {
+    search: t["table.search"],
+    searchPlaceholder: t["list.searchPlaceholder"],
+    columns: t["table.columns"],
+    clear: t["table.clear"],
+    filterBy: t["table.filterBy"],
+    noMatch: t["list.noResults"],
+    rowsPerPage: t["table.rowsPerPage"],
+    results: t["table.results"],
+    page: t["table.page"],
+    previous: t["table.previous"],
+    next: t["table.next"],
+    path: t["list.pathColumn"],
+    owner: t["list.ownerColumn"],
+    city: t["list.cityColumn"],
+    createdBy: t["list.createdByColumn"],
+    status: t["list.statusColumn"],
+    languages: t["list.languagesColumn"],
+    updated: t["list.updatedColumn"],
+    reviewDue: t["list.reviewDueChip"],
+    // Punctuation, not wording: an empty cell reads as a missing value.
+    none: "—",
+    stateLabels: Object.fromEntries(
+      SIMULATOR_STATES.map((state) => [state, t[`status.${state}`]]),
+    ) as Record<SimulatorStateValue, string>,
+    actions: t["list.actions"],
+    open: t["rowAction.open"],
+    view: t["rowAction.view"],
+    viewVisitor: t["list.view"],
+    unpublish: t["publication.unpublish"],
+    unpublishTitle: t["publication.unpublishTitle"],
+    unpublishBody: t["publication.unpublishDescription"],
+    unpublishConfirm: t["publication.unpublish"],
+    unpublished: t["publication.unpublished"],
+    remove: t["list.delete"],
+    removeTitle: t["list.deleteTitle"],
+    removeBody: t["list.deleteDescription"],
+    removeConfirm: t["list.deleteConfirm"],
+    removed: t["list.deleteSuccess"],
+    restore: t.restore,
+    restored: t["list.restoreSuccess"],
+    cancel: t.cancel,
+    actionError: t["list.deleteError"],
+  };
+
+  // Adding a path belongs to the list's own toolbar, beside the controls that
+  // shape the list. The header keeps it only while there is no list yet — the
+  // first path has to be creatable from an empty page.
+  const createPath = (
+    <Button
+      nativeButton={false}
+      render={<Link href={localizedPath("/dashboard/simulator/new", locale)} />}
+    >
+      <Plus aria-hidden />
+      {t.newFlow}
+    </Button>
+  );
 
   return (
     <WorkspacePage>
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-3xl">
-          <p className="text-brand mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em]">
-            <GitBranch className="size-4" aria-hidden />
-            {t["editor.eyebrow"]}
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight">{t.title}</h1>
-          <p className="text-copy-muted mt-2 text-sm leading-relaxed">
-            {t.sub}
-          </p>
-        </div>
-        <Button
-          nativeButton={false}
-          render={
-            <Link href={localizedPath("/dashboard/simulator/new", locale)} />
-          }
-        >
-          <Plus aria-hidden />
-          {t.newFlow}
-        </Button>
-      </header>
+      <PageHeader
+        title={t.title}
+        sub={t.sub}
+        action={rows.length === 0 ? createPath : null}
+      />
 
       {rows.length === 0 ? (
         <Card>
@@ -182,170 +301,20 @@ export default async function SimulatorPage({
           </CardContent>
         </Card>
       ) : (
-        <section className="grid gap-5">
-          <dl className="border-line bg-surface grid overflow-hidden rounded-xl border sm:grid-cols-3">
-            {[
-              [t["list.total"], rows.length],
-              [t["list.drafts"], draftCount],
-              [t["list.reviewDue"], reviewCount],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="border-line grid gap-1 border-b px-5 py-4 last:border-b-0 sm:border-b-0 sm:border-e sm:last:border-e-0"
-              >
-                <dt className="text-copy-muted text-xs font-medium">{label}</dt>
-                <dd className="text-2xl font-semibold tabular-nums">{value}</dd>
-              </div>
-            ))}
-          </dl>
+        <>
+          <StatGrid>
+            <Stat label={t["list.total"]} value={rows.length} />
+            <Stat label={t["list.drafts"]} value={draftCount} />
+            <Stat label={t["list.reviewDue"]} value={reviewCount} />
+          </StatGrid>
 
-          <form
-            action={localizedPath("/dashboard/simulator", locale)}
-            method="get"
-            className="border-line bg-surface grid gap-3 rounded-xl border p-3 md:grid-cols-[minmax(0,1fr)_14rem_auto]"
-          >
-            <Input
-              type="search"
-              name="q"
-              defaultValue={search.q ?? ""}
-              placeholder={t["list.searchPlaceholder"]}
-              aria-label={t["list.searchPlaceholder"]}
-            />
-            <SelectField
-              name="status"
-              defaultValue={requestedStatus}
-              aria-label={t["list.filterState"]}
-            >
-              <option value="">{t["list.allStates"]}</option>
-              {listStates.map((state) => (
-                <option key={state} value={state}>
-                  {t[`status.${state}`]}
-                </option>
-              ))}
-            </SelectField>
-            <Button type="submit">
-              <Search aria-hidden />
-              {t["list.applyFilters"]}
-            </Button>
-          </form>
-
-          <div className="border-line bg-surface overflow-hidden rounded-xl border">
-            <div className="border-line bg-subtle text-copy-muted hidden grid-cols-[minmax(16rem,2fr)_minmax(9rem,1fr)_8rem_minmax(10rem,1fr)_9rem_2rem] gap-4 border-b px-5 py-3 text-xs font-medium md:grid">
-              <span>{t["list.pathColumn"]}</span>
-              <span>{t["list.ownerColumn"]}</span>
-              <span>{t["list.statusColumn"]}</span>
-              <span>{t["list.languagesColumn"]}</span>
-              <span>{t["list.updatedColumn"]}</span>
-              <span aria-hidden />
-            </div>
-            {filteredRows.length > 0 ? (
-              <div aria-label={t.title} className="divide-line divide-y">
-                {filteredRows.map((flow) => (
-                  <div
-                    key={flow.id}
-                    className="hover:bg-subtle grid gap-4 px-5 py-4 transition-colors md:grid-cols-[minmax(16rem,2fr)_minmax(9rem,1fr)_8rem_minmax(10rem,1fr)_9rem_2rem] md:items-center"
-                  >
-                    <div className="min-w-0">
-                      <Link
-                        href={localizedPath(
-                          `/dashboard/simulator/${flow.id}`,
-                          locale,
-                        )}
-                        aria-label={t["list.open"].replace(
-                          "{title}",
-                          flow.internalName,
-                        )}
-                        className="hover:text-brand focus-visible:ring-brand truncate font-semibold focus-visible:rounded focus-visible:outline-none focus-visible:ring-2"
-                      >
-                        {flow.internalName}
-                      </Link>
-                      <p className="text-copy-muted mt-1 truncate text-xs">
-                        /{flow.slug} ·{" "}
-                        {t.version.replace(
-                          "{number}",
-                          String(flow.version.versionNumber),
-                        )}{" "}
-                        · {t.nodes.replace("{count}", String(flow.nodeCount))}
-                      </p>
-                    </div>
-                    <p className="text-copy-muted truncate text-sm">
-                      {flow.ownerName ?? t.platformOwner}
-                      <span className="block text-xs">
-                        {flow.cityName ?? flow.cityCode ?? t.allCities}
-                      </span>
-                    </p>
-                    <div>
-                      <Badge variant={statusVariant[flow.displayStatus]}>
-                        {t[`status.${flow.displayStatus}`]}
-                      </Badge>
-                      {flow.version.reviewDueAt &&
-                      flow.version.reviewDueAt <= new Date() ? (
-                        <p className="text-warn mt-1 flex items-center gap-1 text-xs">
-                          <CalendarClock className="size-3" aria-hidden />
-                          {dateFormatter.format(flow.version.reviewDueAt)}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {flow.languages.length > 0
-                        ? flow.languages.map((language) => (
-                            <span
-                              key={language}
-                              className="border-line text-copy-muted rounded border px-1.5 py-0.5 text-[0.7rem] font-medium"
-                            >
-                              {language === "fr" ||
-                              language === "en" ||
-                              language === "ar"
-                                ? t[`language.${language}`]
-                                : language}
-                            </span>
-                          ))
-                        : "—"}
-                    </div>
-                    <time
-                      dateTime={flow.updatedAt.toISOString()}
-                      className="text-copy-muted text-sm tabular-nums"
-                    >
-                      {dateFormatter.format(flow.updatedAt)}
-                    </time>
-                    <SimulatorRowActions
-                      locale={locale}
-                      flowId={flow.id}
-                      title={flow.internalName}
-                      viewHref={localizedPath(
-                        flow.displayStatus === "published"
-                          ? `/simulator/${flow.slug}`
-                          : `/simulator/preview/${flow.id}`,
-                        locale,
-                      )}
-                      editHref={localizedPath(
-                        `/dashboard/simulator/${flow.id}`,
-                        locale,
-                      )}
-                      archived={flow.displayStatus === "archived"}
-                      labels={{
-                        actions: t["list.actions"],
-                        view: t["list.view"],
-                        edit: t["list.edit"],
-                        delete: t["list.delete"],
-                        deleteTitle: t["list.deleteTitle"],
-                        deleteDescription: t["list.deleteDescription"],
-                        deleteConfirm: t["list.deleteConfirm"],
-                        deleteSuccess: t["list.deleteSuccess"],
-                        deleteError: t["list.deleteError"],
-                        cancel: t.cancel,
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-copy-muted px-5 py-12 text-center text-sm">
-                {t["list.noResults"]}
-              </p>
-            )}
-          </div>
-        </section>
+          <SimulatorTable
+            rows={tableRows}
+            locale={locale}
+            labels={tableLabels}
+            createAction={createPath}
+          />
+        </>
       )}
     </WorkspacePage>
   );

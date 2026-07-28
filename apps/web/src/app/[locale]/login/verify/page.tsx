@@ -114,16 +114,23 @@ export default async function VerifySecondFactorPage({
               <Label htmlFor="code" className="text-base font-semibold">
                 {messages["auth.verify.codeLabel"]}
               </Label>
+              {/*
+                No `required` or `minLength` here: input-otp spreads them onto
+                its real input, which sits transparent above the slots. An empty
+                or short code would then be cancelled by the browser's own
+                constraint check — no request, no message, and a validation
+                bubble pinned to text nobody can see, so the button reads as
+                dead. Let the submit through and let confirmSecondFactorCode
+                answer with `error=invalid` instead.
+              */}
               <InputOTP
                 id="code"
                 name="code"
                 maxLength={6}
-                minLength={6}
                 pattern="^[0-9]+$"
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 placeholder={messages["auth.verify.codePlaceholder"]}
-                required
                 aria-invalid={isInvalidCode || undefined}
                 containerClassName="w-full justify-center"
                 dir="ltr"

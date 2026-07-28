@@ -108,13 +108,26 @@ export async function hasPermission(
   return authorization.effectivePermissions.has(permissionCode);
 }
 
+/**
+ * The editor a protected action runs as. Handed to the action body so it never
+ * has to ask a second time: an action that reached its body has already been
+ * through `requireEditor`, and re-reading the session there both costs another
+ * round trip and re-states the guarantee with a weaker check — a bare `throw`
+ * skips the login redirect and the SMS step-up this gate applies.
+ */
+export type ActionUser = Awaited<ReturnType<typeof requireEditor>>;
+
 export function protectedEditorAction<Result>(
-  action: (formData: FormData, locale: Locale) => Promise<Result>,
+  action: (
+    formData: FormData,
+    locale: Locale,
+    user: ActionUser,
+  ) => Promise<Result>,
 ): (formData: FormData) => Promise<Result> {
   return async (formData) => {
     const locale = await getActionLocale(formData.get("locale"));
-    await requireEditor(locale);
-    return action(formData, locale);
+    const user = await requireEditor(locale);
+    return action(formData, locale, user);
   };
 }
 
@@ -126,7 +139,11 @@ export function protectedEditorAction<Result>(
  */
 export function protectedPermissionAction<Result>(
   permissionCode: string,
-  action: (formData: FormData, locale: Locale) => Promise<Result>,
+  action: (
+    formData: FormData,
+    locale: Locale,
+    user: ActionUser,
+  ) => Promise<Result>,
 ): (formData: FormData) => Promise<Result> {
   return async (formData) => {
     const locale = await getActionLocale(formData.get("locale"));
@@ -138,6 +155,6 @@ export function protectedPermissionAction<Result>(
     ) {
       redirect(await permissionDeniedPath(locale));
     }
-    return action(formData, locale);
+    return action(formData, locale, user);
   };
 }

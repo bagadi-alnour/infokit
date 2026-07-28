@@ -1,22 +1,27 @@
 import type { PublicActivityDetailPayload } from "@infokit/shared/public-content";
 import {
-  Button,
   Callout,
   Card,
-  CardDescription,
   CardTitle,
   Chip,
   MetaRow,
   StatusPill,
   Text,
 } from "@infokit/ui";
-import * as Linking from "expo-linking";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo } from "react";
-import { Image, RefreshControl, ScrollView, View } from "react-native";
+import { useCallback } from "react";
+import { View } from "react-native";
 
-import { ErrorState, LoadingState } from "~/components/request-states";
-import { connectionStrings, deviceLocale, publicClient } from "~/lib/client";
+import {
+  activityMapTarget,
+  ProviderLinks,
+  ServiceChips,
+} from "~/components/content-cards";
+import { AddressLink, CoverImage } from "~/components/content-parts";
+import { PayloadScreen } from "~/components/payload-screen";
+import { TaxonomyIcon } from "~/components/taxonomy-icon";
+import { publicClient } from "~/lib/client";
+import { usePreferences } from "~/lib/preferences";
 import { usePublicPayload } from "~/lib/use-public-payload";
 
 function ActivityDetail({ payload }: { payload: PublicActivityDetailPayload }) {
@@ -27,22 +32,13 @@ function ActivityDetail({ payload }: { payload: PublicActivityDetailPayload }) {
     cancelled: labels.statusCancelled,
     uncertain: labels.statusUncertain,
   };
-  const cover = activity.coverImage;
-  // Read once: a closure cannot rely on narrowing a property access.
-  const mapHref = activity.mapHref;
+  const target = activityMapTarget(activity);
+  const hasProvider =
+    activity.providers.length > 0 || activity.providerNames.length > 0;
 
   return (
     <>
-      {cover ? (
-        <Image
-          source={{ uri: publicClient.resolveUrl(cover.url) }}
-          className="rounded-card bg-subtle h-44 w-full"
-          resizeMode="cover"
-          // A decorative image says nothing a screen reader needs to hear.
-          accessible={!cover.decorative}
-          accessibilityLabel={cover.decorative ? undefined : cover.alt}
-        />
-      ) : null}
+      <CoverImage image={activity.coverImage} className="rounded-card h-44" />
 
       <View className="flex-row flex-wrap items-center gap-2">
         <StatusPill
@@ -50,7 +46,10 @@ function ActivityDetail({ payload }: { payload: PublicActivityDetailPayload }) {
           label={statusWords[activity.status]}
           detail={activity.nextOpeningLabel ?? undefined}
         />
-        <Chip label={activity.categoryLabel} />
+        <Chip
+          label={activity.categoryLabel}
+          icon={<TaxonomyIcon name={activity.categoryIcon} />}
+        />
       </View>
 
       <View className="gap-2">
@@ -74,43 +73,35 @@ function ActivityDetail({ payload }: { payload: PublicActivityDetailPayload }) {
 
       <Card>
         <CardTitle>{labels.place}</CardTitle>
-        <Text>{activity.placeName}</Text>
-        {activity.address ? (
-          <CardDescription>{activity.address}</CardDescription>
-        ) : null}
-        {mapHref ? (
-          <Button
-            tone="outline"
-            onPress={() => {
-              // The map opens outside the app: no location leaves the phone.
-              void Linking.openURL(mapHref);
-            }}
-          >
-            <Text>{labels.mapView}</Text>
-          </Button>
+        {target ? (
+          // Pressing the address hands it to the phone's map application; the
+          // app never asks the phone where its owner is.
+          <AddressLink
+            placeName={activity.placeName}
+            address={activity.address || undefined}
+            target={target}
+            actionLabel={labels.mapView}
+          />
         ) : (
-          <Text variant="muted">{labels.noMap}</Text>
+          <>
+            <Text>{activity.placeName}</Text>
+            <Text variant="muted">{labels.noMap}</Text>
+          </>
         )}
       </Card>
 
-      {labels.audience ? (
+      {labels.audience || activity.services.length > 0 || hasProvider ? (
         <Card>
-          <MetaRow label={labels.audience}>{activity.audienceLabel}</MetaRow>
+          {labels.audience ? (
+            <MetaRow label={labels.audience}>{activity.audienceLabel}</MetaRow>
+          ) : null}
           {activity.services.length > 0 ? (
             <>
               <Text variant="eyebrow">{labels.services}</Text>
-              <View className="flex-row flex-wrap gap-2">
-                {activity.services.map((service) => (
-                  <Chip key={service.id} label={service.label} />
-                ))}
-              </View>
+              <ServiceChips services={activity.services} />
             </>
           ) : null}
-          {activity.providerNames.length > 0 ? (
-            <MetaRow label={labels.provider}>
-              {activity.providerNames.join(" · ")}
-            </MetaRow>
-          ) : null}
+          <ProviderLinks activity={activity} label={labels.provider} />
         </Card>
       ) : null}
 
@@ -132,41 +123,23 @@ function ActivityDetail({ payload }: { payload: PublicActivityDetailPayload }) {
 
 export default function ActivityDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
-  const locale = useMemo(() => deviceLocale(), []);
-  const strings = useMemo(() => connectionStrings(locale), [locale]);
+  const { locale, strings } = usePreferences();
   const load = useCallback(
     (signal: AbortSignal) => publicClient.getActivity(slug, { locale, signal }),
     [slug, locale],
   );
-  const { state, refreshing, refresh, retry } = usePublicPayload(load);
-  const payload = state.status === "ready" ? state.payload : null;
+  const request = usePublicPayload(load);
+  const name =
+    request.state.status === "ready"
+      ? request.state.payload?.activity.name
+      : undefined;
 
   return (
     <>
-      <Stack.Screen options={{ title: payload?.activity.name ?? "InfoKit" }} />
-      <ScrollView
-        className="bg-canvas flex-1"
-        contentContainerClassName="gap-5 p-4 pb-10"
-        style={payload ? { direction: payload.direction } : undefined}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={refresh} />
-        }
-      >
-        {payload ? <ActivityDetail payload={payload} /> : null}
-
-        {state.status === "loading" ? <LoadingState strings={strings} /> : null}
-        {/* A published activity can be unpublished while someone reads it. */}
-        {state.status === "ready" && !payload ? (
-          <Callout tone="warning">{strings.notFound}</Callout>
-        ) : null}
-        {state.status === "error" ? (
-          <ErrorState
-            strings={strings}
-            unreachable={state.unreachable}
-            onRetry={retry}
-          />
-        ) : null}
-      </ScrollView>
+      <Stack.Screen options={{ title: name ?? "InfoKit" }} />
+      <PayloadScreen request={request} strings={strings}>
+        {(payload) => <ActivityDetail payload={payload} />}
+      </PayloadScreen>
     </>
   );
 }

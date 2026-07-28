@@ -9,6 +9,7 @@ import { type Locale } from "@infokit/shared/i18n";
 
 import { getActionLocale } from "~/i18n/request-locale";
 import { stewardContactPatch } from "~/lib/steward-contact";
+import { optionalText } from "~/lib/form-fields";
 import { localizedPath } from "~/i18n/routing";
 import { recordAudit } from "~/server/audit";
 import { requireEditor } from "~/server/auth/require";
@@ -38,11 +39,6 @@ import {
  */
 
 const scopeSchema = z.enum(["global", "org"]);
-
-const optional = z
-  .string()
-  .trim()
-  .transform((v) => (v === "" ? null : v));
 
 /** Read a form field, falling back when it is absent or blank. */
 function field(formData: FormData, name: string, fallback: string): string {
@@ -151,9 +147,9 @@ export async function createService(formData: FormData) {
   const parsed = z
     .object({
       nameFr: nameSchema,
-      nameEn: optional,
-      nameAr: optional,
-      code: optional.pipe(codeSchema.nullable()),
+      nameEn: optionalText,
+      nameAr: optionalText,
+      code: optionalText.pipe(codeSchema.nullable()),
       icon: z.string().trim().min(1).max(50).default("help"),
       categoryId: z.string().uuid(),
     })
@@ -319,8 +315,8 @@ export async function createCategory(formData: FormData) {
       code: codeSchema.max(50),
       icon: z.string().trim().min(1).max(50).default("help"),
       labelFr: nameSchema,
-      labelEn: optional,
-      labelAr: optional,
+      labelEn: optionalText,
+      labelAr: optionalText,
     })
     .parse({
       code: formData.get("code"),
@@ -452,8 +448,8 @@ export async function createTag(formData: FormData) {
   const parsed = z
     .object({
       labelFr: nameSchema,
-      labelEn: optional,
-      labelAr: optional,
+      labelEn: optionalText,
+      labelAr: optionalText,
       code: codeSchema,
       namespace: z.string().trim().min(1).max(60).default("topic"),
       colorToken: z.string().trim().min(1).max(60).default("neutral"),

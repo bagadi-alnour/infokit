@@ -328,13 +328,11 @@ export function ControlField({
   );
 }
 
-export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+export function TextInput(props: ComponentProps<typeof Input>) {
   return <Input {...props} className={cn("min-h-9", props.className)} />;
 }
 
-export function TextArea(
-  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
-) {
+export function TextArea(props: ComponentProps<typeof Textarea>) {
   return <Textarea {...props} className={cn("min-h-20", props.className)} />;
 }
 
@@ -386,6 +384,8 @@ const chipTones = {
   neutral: "bg-neutral-soft text-neutral",
   accent: "bg-brand-soft text-brand",
 } as const;
+
+export type ChipTone = keyof typeof chipTones;
 
 export function Chip({
   tone = "neutral",

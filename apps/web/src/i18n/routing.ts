@@ -6,13 +6,15 @@ import {
   type PublicLocale,
 } from "@infokit/shared/i18n";
 
-export type AuthRoute = "login" | "check" | "error" | "verify";
+export type AuthRoute = "login" | "check" | "error" | "verify" | "device";
 
 const authRouteBase: Record<AuthRoute, string> = {
   login: "/login",
   check: "/login/check",
   error: "/login/error",
   verify: "/login/verify",
+  // Where a finished browser sign-in is handed to the phone app.
+  device: "/login/device",
 };
 
 type QueryValue = string | number | boolean | null | undefined;
@@ -66,16 +68,26 @@ export function localeStaticParams(): Array<{ locale: PublicLocale }> {
   return publicSupportedLocales.map((locale) => ({ locale }));
 }
 
+/**
+ * The same page in every public language, for `hreflang`.
+ *
+ * Most paths are identical across locales, so one path is enough. An article's
+ * slug is generated from its own title in each language, though, so `perLocale`
+ * carries the translated path where one exists — anything missing falls back to
+ * `pathname`, which still resolves.
+ */
 export function languageAlternates(
   pathname: string,
+  perLocale?: Partial<Record<PublicLocale, string>>,
 ): Record<PublicLocale | "x-default", string> {
+  const pathFor = (locale: PublicLocale) => perLocale?.[locale] ?? pathname;
   return {
     ...Object.fromEntries(
       publicSupportedLocales.map((locale) => [
         locale,
-        localizedPath(pathname, locale),
+        localizedPath(pathFor(locale), locale),
       ]),
     ),
-    "x-default": localizedPath(pathname, "fr"),
+    "x-default": localizedPath(pathFor("fr"), "fr"),
   } as Record<PublicLocale | "x-default", string>;
 }

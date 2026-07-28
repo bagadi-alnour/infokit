@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createAssetReadUrl } from "~/server/assets/s3";
-import { auth } from "~/server/auth";
+import { readerUserId } from "~/server/auth/request-reader";
 import {
   coordinationViewer,
   findCoordinationEvent,
@@ -18,15 +18,16 @@ const params = z.object({ id: z.string().uuid(), assetId: z.string().uuid() });
  * The file is not public because it was uploaded; it is readable because the
  * event is. So the event is resolved first, through exactly the tiers the
  * agenda uses — the public read model answers for a visitor, and only when it
- * does not is the caller's own session consulted (the same order as the
- * calendar file route). A flyer belonging to an `organization`-tier event is
+ * does not is the caller's own session consulted — a browser cookie or a
+ * phone's device session (the same order, and the same reader, as the calendar
+ * file route). A flyer belonging to an `organization`-tier event is
  * therefore a 404 to everyone outside that organisation, link in hand or not.
  *
  * Storage stays private throughout: what is returned is a redirect to a
  * short-lived signed URL, never a permanent one that could be forwarded.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params: raw }: { params: Promise<{ id: string; assetId: string }> },
 ) {
   const parsed = params.safeParse(await raw);
@@ -38,9 +39,9 @@ export async function GET(
   const locale = "fr";
   let readable = await findPublicCoordinationEvent({ eventId, locale });
   if (!readable) {
-    const session = await auth();
-    if (!session?.user) return notFound();
-    const viewer = await coordinationViewer(session.user.id);
+    const userId = await readerUserId(request);
+    if (!userId) return notFound();
+    const viewer = await coordinationViewer(userId);
     readable = await findCoordinationEvent({ eventId, viewer, locale });
   }
   if (!readable) return notFound();

@@ -7,8 +7,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { localizedPath } from "~/i18n/routing";
+import { optionalUuid } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
-import { auth } from "~/server/auth";
+import {
+  hasActualPlatformPermission,
+  superadminPermission,
+} from "~/server/auth/authorization";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { hashContent, slugify } from "~/server/content/editorial";
 import { db } from "~/server/db";
@@ -23,12 +27,6 @@ import {
   translationSourceVersions,
   versionPublications,
 } from "~/server/db/schema";
-
-const optionalUuid = z
-  .string()
-  .trim()
-  .transform((value) => (value === "" ? null : value))
-  .pipe(z.string().uuid().nullable());
 
 function refresh(locale: Locale, flowId?: string) {
   revalidatePath(localizedPath("/dashboard/simulator", locale));
@@ -72,7 +70,7 @@ const createFlowSchema = z.object({
 
 export const createSimulatorFlow = protectedPermissionAction(
   "content.simulator.review",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = createFlowSchema.parse({
       internalName: formData.get("internalName"),
       organizationId: formData.get("organizationId") ?? "",
@@ -87,9 +85,6 @@ export const createSimulatorFlow = protectedPermissionAction(
     if (parsed.reviewDueDate < parsed.lastReviewedDate) {
       throw new Error("The next review cannot be before the last review");
     }
-    const session = await auth();
-    const actorId = session?.user.id;
-    if (!actorId) throw new Error("Authentication required");
     const slug = await uniqueFlowSlug(parsed.internalName);
 
     const created = await db.transaction(async (tx) => {
@@ -100,6 +95,7 @@ export const createSimulatorFlow = protectedPermissionAction(
           internalName: parsed.internalName,
           ownerOrganizationId: parsed.organizationId,
           cityId: parsed.cityId,
+          createdById: user.id,
         })
         .returning({ id: flows.id });
       if (!flow) throw new Error("Flow insert returned no row");
@@ -175,7 +171,7 @@ export const createSimulatorFlow = protectedPermissionAction(
         sourceContentJson: sourcePayload,
         sourceContentHash: hashContent(sourcePayload),
         impact: "initial",
-        createdById: actorId,
+        createdById: user.id,
       });
       return { flowId: flow.id, versionId: version.id };
     });
@@ -314,16 +310,13 @@ const saveSchema = z.object({
 
 export const saveSimulatorDraft = protectedPermissionAction(
   "content.simulator.review",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const input = saveSchema.parse({
       flowId: formData.get("flowId"),
       versionId: formData.get("versionId"),
       graph: formData.get("graph"),
     });
     const graph = graphSchema.parse(JSON.parse(input.graph) as unknown);
-    const session = await auth();
-    const actorId = session?.user.id;
-    if (!actorId) throw new Error("Authentication required");
     const nodeIds = new Set(graph.nodes.map((node) => node.id));
     if (!nodeIds.has(graph.entryNodeId)) {
       throw new Error("The start step no longer exists");
@@ -433,7 +426,7 @@ export const saveSimulatorDraft = protectedPermissionAction(
           sourceContentJson: sourcePayload,
           sourceContentHash: sourceHash,
           impact: latestSource ? "review_required" : "initial",
-          createdById: actorId,
+          createdById: user.id,
         });
       }
 
@@ -587,15 +580,12 @@ const demoContentPattern =
 
 export const publishSimulatorVersion = protectedPermissionAction(
   "content.simulator.review",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = publicationSchema.parse({
       flowId: formData.get("flowId"),
       versionId: formData.get("versionId"),
       reviewConfirmed: formData.get("reviewConfirmed"),
     });
-    const session = await auth();
-    const publisherId = session?.user.id;
-    if (!publisherId) throw new Error("A signed-in publisher is required");
 
     const published = await db.transaction(async (tx) => {
       const [version] = await tx
@@ -772,7 +762,7 @@ export const publishSimulatorVersion = protectedPermissionAction(
       await tx.insert(versionPublications).values({
         flowId: version.flowId,
         versionId: version.id,
-        publishedById: publisherId,
+        publishedById: user.id,
         publishedAt: now,
       });
       await tx
@@ -796,6 +786,32 @@ export const publishSimulatorVersion = protectedPermissionAction(
   },
 );
 
+/**
+ * Whoever built the path, or a platform administrator — who has to be able to
+ * finish what someone who has left started, and is the only editor a seeded path
+ * has. Read again here rather than trusted from the menu that offered it.
+ */
+async function requirePathAuthorship(flowId: string, userId: string) {
+  const [flow] = await db
+    .select({
+      slug: flows.slug,
+      createdById: flows.createdById,
+      archivedAt: flows.archivedAt,
+    })
+    .from(flows)
+    .where(eq(flows.id, flowId))
+    .limit(1);
+  if (!flow) throw new Error("Simulator path not found");
+  if (flow.createdById !== userId) {
+    const isPlatformAdministrator = await hasActualPlatformPermission(
+      userId,
+      superadminPermission,
+    );
+    if (!isPlatformAdministrator) throw new Error("Forbidden");
+  }
+  return flow;
+}
+
 const unpublishSchema = z.object({
   flowId: z.string().uuid(),
   versionId: z.string().uuid(),
@@ -803,19 +819,15 @@ const unpublishSchema = z.object({
 
 export const unpublishSimulatorVersion = protectedPermissionAction(
   "content.simulator.review",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = unpublishSchema.parse({
       flowId: formData.get("flowId"),
       versionId: formData.get("versionId"),
     });
-    const session = await auth();
-    if (!session?.user.id) throw new Error("A signed-in publisher is required");
-    const [flow] = await db
-      .select({ slug: flows.slug })
-      .from(flows)
-      .where(eq(flows.id, parsed.flowId))
-      .limit(1);
-    if (!flow) throw new Error("Simulator path not found");
+    // Taking a path away from visitors is the author's call, not every
+    // reviewer's — the row menu offers it on the same terms, but says so from
+    // the browser, which is not where the answer may be decided.
+    const flow = await requirePathAuthorship(parsed.flowId, user.id);
 
     await db.transaction(async (tx) => {
       await tx
@@ -851,55 +863,49 @@ export const unpublishSimulatorVersion = protectedPermissionAction(
   },
 );
 
+/**
+ * Take a path out of the workspace. It may not be public when it goes: what a
+ * visitor was told stays true until someone takes it down, so the way out runs
+ * through unpublishing first — which is a decision on its own, with its own
+ * audit entry, not a side effect of tidying a list.
+ */
 export const archiveSimulatorFlow = protectedPermissionAction(
   "content.simulator.review",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const flowId = z.string().uuid().parse(formData.get("flowId"));
-    const [flow] = await db
-      .select({ slug: flows.slug })
-      .from(flows)
-      .where(eq(flows.id, flowId))
+    await requirePathAuthorship(flowId, user.id);
+
+    const [live] = await db
+      .select({ id: versionPublications.id })
+      .from(versionPublications)
+      .where(
+        and(
+          eq(versionPublications.flowId, flowId),
+          isNull(versionPublications.unpublishedAt),
+        ),
+      )
       .limit(1);
-    if (!flow) throw new Error("Simulator path not found");
-    await db.transaction(async (tx) => {
-      const now = new Date();
-      await tx
-        .update(versionPublications)
-        .set({ unpublishedAt: now })
-        .where(
-          and(
-            eq(versionPublications.flowId, flowId),
-            isNull(versionPublications.unpublishedAt),
-          ),
-        );
-      await tx
-        .update(flowVersions)
-        .set({ status: "retired" })
-        .where(
-          and(
-            eq(flowVersions.flowId, flowId),
-            eq(flowVersions.status, "published"),
-          ),
-        );
-      await tx
-        .update(flows)
-        .set({ archivedAt: now, updatedAt: now })
-        .where(eq(flows.id, flowId));
-    });
+    if (live) throw new Error("Unpublish it first");
+
+    const now = new Date();
+    await db
+      .update(flows)
+      .set({ archivedAt: now, updatedAt: now })
+      .where(eq(flows.id, flowId));
     await recordAudit({
       action: "simulator.flow_archived",
       subjectType: "simulator_flow",
       subjectId: flowId,
     });
     refresh(locale, flowId);
-    refreshPublicSimulator(flow.slug);
   },
 );
 
 export const restoreSimulatorFlow = protectedPermissionAction(
   "content.simulator.review",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const flowId = z.string().uuid().parse(formData.get("flowId"));
+    await requirePathAuthorship(flowId, user.id);
     await db
       .update(flows)
       .set({ archivedAt: null, updatedAt: new Date() })

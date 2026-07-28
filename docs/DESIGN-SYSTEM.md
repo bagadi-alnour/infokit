@@ -32,11 +32,16 @@ frequently under stress. Everything below follows from that:
    never for instructions.
 3. **Reading order of an activity card is fixed:** name → status and next time →
    place and distance → audience → services → providing association →
-   freshness. Cards may compress, never reorder.
+   freshness. Cards may compress, never reorder. A row with nothing to say is
+   left out, not shown empty: an activity the platform publishes itself has no
+   providing association, so that row disappears and the rest keeps its order.
 4. **Inline links inside paragraphs use `accentDeep`**, underlined. The mid-tone
    `accent` is for fills, icons and borders — not for text on canvas.
 5. **Focus is always visible:** a 2px `accent` ring with a 2px offset, on every
-   interactive element, never removed on mouse users.
+   interactive element, never removed on mouse users. One exception, for
+   geometry rather than taste: a control that anchors a popup the width of
+   itself draws its 2px inside its own edge — border and ring in `accent`,
+   meeting — so that focusing it cannot make it wider than the list it opens.
 6. **Minimum tap target 48×48px** on the public site (36px is allowed only
    inside the editor workspace, on pointer devices).
 7. **Degradation order.** Features are dropped in this order when the device or
@@ -71,6 +76,9 @@ token works in CSS and in React Native.
 | `warning` / `warningSoft` | `#8A5A06` / `#E9E3D2` | `#DDB96A` / `#2C2A1E` | uncertain, expiring                     |
 | `danger` / `dangerSoft`   | `#A3282C` / `#EFDAD9` | `#EF8F8A` / `#2F2523` | cancelled, error, no                    |
 | `neutralStatus` / `…Soft` | `#5B6F6B` / `#DEE6E3` | `#9FB3AF` / `#1D2B29` | closed, inactive, unknown               |
+| `eventAccent` / `…Wash`   | `#3B4BA8` / `#E3E6F6` | `#A9B4F5` / `#1B2340` | agenda family (see §5)                  |
+| `articleAccent` / `…Wash` | `#7A3A72` / `#F1E4EF` | `#E2A8D8` / `#2E2033` | reading family                          |
+| `guideAccent` / `…Wash`   | `#8F5220` / `#F4E7D9` | `#E4B489` / `#33261B` | guide family                            |
 
 The accent is a **care teal**: institutional enough to be trusted, far enough
 from the blue of border-police and government sites to not be mistaken for one.
@@ -105,10 +113,67 @@ from the blue of border-police and government sites to not be mistaken for one.
 - **Freshness marker.** "Checked <date>" with a check icon in `success`;
   degrades to `warning` + "to confirm" when the check is older than the
   content's review window, and to `neutralStatus` + "not available" when unknown.
-- **Cards** are `surface` + `border` ring + radius 20 + `md` shadow on hover
-  only. A card is a link target in full; the visible affordance is its title.
+- **Cards** are `surface` + `border` ring + radius 20 + the `sm` shadow at rest,
+  and **no shadow moves on hover**: what answers the pointer is the ring taking
+  the family hue, plus a 2px rise. A shelf where every card blooms under the
+  cursor is chrome competing with the answers printed on it, and rule 7 drops
+  shadows before anything a reader needs. A card is a link target in full; the
+  visible affordance is its title.
+- **Content families.** Each kind of card is built differently, so a reader
+  recognises what they are holding before reading it. One shape and one hue per
+  family, and no family may take more than the one element named here:
+
+  | Family   | Hue                         | The one thing that carries it                  |
+  | -------- | --------------------------- | ---------------------------------------------- |
+  | activity | the status ramp (§6)        | a 6px rule across the head of the card         |
+  | event    | `eventAccent` / `eventWash` | the date, in a washed block                    |
+  | article  | `articleAccent`             | a short rule under the title; nothing filled   |
+  | guide    | `guideAccent` / `guideWash` | the whole card is washed — it is an invitation |
+
+  Family hues are **structural, never signals**: they carry no state, they never
+  appear inside a status pill or a notice, and rule 1 still holds — nothing is
+  understood from a family colour alone. A family hue follows its content from
+  the list into the detail screen, on exactly one element there too.
+
+  The four hues are the **same four on the site and in the app**, under the same
+  utility names (`text-event`, `bg-guide-wash`, …) so a screen and a page cannot
+  drift apart. Beyond the card itself a family may colour two more things, and
+  only these:
+
+  - **the opening of a page or a section** — a tinted eyebrow plus a short rule
+    before the heading, so the reader meets the hue before the first card;
+  - **the card's own affordance word** — "Read article", "Event details",
+    "Open" — because that word is the promise of what the hue leads to.
+
+  Everything else on the surface stays neutral. The home page is where all four
+  meet, and it is the only place they appear side by side.
+
 - **Notices** carry an icon, a bold one-line summary, then detail — in
   `accentSoft` (info), `warningSoft`, `dangerSoft`.
+- **Site chrome.** The public bar is **one line at every width**, and what it can
+  hold changes rather than how many lines it takes: the mark, then the six
+  sections from `lg` up, then the reader's preferences. Language stays on the bar
+  at every width — reading the page at all depends on it — while the sections and
+  the theme move into the menu below `lg`. The bar earns a shadow only once the
+  page has moved under it.
+  - **The associations' door** (sign-in) is chrome, never a section: a reader
+    needs nothing behind it, so it is quiet, it sits last on the bar, below the
+    sections in the menu, and on one line in the footer. On the bar it is a glyph
+    alone — the one exception to writing the word beside the icon, because the bar
+    is glanced at and nothing a reader needs is behind it; its name is carried by
+    `aria-label` and `title`. Where the reader is choosing rather than glancing —
+    the menu row, the footer line — it is written out, and it says whose door it
+    is rather than only "sign in".
+  - **The menu** is a modal drawer against the reading edge: one 56px row per
+    section in reading order, the current one marked by a rail as well as a wash
+    (rule 1), theme as two named choices at the foot. Escape closes it, focus
+    stays inside it, and a thumb can throw it back towards the edge it came from.
+    The burger folds into a cross, the rows arrive just behind the panel — all of
+    it decoration over a layout that is already correct (rule 7).
+  - **The footer** is the mark and what the platform is, the sections again for a
+    reader who arrived at the bottom, then the sentence that qualifies every
+    answer above it. The sections are a two-column grid on a phone: six stacked
+    rows read as a scroll of their own.
 
 ## 6. Status ramp
 
@@ -116,7 +181,7 @@ Four roles, because "open now" is not the only answer the reader needs:
 
 | Role      | Token pair                            | Icon           | Word                    |
 | --------- | ------------------------------------- | -------------- | ----------------------- |
-| open      | `success` / `successSoft`             | check-circle   | Open                    |
+| open      | `success` / `successSoft`             | beating dot    | Open                    |
 | closed    | `neutralStatus` / `neutralStatusSoft` | clock          | Closed (+ next opening) |
 | cancelled | `danger` / `dangerSoft`               | x-circle       | Cancelled               |
 | uncertain | `warning` / `warningSoft`             | alert-triangle | To confirm              |
@@ -124,6 +189,13 @@ Four roles, because "open now" is not the only answer the reader needs:
 `uncertain` is not a failure state: it is the honest answer when the schedule
 exists but has not been verified inside its review window, and it is preferred
 over showing a stale "open".
+
+`open` is the one row whose glyph is not an icon. A check reads as "someone
+verified this", which is the freshness marker's claim and the wrong one to make
+about a state that is only true at this minute; a dot with a beat is what a
+reader already reads as "now". Rule 1 is unchanged — the dot is never alone, the
+word "Open" is beside it — and the beat is the halo only, so a reader who has
+asked for less motion keeps the dot (rule 7).
 
 ## 7. Imagery
 

@@ -17,5 +17,14 @@
   "fresh.overdue": "Verification overdue",
   "fresh.never": "Never verified",
   "today.scheduled": "Today",
-  "action.confirmToday": "Confirm today"
+  "action.confirmToday": "Confirm today",
+  "form.required": "Required",
+  "form.invalid": "Check this value.",
+  "form.saveFailed": "That could not be saved. Try again.",
+  "form.tooLong": "This is longer than the field allows.",
+  "form.tooShort": "This is shorter than the field allows.",
+  "form.endBeforeStart": "The end must come after the start.",
+  "form.invalidDate": "Enter a valid date.",
+  "form.invalidTime": "Enter a valid time.",
+  "form.reviewFields": "Some fields need attention before saving."
 }

@@ -50,6 +50,22 @@ export interface SemanticTheme {
   /** Status: closed / inactive / unknown. */
   neutralStatus: string;
   neutralStatusSoft: string;
+  /**
+   * Content families (docs/DESIGN-SYSTEM.md §5). One hue per kind of card, so a
+   * reader recognises what they are holding before reading a word of it: the
+   * agenda is indigo, articles are plum, guides are copper. Activities keep the
+   * accent — they are the subject of the app.
+   *
+   * These are structural hues, never signals: they carry no state, they never
+   * appear inside a status pill, and nothing may be understood from them alone
+   * (rule 1). `…Accent` is the line and the label; `…Wash` is the fill behind it.
+   */
+  eventAccent: string;
+  eventWash: string;
+  articleAccent: string;
+  articleWash: string;
+  guideAccent: string;
+  guideWash: string;
 }
 
 /** Light set — “Clinique”, the adopted system (docs/DESIGN-SYSTEM.md §3). */
@@ -75,6 +91,12 @@ export const light: SemanticTheme = {
   dangerSoft: "#EFDAD9",
   neutralStatus: "#5B6F6B",
   neutralStatusSoft: "#DEE6E3",
+  eventAccent: "#3B4BA8",
+  eventWash: "#E3E6F6",
+  articleAccent: "#7A3A72",
+  articleWash: "#F1E4EF",
+  guideAccent: "#8F5220",
+  guideWash: "#F4E7D9",
 };
 
 /** Dark set — same roles, same hierarchy, AA contrast kept. */
@@ -100,6 +122,12 @@ export const dark: SemanticTheme = {
   dangerSoft: "#2F2523",
   neutralStatus: "#9FB3AF",
   neutralStatusSoft: "#1D2B29",
+  eventAccent: "#A9B4F5",
+  eventWash: "#1B2340",
+  articleAccent: "#E2A8D8",
+  articleWash: "#2E2033",
+  guideAccent: "#E4B489",
+  guideWash: "#33261B",
 };
 
 /**

@@ -9,13 +9,21 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "org.infokit.app",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": ["comgooglemaps"]
+      }
     },
     "android": {
       "package": "org.infokit.app",
       "edgeToEdgeEnabled": true
     },
-    "plugins": ["expo-router", "expo-font"],
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
     "experiments": {
       "typedRoutes": true
     }
