@@ -38,6 +38,7 @@ import {
   serviceManualStatus,
   stewardContact,
   timestamps,
+  transitMode,
   translationMethod,
   translationReviewStage,
   translationState,
@@ -150,18 +151,14 @@ export const activities = content.table(
       .notNull()
       .default("normal"),
     published: boolean("published").notNull().default(false),
-    createdById: varchar("created_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    createdById: uuid("created_by_id").references(() => users.id),
     createdByScope: activityActorScope("created_by_scope")
       .notNull()
       .default("organization"),
     provisionedByPlatform: boolean("provisioned_by_platform")
       .notNull()
       .default(false),
-    verifiedById: varchar("verified_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    verifiedById: uuid("verified_by_id").references(() => users.id),
     sourceNote: text("source_note"),
     ...stewardContact,
     ...verification,
@@ -224,18 +221,14 @@ export const activityTranslations = content.table(
     reviewStage: translationReviewStage("review_stage")
       .notNull()
       .default("none"),
-    reviewRequestedById: varchar("review_requested_by_id", {
-      length: 255,
-    }).references(() => users.id),
-    reviewRequestedAt: timestamp("review_requested_at", { withTimezone: true }),
-    teamValidatedById: varchar("team_validated_by_id", {
-      length: 255,
-    }).references(() => users.id),
-    teamValidatedAt: timestamp("team_validated_at", { withTimezone: true }),
-    reviewNote: text("review_note"),
-    verifiedById: varchar("verified_by_id", { length: 255 }).references(
+    reviewRequestedById: uuid("review_requested_by_id").references(
       () => users.id,
     ),
+    reviewRequestedAt: timestamp("review_requested_at", { withTimezone: true }),
+    teamValidatedById: uuid("team_validated_by_id").references(() => users.id),
+    teamValidatedAt: timestamp("team_validated_at", { withTimezone: true }),
+    reviewNote: text("review_note"),
+    verifiedById: uuid("verified_by_id").references(() => users.id),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
   },
   (t) => [
@@ -272,7 +265,7 @@ export const activityPublications = content.table(
     translationContentHash: varchar("translation_content_hash", {
       length: 64,
     }).notNull(),
-    publishedById: varchar("published_by_id", { length: 255 })
+    publishedById: uuid("published_by_id")
       .notNull()
       .references(() => users.id),
     publishedAt: timestamp("published_at", { withTimezone: true })
@@ -280,9 +273,7 @@ export const activityPublications = content.table(
       .defaultNow(),
     /** Null activates immediately; a future value delays public visibility. */
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
-    unpublishedById: varchar("unpublished_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    unpublishedById: uuid("unpublished_by_id").references(() => users.id),
     unpublishedAt: timestamp("unpublished_at", { withTimezone: true }),
   },
   (t) => [
@@ -375,6 +366,59 @@ export const activityContacts = content.table(
   (t) => [primaryKey({ columns: [t.activityId, t.contactId] })],
 );
 
+/**
+ * How to get to an activity on public transport: one row per useful line, with
+ * the stop to get off at and how long the walk is from there.
+ *
+ * Held per activity rather than per place, even though a place is where the bus
+ * stops. Two reasons, both about rows that would otherwise get nothing: an
+ * activity may be mobile or city-wide with no place record at all, and the
+ * people who know that the 5 stops outside are the ones editing the activity,
+ * not the directory. The cost is that two activities at one address each carry
+ * their own rows (docs/DATABASE-SCHEMA.md §6).
+ *
+ * Nothing here goes through the translation pipeline: `mode` is rendered from a
+ * localized label and the line and stop are proper nouns. A visitor reading in
+ * Tigrinya sees "ኣውቶቡስ 5 · Théâtre" — the word translated, the network's own
+ * names left exactly as they are printed on the pole.
+ *
+ * The editor owns the whole list: saving replaces it, so no unique key is
+ * imposed on what is, from the database's side, free text.
+ */
+export const activityTransitLinks = content.table(
+  "activity_transit_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    activityId: uuid("activity_id")
+      .notNull()
+      .references(() => activities.id, { onDelete: "cascade" }),
+    mode: transitMode("mode").notNull(),
+    /** The line as the network prints it — "5", "TER 12", "C1". */
+    line: varchar("line", { length: 40 }),
+    /** The stop or station to get off at, in the network's own spelling. */
+    stopName: varchar("stop_name", { length: 120 }),
+    /** Minutes on foot from that stop; null when nobody has measured it. */
+    walkMinutes: smallint("walk_minutes"),
+    displayOrder: integer("display_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    // A row that names neither a line nor a stop tells a reader nothing.
+    check(
+      "activity_transit_links_detail_check",
+      sql`${t.line} is not null or ${t.stopName} is not null`,
+    ),
+    check(
+      "activity_transit_links_walk_check",
+      sql`${t.walkMinutes} is null or (${t.walkMinutes} >= 0 and ${t.walkMinutes} <= 240)`,
+    ),
+    index("activity_transit_links_activity_order_idx").on(
+      t.activityId,
+      t.displayOrder,
+    ),
+  ],
+);
+
 /** Organisations that originated or co-authored an activity. */
 export const activityCreatorOrganizations = content.table(
   "activity_creator_organizations",
@@ -383,21 +427,21 @@ export const activityCreatorOrganizations = content.table(
     activityId: uuid("activity_id")
       .notNull()
       .references(() => activities.id, { onDelete: "cascade" }),
-    organizationId: uuid("organization_id")
-      .notNull()
-      .references(() => organizations.id),
+    // Named explicitly: the generated name overruns 63 bytes (./schemas.ts).
+    organizationId: uuid("organization_id").notNull(),
     state: activityRelationshipState("state").notNull().default("proposed"),
-    proposedById: varchar("proposed_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
-    confirmedById: varchar("confirmed_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    proposedById: uuid("proposed_by_id").references(() => users.id),
+    confirmedById: uuid("confirmed_by_id").references(() => users.id),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     retiredAt: timestamp("retired_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
+    foreignKey({
+      columns: [t.organizationId],
+      foreignColumns: [organizations.id],
+      name: "activity_creator_organizations_organization_id_fk",
+    }),
     unique("activity_creator_organizations_activity_org_uq").on(
       t.activityId,
       t.organizationId,
@@ -426,12 +470,8 @@ export const activityProviders = content.table(
       .default("provider"),
     displayOrder: integer("display_order").notNull().default(0),
     active: boolean("active").notNull().default(true),
-    proposedById: varchar("proposed_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
-    confirmedById: varchar("confirmed_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    proposedById: uuid("proposed_by_id").references(() => users.id),
+    confirmedById: uuid("confirmed_by_id").references(() => users.id),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     effectiveFrom: date("effective_from"),
     effectiveTo: date("effective_to"),
@@ -467,9 +507,7 @@ export const activityVerifications = content.table(
       .notNull()
       .references(() => activities.id, { onDelete: "restrict" }),
     organizationId: uuid("organization_id").references(() => organizations.id),
-    verifiedById: varchar("verified_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    verifiedById: uuid("verified_by_id").references(() => users.id),
     verifiedByMemberId: uuid("verified_by_member_id"),
     actorScope: activityActorScope("actor_scope").notNull(),
     method: varchar("method", { length: 80 }).notNull(),
@@ -565,30 +603,33 @@ export const activityClaimRequests = content.table(
     activityId: uuid("activity_id")
       .notNull()
       .references(() => activities.id, { onDelete: "restrict" }),
-    destinationOrganizationId: uuid("destination_organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "restrict" }),
+    // Both named explicitly: the generated names overrun 63 bytes
+    // (./schemas.ts).
+    destinationOrganizationId: uuid("destination_organization_id").notNull(),
     destinationTeamId: uuid("destination_team_id"),
-    previousOrganizationId: uuid("previous_organization_id").references(
-      () => organizations.id,
-      { onDelete: "restrict" },
-    ),
+    previousOrganizationId: uuid("previous_organization_id"),
     previousTeamId: uuid("previous_team_id"),
     representativeMemberId: uuid("representative_member_id"),
     tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
     state: activityClaimState("state").notNull().default("pending"),
-    requestedById: varchar("requested_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    requestedById: uuid("requested_by_id").references(() => users.id),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
-    decidedById: varchar("decided_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    decidedById: uuid("decided_by_id").references(() => users.id),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
+    foreignKey({
+      name: "activity_claim_requests_destination_organization_id_fk",
+      columns: [t.destinationOrganizationId],
+      foreignColumns: [organizations.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "activity_claim_requests_previous_organization_id_fk",
+      columns: [t.previousOrganizationId],
+      foreignColumns: [organizations.id],
+    }).onDelete("restrict"),
     foreignKey({
       name: "activity_claim_requests_destination_team_scope_fk",
       columns: [t.destinationTeamId, t.destinationOrganizationId],
@@ -637,19 +678,13 @@ export const activityCustodyEvents = content.table(
     activityId: uuid("activity_id")
       .notNull()
       .references(() => activities.id, { onDelete: "restrict" }),
-    claimRequestId: uuid("claim_request_id").references(
-      () => activityClaimRequests.id,
-      { onDelete: "restrict" },
-    ),
+    // Named explicitly: the generated name overruns 63 bytes (./schemas.ts).
+    claimRequestId: uuid("claim_request_id"),
     action: varchar("action", { length: 80 }).notNull(),
-    actorUserId: varchar("actor_user_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    actorUserId: uuid("actor_user_id").references(() => users.id),
     actorScope: activityActorScope("actor_scope").notNull(),
-    previousOrganizationId: uuid("previous_organization_id").references(
-      () => organizations.id,
-      { onDelete: "restrict" },
-    ),
+    // Named explicitly: the generated name overruns 63 bytes (./schemas.ts).
+    previousOrganizationId: uuid("previous_organization_id"),
     newOrganizationId: uuid("new_organization_id").references(
       () => organizations.id,
       { onDelete: "restrict" },
@@ -663,6 +698,16 @@ export const activityCustodyEvents = content.table(
       .defaultNow(),
   },
   (t) => [
+    foreignKey({
+      name: "activity_custody_events_claim_request_id_fk",
+      columns: [t.claimRequestId],
+      foreignColumns: [activityClaimRequests.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "activity_custody_events_previous_organization_id_fk",
+      columns: [t.previousOrganizationId],
+      foreignColumns: [organizations.id],
+    }).onDelete("restrict"),
     foreignKey({
       name: "activity_custody_events_previous_team_scope_fk",
       columns: [t.previousTeamId, t.previousOrganizationId],
@@ -775,9 +820,7 @@ export const scheduleExceptions = content.table(
     kind: scheduleExceptionKind("kind").notNull(),
     startTime: time("start_time"),
     endTime: time("end_time"),
-    createdById: varchar("created_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    createdById: uuid("created_by_id").references(() => users.id),
     ...timestamps,
   },
   (t) => [
@@ -798,16 +841,22 @@ export const scheduleExceptions = content.table(
 export const scheduleExceptionTranslations = content.table(
   "schedule_exception_translations",
   {
-    exceptionId: uuid("exception_id")
-      .notNull()
-      .references(() => scheduleExceptions.id, { onDelete: "cascade" }),
+    // Named explicitly: the generated name overruns 63 bytes (./schemas.ts).
+    exceptionId: uuid("exception_id").notNull(),
     languageCode: varchar("language_code", { length: 35 })
       .notNull()
       .references(() => languages.code),
     publicReason: text("public_reason").notNull(),
     state: translationState("state").notNull().default("draft"),
   },
-  (t) => [primaryKey({ columns: [t.exceptionId, t.languageCode] })],
+  (t) => [
+    primaryKey({ columns: [t.exceptionId, t.languageCode] }),
+    foreignKey({
+      name: "schedule_exception_translations_exception_id_fk",
+      columns: [t.exceptionId],
+      foreignColumns: [scheduleExceptions.id],
+    }).onDelete("cascade"),
+  ],
 );
 
 /**
@@ -823,17 +872,21 @@ export const activityOccurrenceConfirmations = content.table(
     activityId: uuid("activity_id")
       .notNull()
       .references(() => activities.id, { onDelete: "restrict" }),
-    organizationId: uuid("organization_id").references(() => organizations.id),
+    // Named explicitly: the generated name overruns 63 bytes (./schemas.ts).
+    organizationId: uuid("organization_id"),
     date: date("date").notNull(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    confirmedById: varchar("confirmed_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    confirmedById: uuid("confirmed_by_id").references(() => users.id),
     actorScope: activityActorScope("actor_scope").notNull(),
   },
   (t) => [
+    foreignKey({
+      name: "activity_occurrence_confirmations_organization_id_fk",
+      columns: [t.organizationId],
+      foreignColumns: [organizations.id],
+    }),
     foreignKey({
       name: "activity_occurrence_confirmations_provider_scope_fk",
       columns: [t.activityId, t.organizationId],

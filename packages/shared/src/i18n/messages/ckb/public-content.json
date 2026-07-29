@@ -85,5 +85,15 @@
   "organization.purpose": "ئامانج",
   "organization.goals": "ئامانجەکان",
   "organization.values": "بەهاکان",
-  "organization.backToActivities": "گەڕانەوە بۆ چالاکییەکان"
+  "organization.backToActivities": "گەڕانەوە بۆ چالاکییەکان",
+  "transit.gettingHere": "چۆن بگەیتە ئێرە",
+  "transit.walk": "{minutes} خولەک بە پێ",
+  "transit.mode.bus": "پاس",
+  "transit.mode.tram": "ترام",
+  "transit.mode.metro": "مێترۆ",
+  "transit.mode.train": "شەمەندەفەر",
+  "transit.mode.coach": "پاسی نێوانشار",
+  "transit.mode.ferry": "کەشتی",
+  "transit.mode.bike": "دوچەرخە",
+  "transit.mode.other": "هێڵ"
 }

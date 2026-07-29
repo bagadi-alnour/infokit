@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { Textarea } from "~/components/ui/textarea";
+import { familyStyles, type ContentFamily } from "~/lib/content-families";
 import { type Freshness } from "~/lib/freshness";
 import { cn } from "~/lib/utils";
 
@@ -76,6 +77,7 @@ export function PageHeader({
   action,
   back,
   badges,
+  family,
 }: {
   title: string;
   sub?: string;
@@ -84,7 +86,22 @@ export function PageHeader({
   back?: { href: string; label: string };
   /** Status carried next to the title: colour is always paired with its word. */
   badges?: ReactNode;
+  /**
+   * Which of the four content families this page edits (§5). It tints the rule
+   * under the title — the section opening is the one thing beyond a card that a
+   * family may colour — so an editor moving between eight table pages that share
+   * one layout can tell the agenda from the articles before reading the heading.
+   *
+   * One family per page: the console never shows two of them side by side, and
+   * the console's own chrome (the sidebar, the toolbar, every active state)
+   * stays in the accent, because "you are here" should not change colour with
+   * the section. There is no tinted eyebrow here as there is on the public
+   * pages: the console's `title` already names the section, so an eyebrow would
+   * only say it twice.
+   */
+  family?: ContentFamily;
 }) {
+  const tone = family ? familyStyles[family] : null;
   return (
     <div className="mb-6">
       {back ? (
@@ -102,6 +119,12 @@ export function PageHeader({
             <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
             {badges}
           </div>
+          {tone ? (
+            <span
+              className={cn("mt-2.5 block h-0.5 w-10 rounded-full", tone.dot)}
+              aria-hidden
+            />
+          ) : null}
           {sub ? (
             <p className="text-copy-muted mt-2 max-w-3xl text-sm">{sub}</p>
           ) : null}
@@ -448,12 +471,17 @@ export function TH({
 export function TD({
   children,
   className = "",
+  colSpan,
 }: {
   children?: ReactNode;
   className?: string;
+  /** For a cell that carries a row's expanded detail under all its columns. */
+  colSpan?: number;
 }) {
   return (
-    <TableCell className={cn("px-3 py-2.5", className)}>{children}</TableCell>
+    <TableCell className={cn("px-3 py-2.5", className)} colSpan={colSpan}>
+      {children}
+    </TableCell>
   );
 }
 

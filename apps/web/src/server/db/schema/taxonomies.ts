@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  foreignKey,
   integer,
   primaryKey,
   text,
@@ -30,9 +31,8 @@ export const serviceCategories = content.table("service_categories", {
 export const serviceCategoryTranslations = content.table(
   "service_category_translations",
   {
-    categoryId: uuid("category_id")
-      .notNull()
-      .references(() => serviceCategories.id, { onDelete: "cascade" }),
+    // Named explicitly: the generated name overruns 63 bytes (./schemas.ts).
+    categoryId: uuid("category_id").notNull(),
     languageCode: varchar("language_code", { length: 35 })
       .notNull()
       .references(() => languages.code),
@@ -41,6 +41,11 @@ export const serviceCategoryTranslations = content.table(
   },
   (t) => [
     primaryKey({ columns: [t.categoryId, t.languageCode] }),
+    foreignKey({
+      columns: [t.categoryId],
+      foreignColumns: [serviceCategories.id],
+      name: "service_category_translations_category_id_fk",
+    }).onDelete("cascade"),
     uniqueIndex("service_category_translations_language_label_uq").on(
       t.languageCode,
       sql`lower(regexp_replace(btrim(${t.label}), '[[:space:]]+', ' ', 'g'))`,
@@ -89,9 +94,8 @@ export const audienceCategories = content.table("audience_categories", {
 export const audienceCategoryTranslations = content.table(
   "audience_category_translations",
   {
-    audienceCategoryId: uuid("audience_category_id")
-      .notNull()
-      .references(() => audienceCategories.id, { onDelete: "cascade" }),
+    // Named explicitly: the generated names overrun 63 bytes (./schemas.ts).
+    audienceCategoryId: uuid("audience_category_id").notNull(),
     languageCode: varchar("language_code", { length: 35 })
       .notNull()
       .references(() => languages.code),
@@ -99,5 +103,15 @@ export const audienceCategoryTranslations = content.table(
     explanation: text("explanation"),
     state: translationState("state").notNull().default("draft"),
   },
-  (t) => [primaryKey({ columns: [t.audienceCategoryId, t.languageCode] })],
+  (t) => [
+    primaryKey({
+      columns: [t.audienceCategoryId, t.languageCode],
+      name: "audience_category_translations_pk",
+    }),
+    foreignKey({
+      columns: [t.audienceCategoryId],
+      foreignColumns: [audienceCategories.id],
+      name: "audience_category_translations_audience_category_id_fk",
+    }).onDelete("cascade"),
+  ],
 );

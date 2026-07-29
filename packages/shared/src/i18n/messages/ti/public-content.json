@@ -85,5 +85,15 @@
   "organization.purpose": "ተልእኮ",
   "organization.goals": "ዕላማታት",
   "organization.values": "ክብርታት",
-  "organization.backToActivities": "ናብ ንጥፈታት ተመለስ"
+  "organization.backToActivities": "ናብ ንጥፈታት ተመለስ",
+  "transit.gettingHere": "ናብዚ ከመይ ትመጽእ",
+  "transit.walk": "{minutes} ደቓይቕ ብእግሪ",
+  "transit.mode.bus": "ኣውቶቡስ",
+  "transit.mode.tram": "ትራም",
+  "transit.mode.metro": "መትሮ",
+  "transit.mode.train": "ባቡር",
+  "transit.mode.coach": "ናይ ነዊሕ ጉዕዞ ኣውቶቡስ",
+  "transit.mode.ferry": "መርከብ",
+  "transit.mode.bike": "ብሽክለታ",
+  "transit.mode.other": "መስመር"
 }

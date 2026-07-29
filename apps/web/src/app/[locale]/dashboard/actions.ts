@@ -8,10 +8,7 @@ import { z } from "zod";
 import { localizedPath } from "~/i18n/routing";
 import { parisToday } from "~/lib/freshness";
 import { recordAudit } from "~/server/audit";
-import {
-  getRoleTestState,
-  platformPermissionsForUser,
-} from "~/server/auth/authorization";
+import { platformPermissionsForUser } from "~/server/auth/authorization";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
@@ -34,6 +31,20 @@ function refresh(locale: Locale, activityId?: string) {
       localizedPath(`/dashboard/activities/${activityId}`, locale),
     );
   }
+}
+
+/**
+ * The organisation an audit row belongs to. Read for its own sake because the
+ * daily-status buttons only ever receive an activity id, and a trail row without
+ * an organisation is invisible to every association reading their own history.
+ */
+async function owningOrganization(activityId: string): Promise<string | null> {
+  const [activity] = await db
+    .select({ organizationId: activities.organizationId })
+    .from(activities)
+    .where(eq(activities.id, activityId))
+    .limit(1);
+  return activity?.organizationId ?? null;
 }
 
 async function eligibleToday(ids: string[]) {
@@ -67,19 +78,13 @@ async function confirm(ids: string[], locale: Locale, actorId: string) {
   ];
   if (uniqueActivities.length === 0) return;
 
-  const [authorization, platformPermissions] = await Promise.all([
-    getRoleTestState(actorId),
-    platformPermissionsForUser(actorId),
-  ]);
-  const assumedOrganizationId = authorization.assumedOrganizationId;
-  const verifyingAsPlatform =
-    !assumedOrganizationId &&
-    platformPermissions.has("content.activity.verify");
+  const platformPermissions = await platformPermissionsForUser(actorId);
+  const verifyingAsPlatform = platformPermissions.has(
+    "content.activity.verify",
+  );
   const confirmations = uniqueActivities.map((activity) => ({
     activityId: activity.id,
-    organizationId: verifyingAsPlatform
-      ? null
-      : (assumedOrganizationId ?? activity.organizationId),
+    organizationId: verifyingAsPlatform ? null : activity.organizationId,
     date: parisToday().isoDate,
     confirmedById: actorId,
     actorScope: verifyingAsPlatform
@@ -238,11 +243,20 @@ export const cancelActivityToday = protectedPermissionAction(
           eq(scheduleExceptions.kind, "cancellation"),
         ),
       );
+    // Only the first press is an event: pressing an already-cancelled day again
+    // changes nothing, and a row per press would say something happened twice.
     if (!existing) {
       await db.insert(scheduleExceptions).values({
         activityId,
         date: today.isoDate,
         kind: "cancellation",
+      });
+      await recordAudit({
+        action: "activity.occurrence_cancelled",
+        subjectType: "activity",
+        subjectId: activityId,
+        organizationId: await owningOrganization(activityId),
+        metadata: { date: today.isoDate, scope: "single_occurrence" },
       });
     }
     refresh(locale, activityId);
@@ -254,7 +268,7 @@ export const undoCancelActivityToday = protectedPermissionAction(
   async (formData, locale) => {
     const activityId = activityIdSchema.parse(formData.get("activityId"));
     const today = parisToday();
-    await db
+    const removed = await db
       .delete(scheduleExceptions)
       .where(
         and(
@@ -262,7 +276,17 @@ export const undoCancelActivityToday = protectedPermissionAction(
           eq(scheduleExceptions.date, today.isoDate),
           eq(scheduleExceptions.kind, "cancellation"),
         ),
-      );
+      )
+      .returning({ id: scheduleExceptions.id });
+    if (removed.length > 0) {
+      await recordAudit({
+        action: "activity.occurrence_cancellation_undone",
+        subjectType: "activity",
+        subjectId: activityId,
+        organizationId: await owningOrganization(activityId),
+        metadata: { date: today.isoDate, scope: "single_occurrence" },
+      });
+    }
     refresh(locale, activityId);
   },
 );
@@ -272,10 +296,20 @@ export const markActivityUncertain = protectedPermissionAction(
   async (formData, locale) => {
     const activityId = activityIdSchema.parse(formData.get("activityId"));
     const today = parisToday();
-    await db
+    const marked = await db
       .insert(scheduleExceptions)
       .values({ activityId, date: today.isoDate, kind: "uncertain" })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: scheduleExceptions.id });
+    if (marked.length > 0) {
+      await recordAudit({
+        action: "activity.occurrence_marked_uncertain",
+        subjectType: "activity",
+        subjectId: activityId,
+        organizationId: await owningOrganization(activityId),
+        metadata: { date: today.isoDate, scope: "single_occurrence" },
+      });
+    }
     refresh(locale, activityId);
   },
 );

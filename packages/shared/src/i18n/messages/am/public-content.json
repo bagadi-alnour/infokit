@@ -85,5 +85,15 @@
   "organization.purpose": "ተልእኮ",
   "organization.goals": "ግቦች",
   "organization.values": "እሴቶች",
-  "organization.backToActivities": "ወደ እንቅስቃሴዎች ተመለስ"
+  "organization.backToActivities": "ወደ እንቅስቃሴዎች ተመለስ",
+  "transit.gettingHere": "እዚህ እንዴት ይደረሳል",
+  "transit.walk": "{minutes} ደቂቃ በእግር",
+  "transit.mode.bus": "አውቶብስ",
+  "transit.mode.tram": "ትራም",
+  "transit.mode.metro": "ሜትሮ",
+  "transit.mode.train": "ባቡር",
+  "transit.mode.coach": "የረጅም ርቀት አውቶብስ",
+  "transit.mode.ferry": "መርከብ",
+  "transit.mode.bike": "ብስክሌት",
+  "transit.mode.other": "መስመር"
 }

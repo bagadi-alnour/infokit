@@ -85,5 +85,15 @@
   "organization.purpose": "Ujeeddo",
   "organization.goals": "Yoolal",
   "organization.values": "Qiyam",
-  "organization.backToActivities": "Ku noqo waxqabadyada"
+  "organization.backToActivities": "Ku noqo waxqabadyada",
+  "transit.gettingHere": "Sida loo yimaado",
+  "transit.walk": "{minutes} daqiiqo lug",
+  "transit.mode.bus": "Bas",
+  "transit.mode.tram": "Taraam",
+  "transit.mode.metro": "Metro",
+  "transit.mode.train": "Tareen",
+  "transit.mode.coach": "Bas safar dheer",
+  "transit.mode.ferry": "Doonni",
+  "transit.mode.bike": "Baaskiil",
+  "transit.mode.other": "Khadka"
 }

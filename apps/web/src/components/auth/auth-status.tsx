@@ -2,11 +2,15 @@ import { Callout } from "~/components/public/primitives";
 
 const statuses = {
   login_error: "danger",
+  account_not_found: "danger",
+  invalid_credentials: "danger",
+  unavailable: "danger",
   sent: "info",
   invalid: "danger",
   cooldown: "warning",
   rate_limited: "warning",
   send_error: "danger",
+  phone: "danger",
   reset: "info",
   reset_error: "danger",
 } as const satisfies Record<string, "info" | "warning" | "danger">;

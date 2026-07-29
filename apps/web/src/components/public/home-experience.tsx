@@ -441,35 +441,43 @@ export function PublicHomeExperience({
       ) : null}
 
       {/* The guide is the route for a reader who cannot yet name what they need,
-          and the one filled panel on the page: nothing else competes with it. */}
+          and the one washed panel on the page — which is what its family is
+          (§5: a guide card is an invitation, so the whole card is washed). It
+          was filled in the accent, which made the largest coloured thing on the
+          page say "activity" about the one section that is not one, and left
+          copper as a hue the reader never actually meets. */}
       {counts.guides > 0 ? (
         <section aria-labelledby="guide" className="py-6 md:py-8">
-          <div className="bg-brand text-brand-ink rounded-panel relative overflow-hidden px-6 py-12 sm:px-12">
+          <div className="bg-guide-wash border-guide rounded-panel relative overflow-hidden border px-6 py-12 sm:px-12">
             <div className="relative z-10 max-w-2xl">
-              <p className={cn(badgePill, "bg-brand-ink/15 text-brand-ink")}>
+              {/* The tint carries the family here, not the word: copper text on
+                  a copper tint over the copper wash measures 4.2:1, under AA at
+                  this size. The hue is unmistakable from the panel itself. */}
+              <p className={cn(badgePill, "bg-guide/15 text-ink")}>
                 <MessagesSquare className="size-3.5" aria-hidden />
                 {labels.guideEyebrow}
               </p>
               <h2
                 id="guide"
-                className="font-display mt-4 text-balance text-3xl font-bold leading-tight tracking-tight sm:text-4xl"
+                className="font-display text-ink mt-4 text-balance text-3xl font-bold leading-tight tracking-tight sm:text-4xl"
               >
                 {labels.newHere}
               </h2>
-              <p className="text-brand-ink/85 mt-4 text-pretty text-lg leading-relaxed">
+              {/* Ink, not muted copy: on this wash the metadata grey lands at
+                  4.4:1, which is under AA for anything this size. */}
+              <p className="text-ink mt-4 text-pretty text-lg leading-relaxed">
                 {labels.newHereBody}
               </p>
               <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
                 <ActionLink
                   href={links.guide}
-                  tone="soft"
                   size="large"
                   className="rounded-full px-8 text-base"
                 >
                   {labels.newHereAction}
                   <ArrowRight className="size-5 rtl:rotate-180" aria-hidden />
                 </ActionLink>
-                <p className="text-brand-ink/85 inline-flex items-center gap-2 text-sm font-medium">
+                <p className="text-ink inline-flex items-center gap-2 text-sm font-medium">
                   <Lock className="size-4" aria-hidden />
                   {labels.guidePrivate}
                 </p>
@@ -477,11 +485,11 @@ export function PublicHomeExperience({
             </div>
 
             <span
-              className="bg-brand-ink/10 pointer-events-none absolute -end-16 -top-16 size-64 rounded-full"
+              className="bg-guide/10 pointer-events-none absolute -end-16 -top-16 size-64 rounded-full"
               aria-hidden
             />
             <span
-              className="bg-brand-ink/10 pointer-events-none absolute -bottom-20 end-24 size-48 rounded-full"
+              className="bg-guide/10 pointer-events-none absolute -bottom-20 end-24 size-48 rounded-full"
               aria-hidden
             />
           </div>
@@ -521,7 +529,15 @@ export function PublicHomeExperience({
               <p className="text-copy-muted flex-1 leading-relaxed">
                 {labels.articlesDescription}
               </p>
-              <p className="text-ink inline-flex items-center gap-2 text-sm font-semibold">
+              {/* The count is this card's affordance — the one other thing a
+                  family may colour (§5), and the reason a reader who followed
+                  plum from here meets plum on the page it opens. */}
+              <p
+                className={cn(
+                  "inline-flex items-center gap-2 text-sm font-semibold",
+                  familyStyles.article.text,
+                )}
+              >
                 {counts.articles} · {labels.published}
                 <ArrowRight
                   className="size-4 transition-transform group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1"
@@ -561,7 +577,12 @@ export function PublicHomeExperience({
               <p className="text-copy-muted flex-1 leading-relaxed">
                 {labels.agendaDescription}
               </p>
-              <p className="text-ink inline-flex items-center gap-2 text-sm font-semibold">
+              <p
+                className={cn(
+                  "inline-flex items-center gap-2 text-sm font-semibold",
+                  familyStyles.event.text,
+                )}
+              >
                 {counts.events} · {labels.published}
                 <ArrowRight
                   className="size-4 transition-transform group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1"

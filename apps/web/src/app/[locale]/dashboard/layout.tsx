@@ -3,7 +3,7 @@ import "~/styles/workspace.css";
 
 import { localeMetadata, type Locale } from "@infokit/shared/i18n";
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
-import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, isNull, ne, or } from "drizzle-orm";
 import { TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
@@ -17,7 +17,6 @@ import {
   AdminNotifications,
   type AttentionItem,
 } from "~/components/admin/admin-notifications";
-import { AdminScopeIdentity } from "~/components/admin/admin-scope-controls";
 import {
   AdminUIProvider,
   PermissionDeniedNotice,
@@ -27,7 +26,6 @@ import {
   SidebarCreateMenu,
   type SidebarCreateAction,
 } from "~/components/admin/sidebar-create-menu";
-import { SuperadminRoleSwitcher } from "~/components/admin/superadmin-role-switcher";
 import { Icon } from "~/components/icons";
 import { BrandMark, BrandWordmark } from "~/components/public/brand-mark";
 import { Toaster } from "~/components/ui/sonner";
@@ -49,20 +47,28 @@ import {
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { attentionKindOf, type AttentionKind } from "~/lib/freshness";
+import { auditScope } from "~/server/audit/query";
 import { requireEditor } from "~/server/auth/require";
-import { getRoleTestState, isPlatformAdmin } from "~/server/auth/authorization";
+import {
+  activityWorkspacePermissions,
+  articleWorkspacePermissions,
+  hasActualPlatformPermission,
+  isPlatformAdmin,
+  ownedWithin,
+  permissionScopeAny,
+  platformPermissionsForUser,
+  platformStaffPermission,
+} from "~/server/auth/authorization";
+import { COORDINATION_MANAGE_PERMISSION } from "~/server/content/coordination-events";
 import { db } from "~/server/db";
 import {
   activities,
   activityTranslations,
-  cities,
-  cityTeams,
-  cityTranslations,
   organizationMembers,
   organizations,
-  roles,
   scheduleRules,
 } from "~/server/db/schema";
+import { memberDirectoryScope } from "~/server/members";
 import { DashboardNav, type DashboardNavGroup } from "./nav";
 
 /** Worst first: an editor opening the bell reads the queue top to bottom. */
@@ -120,108 +126,135 @@ export default async function DashboardLayout({
   const direction = localeMetadata[locale].direction;
   const user = await requireEditor(locale);
   const messages = await loadPageCatalog(locale, "dashboard-layout");
+
+  /**
+   * What this editor may open, resolved before anything is counted, because the
+   * activity badge and the attention bell are themselves a list of rows and have
+   * to stay inside the same scope as the page they link into.
+   *
+   * Each question is asked the way the thing behind it asks:
+   *
+   * - The workspace scopes come from the same resolver the list pages use, so an
+   *   entry appears exactly when that page will let this account in.
+   * - The create entries read **platform** grants only, because that is all
+   *   `protectedPermissionAction` accepts — it cannot know which organisation a
+   *   form targets, so a membership grant does not pass it
+   *   (server/auth/require.ts). A "+ New" that leads to a refusal is worse than
+   *   no button at all.
+   *
+   * One read of the platform set answers the four write questions; asking
+   * `hasActualPlatformPermission` four times would run the same join four times.
+   */
+  const [activityScope, articleScope, platformGrants] = await Promise.all([
+    permissionScopeAny(user.id, activityWorkspacePermissions),
+    permissionScopeAny(user.id, articleWorkspacePermissions),
+    platformPermissionsForUser(user.id),
+  ]);
+  const canCreateActivity = platformGrants.has("content.activity.manage");
+  const canCreateArticle = platformGrants.has("content.article.write");
+  const canCreateEvent = platformGrants.has(COORDINATION_MANAGE_PERMISSION);
+  const simulatorAccess = platformGrants.has("content.simulator.review");
+
   const [
-    organizationRows,
+    organizationCountRows,
     membershipRows,
-    cityRows,
-    teamRows,
+    demoOrganizationRows,
     activityRows,
     scheduledActivityRows,
-    roleRows,
-    roleTest,
     platformAdmin,
+    auditAccess,
+    memberDirectoryAccess,
+    staffAccess,
   ] = await Promise.all([
-    db
-      .select({ id: organizations.id, name: organizations.displayName })
-      .from(organizations)
-      .orderBy(asc(organizations.displayName)),
+    // A number, not a list. How many associations exist is directory knowledge;
+    // their names are the directory itself, and the sidebar is not the place an
+    // editor without the directory learns them.
+    db.select({ value: count() }).from(organizations),
     // Which associations this editor belongs to, so the directory entry can
-    // become a link to their own record. Offboarded rows stay in the table as
-    // history and must not count as a membership.
+    // become a link to their own record and the user menu can name the space
+    // they are working in. Offboarded rows stay in the table as history and
+    // must not count as a membership.
     db
-      .select({ id: organizationMembers.organizationId })
+      .select({
+        id: organizationMembers.organizationId,
+        name: organizations.displayName,
+      })
       .from(organizationMembers)
+      .innerJoin(
+        organizations,
+        eq(organizations.id, organizationMembers.organizationId),
+      )
       .where(
         and(
           eq(organizationMembers.userId, user.id),
           ne(organizationMembers.status, "offboarded"),
         ),
       ),
+    // The demo tripwire, asked as an existence check so it does not need every
+    // name to find one. Both spellings, because `ilike` folds case but not
+    // accents and the demo seed writes "démo" as well as "demo".
     db
-      .select({
-        id: cities.id,
-        code: cities.code,
-        name: cityTranslations.name,
-      })
-      .from(cities)
-      .leftJoin(
-        cityTranslations,
-        and(
-          eq(cityTranslations.cityId, cities.id),
-          eq(cityTranslations.languageCode, locale),
+      .select({ id: organizations.id })
+      .from(organizations)
+      .where(
+        or(
+          ilike(organizations.displayName, "%demo%"),
+          ilike(organizations.displayName, "%démo%"),
         ),
       )
-      .where(eq(cities.active, true))
-      .orderBy(asc(cities.code)),
-    db
-      .select({
-        id: cityTeams.id,
-        name: cityTeams.name,
-        organizationId: cityTeams.organizationId,
-        cityId: cityTeams.cityId,
-      })
-      .from(cityTeams)
-      .where(eq(cityTeams.active, true)),
+      .limit(1),
     // The same rows answer two questions: how many activities the sidebar
-    // badge shows, and which of them are waiting on a confirmation.
-    db
-      .select({
-        id: activities.id,
-        organizationId: activities.organizationId,
-        cityId: activities.cityId,
-        manualStatus: activities.manualStatus,
-        lastVerifiedAt: activities.lastVerifiedAt,
-        reviewDueAt: activities.reviewDueAt,
-      })
-      .from(activities)
-      .where(isNull(activities.archivedAt)),
+    // badge shows, and which of them are waiting on a confirmation. Both are
+    // statements about rows, so both are scoped: a badge reading 40 when this
+    // editor administers 3 is a headcount of somebody else's work, and the bell
+    // names the record it links to.
+    activityScope
+      ? db
+          .select({
+            id: activities.id,
+            organizationId: activities.organizationId,
+            cityId: activities.cityId,
+            manualStatus: activities.manualStatus,
+            lastVerifiedAt: activities.lastVerifiedAt,
+            reviewDueAt: activities.reviewDueAt,
+          })
+          .from(activities)
+          .where(
+            and(
+              isNull(activities.archivedAt),
+              ownedWithin(activities.organizationId, activityScope),
+            ),
+          )
+      : [],
     db
       .selectDistinct({ activityId: scheduleRules.activityId })
       .from(scheduleRules),
-    db
-      .select({ id: roles.id, code: roles.code })
-      .from(roles)
-      .where(isNull(roles.organizationId))
-      .orderBy(asc(roles.code)),
-    getRoleTestState(user.id),
     isPlatformAdmin(user.id),
+    // Asked the same way the pages themselves ask, so an entry appears exactly
+    // for the editors that page will let in — a link that answers "permission
+    // denied" teaches nothing except that the sidebar is not to be trusted.
+    auditScope(user.id),
+    memberDirectoryScope(user.id),
+    hasActualPlatformPermission(user.id, platformStaffPermission),
   ]);
 
-  const scopeCities = cityRows.map((city) => ({
-    id: city.id,
-    name: city.name ?? city.code,
-  }));
-  const defaults = {
-    organizationId: organizationRows[0]?.id,
-    cityId: teamRows[0]?.cityId ?? scopeCities[0]?.id,
-  };
+  const organizationCount = organizationCountRows[0]?.value ?? 0;
   /**
    * Who gets the directory, decided exactly as the directory page decides it
-   * (organizations/page.tsx): listing every association is administration, and
-   * a superadmin testing an organisation role is that organisation's member for
-   * the duration.
+   * (organizations/page.tsx): listing every association is administration.
    */
-  const directoryAccess =
-    platformAdmin && roleTest.assumedOrganizationId === null;
+  const directoryAccess = platformAdmin;
   /**
    * The one record a non-directory editor would be sent to anyway. With several
    * memberships there is no "mine", so those editors keep the list — it is the
    * only place that disambiguates.
    */
-  const ownOrganizationId = directoryAccess
+  const ownOrganization = directoryAccess
     ? null
-    : (roleTest.assumedOrganizationId ??
-      (membershipRows.length === 1 ? (membershipRows[0]?.id ?? null) : null));
+    : membershipRows.length === 1
+      ? (membershipRows[0] ?? null)
+      : null;
+  const ownOrganizationId = ownOrganization?.id ?? null;
   const organizationHref = ownOrganizationId
     ? localizedPath(`/dashboard/organizations/${ownOrganizationId}`, locale)
     : localizedPath("/dashboard/organizations", locale);
@@ -293,6 +326,43 @@ export default async function DashboardLayout({
     },
   );
   /**
+   * The content this account works on, which for a platform account that holds
+   * no content role is nothing at all: the technical owner staffs the platform
+   * and reads the trail, and `platform_content_manager` writes
+   * (server/db/seed.ts). The group is dropped rather than shown empty, so the
+   * sidebar states what this editor does instead of what the console can do.
+   */
+  const publishItems = [
+    ...(activityScope
+      ? [
+          {
+            href: localizedPath("/dashboard/activities", locale),
+            label: messages["nav.activities"],
+            icon: "calendar" as const,
+            count: activityRows.length,
+          },
+        ]
+      : []),
+    ...(articleScope
+      ? [
+          {
+            href: localizedPath("/dashboard/articles", locale),
+            label: messages["nav.articles"],
+            icon: "article" as const,
+          },
+        ]
+      : []),
+    ...(simulatorAccess
+      ? [
+          {
+            href: localizedPath("/dashboard/simulator", locale),
+            label: messages["nav.simulator"],
+            icon: "simulator" as const,
+          },
+        ]
+      : []),
+  ];
+  /**
    * Grouped by what an editor is doing, not by table: today's work, the
    * content they publish, the directory those records point at, and the
    * platform catalogues. Routes that do not exist yet are left out — an
@@ -317,27 +387,9 @@ export default async function DashboardLayout({
         },
       ],
     },
-    {
-      label: messages["nav.group.publish"],
-      items: [
-        {
-          href: localizedPath("/dashboard/activities", locale),
-          label: messages["nav.activities"],
-          icon: "calendar",
-          count: activityRows.length,
-        },
-        {
-          href: localizedPath("/dashboard/articles", locale),
-          label: messages["nav.articles"],
-          icon: "article",
-        },
-        {
-          href: localizedPath("/dashboard/simulator", locale),
-          label: messages["nav.simulator"],
-          icon: "simulator",
-        },
-      ],
-    },
+    ...(publishItems.length > 0
+      ? [{ label: messages["nav.group.publish"], items: publishItems }]
+      : []),
     {
       label: messages["nav.group.directory"],
       items: [
@@ -353,7 +405,7 @@ export default async function DashboardLayout({
           // How many organisations exist is directory knowledge; a member of
           // one association goes to their own record from here, so the total
           // would be a number they cannot act on.
-          count: directoryAccess ? organizationRows.length : undefined,
+          count: directoryAccess ? organizationCount : undefined,
           children: [
             {
               href: organizationHref,
@@ -371,20 +423,40 @@ export default async function DashboardLayout({
                   },
                 ]
               : []),
+            // The teams and the vocabulary they are described with appear
+            // together: a member's declarations are only worth filling in once
+            // there are catalogue rows to point at. The board itself is a
+            // roster, so its entry needs the grant that opens one; the
+            // vocabulary is about skills, not people.
             ...(env.ENABLE_PHASE3_MEMBER_ASSIGNMENTS
               ? [
+                  ...(memberDirectoryAccess
+                    ? [
+                        {
+                          href: localizedPath("/dashboard/team", locale),
+                          label: messages["nav.team"],
+                          icon: "team" as const,
+                        },
+                      ]
+                    : []),
                   {
-                    href: localizedPath("/dashboard/team", locale),
-                    label: messages["nav.team"],
-                    icon: "team" as const,
+                    href: localizedPath("/dashboard/skills", locale),
+                    label: messages["nav.skills"],
+                    icon: "skills" as const,
                   },
                 ]
               : []),
-            {
-              href: localizedPath("/dashboard/places", locale),
-              label: messages["nav.places"],
-              icon: "place",
-            },
+            // Places are where activities happen, and maintaining them asks for
+            // the same grant as maintaining an activity (places/actions.ts).
+            ...(canCreateActivity
+              ? [
+                  {
+                    href: localizedPath("/dashboard/places", locale),
+                    label: messages["nav.places"],
+                    icon: "place" as const,
+                  },
+                ]
+              : []),
           ],
         },
       ],
@@ -397,6 +469,24 @@ export default async function DashboardLayout({
           label: messages["nav.catalogue"],
           icon: "catalogue",
         },
+        ...(staffAccess
+          ? [
+              {
+                href: localizedPath("/dashboard/staff", locale),
+                label: messages["nav.staff"],
+                icon: "team" as const,
+              },
+            ]
+          : []),
+        ...(auditAccess
+          ? [
+              {
+                href: localizedPath("/dashboard/audit", locale),
+                label: messages["nav.audit"],
+                icon: "audit" as const,
+              },
+            ]
+          : []),
         {
           href: localizedPath("/dashboard/account", locale),
           label: messages["nav.account"],
@@ -411,30 +501,46 @@ export default async function DashboardLayout({
    * one list, so a new route can never appear in one and not the other.
    */
   const createEntries = [
-    {
-      href: localizedPath("/dashboard/activities/new", locale),
-      label: messages["action.newActivity"],
-      icon: "calendar" as const,
-      hint: messages["nav.activities"],
-    },
-    {
-      href: localizedPath("/dashboard/events/new", locale),
-      label: messages["action.newEvent"],
-      icon: "event" as const,
-      hint: messages["nav.events"],
-    },
-    {
-      href: localizedPath("/dashboard/articles/new", locale),
-      label: messages["action.newArticle"],
-      icon: "article" as const,
-      hint: messages["nav.articles"],
-    },
-    {
-      href: localizedPath("/dashboard/simulator/new", locale),
-      label: messages["action.newSimulatorFlow"],
-      icon: "simulator" as const,
-      hint: messages["nav.simulator"],
-    },
+    ...(canCreateActivity
+      ? [
+          {
+            href: localizedPath("/dashboard/activities/new", locale),
+            label: messages["action.newActivity"],
+            icon: "calendar" as const,
+            hint: messages["nav.activities"],
+          },
+        ]
+      : []),
+    ...(canCreateEvent
+      ? [
+          {
+            href: localizedPath("/dashboard/events/new", locale),
+            label: messages["action.newEvent"],
+            icon: "event" as const,
+            hint: messages["nav.events"],
+          },
+        ]
+      : []),
+    ...(canCreateArticle
+      ? [
+          {
+            href: localizedPath("/dashboard/articles/new", locale),
+            label: messages["action.newArticle"],
+            icon: "article" as const,
+            hint: messages["nav.articles"],
+          },
+        ]
+      : []),
+    ...(simulatorAccess
+      ? [
+          {
+            href: localizedPath("/dashboard/simulator/new", locale),
+            label: messages["action.newSimulatorFlow"],
+            icon: "simulator" as const,
+            hint: messages["nav.simulator"],
+          },
+        ]
+      : []),
     ...(platformAdmin
       ? [
           {
@@ -489,23 +595,17 @@ export default async function DashboardLayout({
       ],
     },
   ];
-  const isDemo = organizationRows.some((organization) =>
-    organization.name
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "")
-      .toLocaleLowerCase(locale)
-      .includes("demo"),
-  );
+  const isDemo = demoOrganizationRows.length > 0;
   const defaultSidebarOpen =
     (await cookies()).get("sidebar_state")?.value !== "false";
 
   return (
     <AdminUIProvider
       direction={direction}
-      permissionDenied={messages["roleTest.permissionDenied"]}
+      permissionDenied={messages["access.permissionDenied"]}
     >
       <Toaster position="top-center" closeButton />
-      <PermissionDeniedNotice message={messages["roleTest.permissionDenied"]} />
+      <PermissionDeniedNotice message={messages["access.permissionDenied"]} />
       <SidebarProvider
         defaultOpen={defaultSidebarOpen}
         className="bg-canvas text-ink"
@@ -524,10 +624,9 @@ export default async function DashboardLayout({
           mobileDescription={messages["sidebar.mobileDescription"]}
           className="border-line bg-subtle"
         >
-          {/* Read top to bottom: which product this is, whose records you are
-           * editing, then the one verb that starts something new. Navigation
-           * begins below that, so the three answers an editor needs on arrival
-           * never move. */}
+          {/* Read top to bottom: which product this is, then the one verb that
+           * starts something new. Navigation begins below that, so the two
+           * answers an editor needs on arrival never move. */}
           <SidebarHeader className="gap-3 px-3 pt-3">
             <Link
               href={localizedPath("/dashboard", locale)}
@@ -546,15 +645,6 @@ export default async function DashboardLayout({
                 </span>
               </span>
             </Link>
-            <div className="group-data-[collapsible=icon]:hidden">
-              <AdminScopeIdentity
-                organizations={organizationRows}
-                cities={scopeCities}
-                teams={teamRows}
-                defaults={defaults}
-                label={messages["scope.organization"]}
-              />
-            </div>
             <SidebarCreateMenu
               label={messages["nav.create"]}
               actions={createActions}
@@ -566,44 +656,11 @@ export default async function DashboardLayout({
               ariaLabel={messages["auth.dashboard.console"]}
               groups={navigation}
             />
-            {/* Support tooling scrolls with the navigation instead of sitting in
-             * the footer: it is tall, rarely used, and on a short window a fixed
-             * footer squeezed the nav down to a sliver. */}
-            <div className="mt-auto grid gap-3 px-3 pb-3 group-data-[collapsible=icon]:hidden">
-              {roleTest.isSuperadmin ? (
-                <SuperadminRoleSwitcher
-                  key={
-                    roleTest.assumedRoles
-                      .map((role) => role.roleId)
-                      .sort()
-                      .join(":") || "actual"
-                  }
-                  locale={locale}
-                  roles={roleRows}
-                  organizations={organizationRows}
-                  activeRoles={roleTest.assumedRoles}
-                  activeOrganization={
-                    roleTest.assumedOrganizationId
-                      ? {
-                          id: roleTest.assumedOrganizationId,
-                          name:
-                            roleTest.assumedOrganizationName ??
-                            messages["scope.organization"],
-                        }
-                      : null
-                  }
-                  labels={{
-                    testing: messages["roleTest.testing"],
-                    role: messages["roleTest.role"],
-                    organization: messages["roleTest.organization"],
-                    apply: messages["roleTest.apply"],
-                    applyError: messages["roleTest.applyError"],
-                    exit: messages["roleTest.exit"],
-                    noMatch: messages["roleTest.noMatch"],
-                  }}
-                />
-              ) : null}
-              {isDemo ? (
+            {/* The one banner that scrolls with the navigation rather than
+             * sitting in the footer: on a short window a fixed footer squeezed
+             * the nav down to a sliver. */}
+            {isDemo ? (
+              <div className="mt-auto px-3 pb-3 group-data-[collapsible=icon]:hidden">
                 <div className="border-warn/50 bg-warn-soft text-warn flex gap-2.5 rounded-lg border p-3 text-sm font-medium">
                   <TriangleAlert
                     className="mt-0.5 size-4 shrink-0"
@@ -611,8 +668,8 @@ export default async function DashboardLayout({
                   />
                   <span>{messages["demo.warning"]}</span>
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </SidebarContent>
           {/* One short row, always visible: the console edits what the public
            * site shows, so the way to go look at it should not scroll away. */}
@@ -689,12 +746,11 @@ export default async function DashboardLayout({
                 name={user.name ?? messages["auth.dashboard.role.editor"]}
                 email={user.email ?? null}
                 initials={initialsOf(user.name ?? user.email ?? "")}
-                context={
-                  organizationRows.find(
-                    (organization) =>
-                      organization.id === defaults.organizationId,
-                  )?.name ?? messages["scope.organization"]
-                }
+                // Which space these edits land in: the association whose
+                // member this account is, or the platform itself. Read from the
+                // account's own memberships, so it states a fact rather than a
+                // selection someone could change.
+                context={ownOrganization?.name ?? messages["scope.platform"]}
                 accountHref={localizedPath("/dashboard/account", locale)}
                 labels={{
                   open: messages["profile.open"],

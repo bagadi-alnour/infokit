@@ -30,6 +30,28 @@ export interface PublicActivityProvider {
   href: string;
 }
 
+/**
+ * One way in on public transport, for a reader who is deciding whether they can
+ * get there at all.
+ *
+ * The mode arrives twice on purpose. `modeLabel` is the word — already in the
+ * reader's language, because "bus" is not a word everybody knows in French —
+ * and `mode` is the stable key a client picks an icon by, never shown as text.
+ * The line and the stop are the network's own names, left exactly as they are
+ * printed on the pole: a stop nobody can read out to a driver is no help.
+ */
+export interface PublicTransitLink {
+  mode:
+    "bus" | "tram" | "metro" | "train" | "coach" | "ferry" | "bike" | "other";
+  modeLabel: string;
+  line: string | null;
+  stopName: string | null;
+  /** "4 min walk", localized. Null when nobody has measured the walk. */
+  walkLabel: string | null;
+  /** The whole row on one line, for a surface with no room for the parts. */
+  label: string;
+}
+
 export interface PublicActivitySummary {
   id: string;
   slug: string;
@@ -82,6 +104,13 @@ export interface PublicActivityDetail extends PublicActivitySummary {
   description: string;
   instructions: string;
   /**
+   * How to get there without a car, in the order the editors listed. Empty when
+   * nobody has recorded it — never guessed from the address. Carried by the
+   * detail only: a card is for choosing between activities, and the journey
+   * matters once one has been chosen.
+   */
+  transit: PublicTransitLink[];
+  /**
    * The place on Google Maps, for the walking directions a reader leaves with.
    * Only the single-activity surfaces carry it — a shelf of cards is for
    * choosing, not for setting off. Null when the place is an area only.
@@ -122,6 +151,8 @@ export interface PublicActivityLabels {
   mapTitle: string;
   mapHint: string;
   noMap: string;
+  /** Heading over the transport links — "Getting here". */
+  gettingHere: string;
   statusOpen: string;
   statusClosed: string;
   statusCancelled: string;
@@ -299,6 +330,8 @@ export interface PublicEventSummary {
   allDay: boolean;
   whereLabel: string | null;
   mapHref: string | null;
+  /** How to get there on public transport; empty when nobody recorded it. */
+  transit: PublicTransitLink[];
   cityName: string;
   hostName: string | null;
   hostHref: string | null;
@@ -321,6 +354,8 @@ export interface PublicEventLabels {
   when: string;
   where: string;
   city: string;
+  /** Heading over the transport links — "Getting here". */
+  gettingHere: string;
   host: string;
   platform: string;
   contact: string;

@@ -65,9 +65,7 @@ export const publicEvents = content.table(
       .notNull()
       .default("normal"),
     published: boolean("published").notNull().default(false),
-    verifiedById: varchar("verified_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    verifiedById: uuid("verified_by_id").references(() => users.id),
     sourceNote: text("source_note"),
     ...verification,
     ...archival,
@@ -120,9 +118,7 @@ export const publicEventTranslations = content.table(
     carriedForwardFromSourceVersionId: uuid(
       "carried_forward_from_source_version_id",
     ),
-    verifiedById: varchar("verified_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    verifiedById: uuid("verified_by_id").references(() => users.id),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
   },
   (t) => [
@@ -155,15 +151,13 @@ export const publicEventPublications = content.table(
     translationContentHash: varchar("translation_content_hash", {
       length: 64,
     }).notNull(),
-    publishedById: varchar("published_by_id", { length: 255 })
+    publishedById: uuid("published_by_id")
       .notNull()
       .references(() => users.id),
     publishedAt: timestamp("published_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    unpublishedById: varchar("unpublished_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    unpublishedById: uuid("unpublished_by_id").references(() => users.id),
     unpublishedAt: timestamp("unpublished_at", { withTimezone: true }),
   },
   (t) => [
@@ -192,13 +186,19 @@ export const publicEventAudienceTranslations = content.table(
     eventId: uuid("event_id")
       .notNull()
       .references(() => publicEvents.id, { onDelete: "cascade" }),
-    languageCode: varchar("language_code", { length: 35 })
-      .notNull()
-      .references(() => languages.code),
+    // Named explicitly: the generated name overruns 63 bytes (./schemas.ts).
+    languageCode: varchar("language_code", { length: 35 }).notNull(),
     eligibilityDetails: text("eligibility_details").notNull(),
     state: translationState("state").notNull().default("draft"),
   },
-  (t) => [primaryKey({ columns: [t.eventId, t.languageCode] })],
+  (t) => [
+    primaryKey({ columns: [t.eventId, t.languageCode] }),
+    foreignKey({
+      columns: [t.languageCode],
+      foreignColumns: [languages.code],
+      name: "public_event_audience_translations_language_code_fk",
+    }),
+  ],
 );
 
 /** Recurrence definition; occurrences are materialized ahead of time. */
@@ -250,16 +250,29 @@ export const publicEventOccurrences = content.table(
 export const publicEventOccurrenceTranslations = content.table(
   "public_event_occurrence_translations",
   {
-    occurrenceId: uuid("occurrence_id")
-      .notNull()
-      .references(() => publicEventOccurrences.id, { onDelete: "cascade" }),
-    languageCode: varchar("language_code", { length: 35 })
-      .notNull()
-      .references(() => languages.code),
+    // All three named explicitly: the generated names overrun 63 bytes
+    // (./schemas.ts).
+    occurrenceId: uuid("occurrence_id").notNull(),
+    languageCode: varchar("language_code", { length: 35 }).notNull(),
     publicReason: text("public_reason").notNull(),
     state: translationState("state").notNull().default("draft"),
   },
-  (t) => [primaryKey({ columns: [t.occurrenceId, t.languageCode] })],
+  (t) => [
+    primaryKey({
+      columns: [t.occurrenceId, t.languageCode],
+      name: "public_event_occurrence_translations_pk",
+    }),
+    foreignKey({
+      columns: [t.occurrenceId],
+      foreignColumns: [publicEventOccurrences.id],
+      name: "public_event_occurrence_translations_occurrence_id_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [t.languageCode],
+      foreignColumns: [languages.code],
+      name: "public_event_occurrence_translations_language_code_fk",
+    }),
+  ],
 );
 
 /** Services available during the event. */

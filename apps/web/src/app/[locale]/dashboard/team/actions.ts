@@ -1,21 +1,26 @@
 "use server";
 
 import type { Locale } from "@infokit/shared/i18n";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { env } from "~/env";
 import { localizedPath } from "~/i18n/routing";
-import { optionalText } from "~/lib/form-fields";
+import {
+  optionalText,
+  optionalUuid,
+  personName,
+  phoneNumber,
+} from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { db } from "~/server/db";
 import { sendMemberInvitation } from "~/server/invitations";
 import {
-  parseSkills,
-  replaceMemberProfileFacets,
+  insertMember,
   validLanguageCodes,
+  writeMemberProfile,
 } from "~/server/members";
 import {
   activities,
@@ -54,6 +59,65 @@ async function requireTeam(teamId: string) {
   return team;
 }
 
+async function requireOrganization(organizationId: string) {
+  const [organization] = await db
+    .select({ id: organizations.id, name: organizations.displayName })
+    .from(organizations)
+    .where(eq(organizations.id, organizationId));
+  if (!organization) throw new Error("Unknown organisation");
+  return organization;
+}
+
+async function requireMember(memberId: string) {
+  const [member] = await db
+    .select({
+      id: organizationMembers.id,
+      organizationId: organizationMembers.organizationId,
+      organizationName: organizations.displayName,
+      email: organizationMembers.contactEmail,
+      status: organizationMembers.status,
+      userId: organizationMembers.userId,
+    })
+    .from(organizationMembers)
+    .innerJoin(
+      organizations,
+      eq(organizationMembers.organizationId, organizations.id),
+    )
+    .where(eq(organizationMembers.id, memberId));
+  if (!member) throw new Error("Unknown member");
+  return member;
+}
+
+/**
+ * Leaving a team also ends the assignments that came with it: an activity of
+ * that team is staffed from its roster, so somebody who is no longer on the
+ * roster is no longer expected on Tuesday either. The membership row and its
+ * history stay intact — `active: false`, never a delete.
+ */
+async function deactivateTeamAssignments(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  memberId: string,
+  teamId: string,
+) {
+  const teamActivities = await tx
+    .select({ id: activities.id })
+    .from(activities)
+    .where(eq(activities.teamId, teamId));
+  if (teamActivities.length === 0) return;
+  await tx
+    .update(activityMemberAssignments)
+    .set({ active: false })
+    .where(
+      and(
+        eq(activityMemberAssignments.memberId, memberId),
+        inArray(
+          activityMemberAssignments.activityId,
+          teamActivities.map((activity) => activity.id),
+        ),
+      ),
+    );
+}
+
 /* ------------------------------- create ------------------------------ */
 
 const createTeamSchema = z.object({
@@ -82,11 +146,7 @@ export const createTeam = protectedPermissionAction(
       .from(cities)
       .where(eq(cities.id, parsed.cityId));
     if (!city) throw new Error("Unknown city");
-    const [organization] = await db
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.id, parsed.organizationId));
-    if (!organization) throw new Error("Unknown organisation");
+    await requireOrganization(parsed.organizationId);
 
     const [team] = await db
       .insert(cityTeams)
@@ -113,122 +173,152 @@ export const createTeam = protectedPermissionAction(
 
 /* ------------------------------- invite ------------------------------ */
 
-const inviteSchema = z.object({
-  teamId: z.string().uuid(),
+/**
+ * What every member row carries (`core.organization_members`): the two halves of
+ * a name, the function held, a reachable number and an address. None of them is
+ * optional — a roster of half-filled rows is what makes a coverage board
+ * unusable, and the number is what a coordinator needs when a maraude changes at
+ * six in the evening.
+ */
+const identityFields = {
+  firstName: personName,
+  lastName: personName,
   email: z.string().trim().toLowerCase().email(),
-  displayName: optionalText,
-  title: optionalText,
-  skills: optionalText,
+  phone: phoneNumber,
+  title: z.string().trim().min(2).max(160),
+};
+
+const inviteSchema = z.object({
+  organizationId: z.string().uuid(),
+  /**
+   * Blank when the person is joining the organisation without a team yet: they
+   * exist on the books, they show in the unassigned column, and a coordinator
+   * drops them onto a team when there is one to put them on.
+   */
+  teamId: optionalUuid,
+  ...identityFields,
+  /**
+   * Catalogue ids, not typed words: `replaceSkillRecords` keeps only the rows
+   * this organisation may actually point at, so a stale or forged id costs
+   * nothing. Bounded the same way the language list is.
+   */
+  skillIds: z.array(z.string().uuid()).max(40),
   languages: z.array(z.string().min(2).max(35)).max(30),
 });
 
+function readIdentity(formData: FormData) {
+  return {
+    firstName: formData.get("firstName"),
+    lastName: formData.get("lastName"),
+    email: formData.get("email"),
+    phone: formData.get("phone"),
+    title: formData.get("title"),
+  };
+}
+
 /**
- * Add a person to the team by email, without an activity assignment. If no
- * account exists yet, the membership is reserved and an email invitation to
- * join is sent immediately.
+ * Add a person to the organisation, on a team or not yet. If no account exists
+ * for the address, the membership is reserved and an email invitation to join is
+ * sent immediately.
  */
-export const inviteTeamMember = protectedPermissionAction(
+export const inviteMember = protectedPermissionAction(
   "members.manage",
   async (formData, locale, user) => {
     assertEnabled();
     const parsed = inviteSchema.parse({
-      teamId: formData.get("teamId"),
-      email: formData.get("email"),
-      displayName: formData.get("displayName") ?? "",
-      title: formData.get("title") ?? "",
-      skills: formData.get("skills") ?? "",
+      organizationId: formData.get("organizationId"),
+      teamId: formData.get("teamId") ?? "",
+      ...readIdentity(formData),
+      skillIds: formData.getAll("skillIds"),
       languages: formData.getAll("languages"),
     });
-    const team = await requireTeam(parsed.teamId);
-    const skills = parseSkills(parsed.skills);
+    const organization = await requireOrganization(parsed.organizationId);
+    const team = parsed.teamId ? await requireTeam(parsed.teamId) : null;
+    if (team && team.organizationId !== organization.id) {
+      throw new Error("That team belongs to another organisation");
+    }
     const languageCodes = await validLanguageCodes(parsed.languages);
 
     const [account] = await db
-      .select({ id: users.id, name: users.name })
+      .select({ id: users.id })
       .from(users)
       .where(sql`lower(${users.email}) = ${parsed.email}`)
       .limit(1);
 
-    const { member, created } = await db.transaction(async (tx) => {
+    const { memberId, created } = await db.transaction(async (tx) => {
       const identityMatch = account
         ? or(
             eq(organizationMembers.contactEmail, parsed.email),
             eq(organizationMembers.userId, account.id),
           )
         : eq(organizationMembers.contactEmail, parsed.email);
-      let created = false;
-      let [existing] = await tx
+      const [existing] = await tx
         .select({ id: organizationMembers.id })
         .from(organizationMembers)
         .where(
           and(
-            eq(organizationMembers.organizationId, team.organizationId),
+            eq(organizationMembers.organizationId, organization.id),
             identityMatch,
           ),
         )
         .limit(1);
 
-      if (!existing) {
-        created = true;
-        [existing] = await tx
-          .insert(organizationMembers)
-          .values({
-            organizationId: team.organizationId,
-            userId: account?.id ?? null,
-            displayName:
-              parsed.displayName ??
-              account?.name ??
-              parsed.email.split("@")[0] ??
-              parsed.email,
+      const memberId =
+        existing?.id ??
+        (await insertMember(tx, {
+          organizationId: organization.id,
+          userId: account?.id ?? null,
+          identity: {
+            firstName: parsed.firstName,
+            lastName: parsed.lastName,
             contactEmail: parsed.email,
-            status: account ? "active" : "invited",
-          })
-          .returning({ id: organizationMembers.id });
-      } else if (parsed.displayName) {
-        await tx
-          .update(organizationMembers)
-          .set({ displayName: parsed.displayName })
-          .where(eq(organizationMembers.id, existing.id));
-      }
-      if (!existing) throw new Error("Member insert returned no row");
+            phone: parsed.phone,
+            title: parsed.title,
+          },
+        }));
 
-      await replaceMemberProfileFacets(tx, existing.id, {
+      await writeMemberProfile(tx, memberId, {
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        phone: parsed.phone,
         title: parsed.title,
-        skills,
+        skillIds: parsed.skillIds,
         languageCodes,
       });
-      await tx
-        .insert(cityTeamMembers)
-        .values({
-          teamId: team.id,
-          organizationId: team.organizationId,
-          memberId: existing.id,
-        })
-        .onConflictDoUpdate({
-          target: [cityTeamMembers.teamId, cityTeamMembers.memberId],
-          set: { active: true },
-        });
-      return { member: existing, created };
+      if (team) {
+        await tx
+          .insert(cityTeamMembers)
+          .values({
+            teamId: team.id,
+            organizationId: organization.id,
+            memberId,
+          })
+          .onConflictDoUpdate({
+            target: [cityTeamMembers.teamId, cityTeamMembers.memberId],
+            set: { active: true },
+          });
+      }
+      return { memberId, created: !existing };
     });
 
     if (!account && created) {
       await sendMemberInvitation({
-        organizationId: team.organizationId,
+        organizationId: organization.id,
         email: parsed.email,
-        memberId: member.id,
+        memberId,
         invitedById: user.id,
         locale,
-        organizationName: team.organizationName,
-        teamName: team.name,
-        inviterName: user.name ?? user.email ?? team.name,
+        organizationName: organization.name,
+        teamName: team?.name,
+        inviterName: user.name ?? user.email ?? organization.name,
       });
     }
     await recordAudit({
-      action: "team.member_added",
-      subjectType: "team",
-      subjectId: team.id,
-      organizationId: team.organizationId,
-      metadata: { memberId: member.id, invited: !account && created },
+      action: team ? "team.member_added" : "member.added",
+      subjectType: team ? "team" : "member",
+      subjectId: team ? team.id : memberId,
+      organizationId: organization.id,
+      metadata: { memberId, invited: !account && created },
     });
     refresh(locale);
   },
@@ -238,39 +328,41 @@ export const inviteTeamMember = protectedPermissionAction(
 
 const profileSchema = z.object({
   memberId: z.string().uuid(),
-  displayName: z.string().trim().min(2).max(200),
-  title: optionalText,
-  skills: optionalText,
+  firstName: personName,
+  lastName: personName,
+  phone: phoneNumber,
+  title: z.string().trim().min(2).max(160),
+  skillIds: z.array(z.string().uuid()).max(40),
   languages: z.array(z.string().min(2).max(35)).max(30),
 });
 
+/**
+ * Everything a coordinator may correct about a member. The address is not in the
+ * form: it is what the invitation was sent to and what an account links itself
+ * by, so changing it is re-inviting somebody rather than editing a field.
+ */
 export const updateMemberProfile = protectedPermissionAction(
   "members.manage",
   async (formData, locale) => {
     assertEnabled();
     const parsed = profileSchema.parse({
       memberId: formData.get("memberId"),
-      displayName: formData.get("displayName"),
-      title: formData.get("title") ?? "",
-      skills: formData.get("skills") ?? "",
+      firstName: formData.get("firstName"),
+      lastName: formData.get("lastName"),
+      phone: formData.get("phone"),
+      title: formData.get("title"),
+      skillIds: formData.getAll("skillIds"),
       languages: formData.getAll("languages"),
     });
-    const [member] = await db
-      .select({ organizationId: organizationMembers.organizationId })
-      .from(organizationMembers)
-      .where(eq(organizationMembers.id, parsed.memberId));
-    if (!member) throw new Error("Unknown member");
-
-    const skills = parseSkills(parsed.skills);
+    const member = await requireMember(parsed.memberId);
     const languageCodes = await validLanguageCodes(parsed.languages);
     await db.transaction(async (tx) => {
-      await tx
-        .update(organizationMembers)
-        .set({ displayName: parsed.displayName })
-        .where(eq(organizationMembers.id, parsed.memberId));
-      await replaceMemberProfileFacets(tx, parsed.memberId, {
+      await writeMemberProfile(tx, parsed.memberId, {
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        phone: parsed.phone,
         title: parsed.title,
-        skills,
+        skillIds: parsed.skillIds,
         languageCodes,
       });
     });
@@ -306,7 +398,7 @@ export const setTeamLead = protectedPermissionAction(
     await db.transaction(async (tx) => {
       await tx
         .update(cityTeamMembers)
-        .set({ isLead: false, updatedAt: new Date() })
+        .set({ isLead: false })
         .where(
           and(
             eq(cityTeamMembers.teamId, parsed.teamId),
@@ -316,7 +408,7 @@ export const setTeamLead = protectedPermissionAction(
       if (parsed.lead === "true") {
         await tx
           .update(cityTeamMembers)
-          .set({ isLead: true, updatedAt: new Date() })
+          .set({ isLead: true })
           .where(
             and(
               eq(cityTeamMembers.teamId, parsed.teamId),
@@ -337,61 +429,85 @@ export const setTeamLead = protectedPermissionAction(
   },
 );
 
-/* ------------------------------ removal ------------------------------ */
+/* -------------------------------- move ------------------------------- */
 
-const removalSchema = z.object({
-  teamId: z.string().uuid(),
+const moveSchema = z.object({
   memberId: z.string().uuid(),
+  /** Null is the unassigned column: in the organisation, on no team. */
+  teamId: optionalUuid,
+  /** Which column the member was picked up from, so the others are left alone. */
+  fromTeamId: optionalUuid,
 });
 
 /**
- * Remove from the team and deactivate the member's assignments on this
- * team's activities. The membership record and its history stay intact.
+ * Move one member between the columns of the team board — out of the unassigned
+ * pool onto a team, from one team to another, or back off a team.
+ *
+ * Only the column the drag started from is left: an association working in two
+ * cities may legitimately have somebody on both city teams, and a gesture aimed
+ * at one column must not quietly end the other membership.
  */
-export const removeTeamMember = protectedPermissionAction(
+export const moveMemberToTeam = protectedPermissionAction(
   "teams.manage",
   async (formData, locale) => {
     assertEnabled();
-    const parsed = removalSchema.parse({
-      teamId: formData.get("teamId"),
+    const parsed = moveSchema.parse({
       memberId: formData.get("memberId"),
+      teamId: formData.get("teamId") ?? "",
+      fromTeamId: formData.get("fromTeamId") ?? "",
     });
-    const team = await requireTeam(parsed.teamId);
+    if (parsed.teamId === parsed.fromTeamId) return;
+    const member = await requireMember(parsed.memberId);
+    const target = parsed.teamId ? await requireTeam(parsed.teamId) : null;
+    if (target && target.organizationId !== member.organizationId) {
+      throw new Error("A member cannot join another organisation's team");
+    }
+    const source = parsed.fromTeamId
+      ? await requireTeam(parsed.fromTeamId)
+      : null;
+    if (source && source.organizationId !== member.organizationId) {
+      throw new Error("That team belongs to another organisation");
+    }
+
     await db.transaction(async (tx) => {
-      await tx
-        .update(cityTeamMembers)
-        .set({ active: false, isLead: false, updatedAt: new Date() })
-        .where(
-          and(
-            eq(cityTeamMembers.teamId, parsed.teamId),
-            eq(cityTeamMembers.memberId, parsed.memberId),
-          ),
-        );
-      const teamActivities = await tx
-        .select({ id: activities.id })
-        .from(activities)
-        .where(eq(activities.teamId, parsed.teamId));
-      if (teamActivities.length > 0) {
+      if (source) {
         await tx
-          .update(activityMemberAssignments)
-          .set({ active: false, updatedAt: new Date() })
+          .update(cityTeamMembers)
+          .set({ active: false, isLead: false })
           .where(
             and(
-              eq(activityMemberAssignments.memberId, parsed.memberId),
-              inArray(
-                activityMemberAssignments.activityId,
-                teamActivities.map((activity) => activity.id),
-              ),
+              eq(cityTeamMembers.teamId, source.id),
+              eq(cityTeamMembers.memberId, parsed.memberId),
             ),
           );
+        await deactivateTeamAssignments(tx, parsed.memberId, source.id);
+      }
+      if (target) {
+        await tx
+          .insert(cityTeamMembers)
+          .values({
+            teamId: target.id,
+            organizationId: member.organizationId,
+            memberId: parsed.memberId,
+          })
+          .onConflictDoUpdate({
+            target: [cityTeamMembers.teamId, cityTeamMembers.memberId],
+            /**
+             * Leading is a decision about a team, not a property of the person,
+             * so it does not travel with them — and reviving a stale lead flag
+             * would collide with the team's existing lead.
+             */
+            set: { active: true, isLead: false },
+          });
       }
     });
+
     await recordAudit({
-      action: "team.member_removed",
-      subjectType: "team",
-      subjectId: parsed.teamId,
-      organizationId: team.organizationId,
-      metadata: { memberId: parsed.memberId },
+      action: target ? "team.member_moved" : "team.member_removed",
+      subjectType: "member",
+      subjectId: parsed.memberId,
+      organizationId: member.organizationId,
+      metadata: { from: parsed.fromTeamId, to: parsed.teamId },
     });
     refresh(locale);
   },
@@ -399,46 +515,38 @@ export const removeTeamMember = protectedPermissionAction(
 
 /* --------------------------- resend invite --------------------------- */
 
-const resendSchema = z.object({
-  teamId: z.string().uuid(),
-  memberId: z.string().uuid(),
-});
+const resendSchema = z.object({ memberId: z.string().uuid() });
 
 export const resendMemberInvitation = protectedPermissionAction(
   "members.manage",
   async (formData, locale, user) => {
     assertEnabled();
-    const parsed = resendSchema.parse({
-      teamId: formData.get("teamId"),
-      memberId: formData.get("memberId"),
-    });
-    const team = await requireTeam(parsed.teamId);
-    const [member] = await db
-      .select({
-        id: organizationMembers.id,
-        email: organizationMembers.contactEmail,
-      })
-      .from(organizationMembers)
-      .where(
-        and(
-          eq(organizationMembers.id, parsed.memberId),
-          eq(organizationMembers.organizationId, team.organizationId),
-          eq(organizationMembers.status, "invited"),
-          isNull(organizationMembers.userId),
-        ),
-      );
-    if (!member?.email) {
+    const parsed = resendSchema.parse({ memberId: formData.get("memberId") });
+    const member = await requireMember(parsed.memberId);
+    if (member.status !== "invited" || member.userId) {
       throw new Error("Only pending invitations can be resent");
     }
+    /** Names the team in the email when there is one to name. */
+    const [team] = await db
+      .select({ name: cityTeams.name })
+      .from(cityTeamMembers)
+      .innerJoin(cityTeams, eq(cityTeamMembers.teamId, cityTeams.id))
+      .where(
+        and(
+          eq(cityTeamMembers.memberId, parsed.memberId),
+          eq(cityTeamMembers.active, true),
+        ),
+      )
+      .limit(1);
     await sendMemberInvitation({
-      organizationId: team.organizationId,
+      organizationId: member.organizationId,
       email: member.email,
       memberId: member.id,
       invitedById: user.id,
       locale,
-      organizationName: team.organizationName,
-      teamName: team.name,
-      inviterName: user.name ?? user.email ?? team.name,
+      organizationName: member.organizationName,
+      teamName: team?.name,
+      inviterName: user.name ?? user.email ?? member.organizationName,
     });
     refresh(locale);
   },

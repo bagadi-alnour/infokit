@@ -8,7 +8,7 @@ import {
   users,
   verificationTokens,
 } from "~/server/db/schema";
-import { editorRecipient } from "./editors";
+import { canSignIn } from "./eligibility";
 import { hashSessionToken } from "./session-token";
 
 const drizzleAdapter = DrizzleAdapter(db, {
@@ -34,8 +34,8 @@ export const authAdapter: Adapter = {
   ...drizzleAdapter,
   async createVerificationToken(token) {
     // Preserve the provider's generic success response without retaining an
-    // unapproved address or creating a usable token for it.
-    if (!editorRecipient(token.identifier)) return token;
+    // unknown address or creating a usable token for it.
+    if (!(await canSignIn(token.identifier))) return token;
     const created = await drizzleAdapter.createVerificationToken?.(token);
     if (!created)
       throw new Error("Auth adapter did not create a verification token");

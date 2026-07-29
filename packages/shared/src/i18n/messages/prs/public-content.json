@@ -85,5 +85,15 @@
   "organization.purpose": "مأموریت",
   "organization.goals": "اهداف",
   "organization.values": "ارزش‌ها",
-  "organization.backToActivities": "بازگشت به فعالیت‌ها"
+  "organization.backToActivities": "بازگشت به فعالیت‌ها",
+  "transit.gettingHere": "راه رسیدن",
+  "transit.walk": "{minutes} دقیقه پیاده",
+  "transit.mode.bus": "بس",
+  "transit.mode.tram": "تراموا",
+  "transit.mode.metro": "مترو",
+  "transit.mode.train": "قطار",
+  "transit.mode.coach": "بس بین‌شهری",
+  "transit.mode.ferry": "کشتی مسافربری",
+  "transit.mode.bike": "بایسکل",
+  "transit.mode.other": "خط"
 }

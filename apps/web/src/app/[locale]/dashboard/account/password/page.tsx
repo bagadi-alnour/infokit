@@ -2,7 +2,8 @@ import { loadCatalog, loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { eq } from "drizzle-orm";
 
 import { updatePassword } from "../../../login/actions";
-import { Card, Field, TextInput } from "~/components/admin/workspace";
+import { AdminPasswordCreationFields } from "~/components/admin/password-creation-fields";
+import { Card } from "~/components/admin/workspace";
 import { PendingButton } from "~/components/pending-button";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { requireRouteLocale } from "~/i18n/route-locale";
@@ -72,29 +73,25 @@ export default async function AccountPasswordPage({
               ? auth["auth.account.passwordExists"]
               : auth["auth.account.passwordMissing"]}
           </p>
-          <Field
-            label={auth["auth.account.passwordLabel"]}
-            hint={auth["auth.account.passwordHint"]}
-          >
-            <TextInput
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={12}
-              maxLength={128}
-              required
-            />
-          </Field>
-          <Field label={auth["auth.account.passwordConfirmationLabel"]}>
-            <TextInput
-              name="passwordConfirmation"
-              type="password"
-              autoComplete="new-password"
-              minLength={12}
-              maxLength={128}
-              required
-            />
-          </Field>
+          <AdminPasswordCreationFields
+            passwordLabel={auth["auth.account.passwordLabel"]}
+            confirmationLabel={auth["auth.account.passwordConfirmationLabel"]}
+            showPasswordLabel={auth["auth.password.show"]}
+            hidePasswordLabel={auth["auth.password.hide"]}
+            strengthLabels={{
+              label: auth["auth.passwordStrength.label"],
+              weak: auth["auth.passwordStrength.weak"],
+              fair: auth["auth.passwordStrength.fair"],
+              good: auth["auth.passwordStrength.good"],
+              strong: auth["auth.passwordStrength.strong"],
+              veryStrong: auth["auth.passwordStrength.veryStrong"],
+              minLength: auth["auth.passwordStrength.minLength"],
+              uppercase: auth["auth.passwordStrength.uppercase"],
+              lowercase: auth["auth.passwordStrength.lowercase"],
+              number: auth["auth.passwordStrength.number"],
+              special: auth["auth.passwordStrength.special"],
+            }}
+          />
           <div>
             <PendingButton>{auth["auth.account.passwordSubmit"]}</PendingButton>
           </div>

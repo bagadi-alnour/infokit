@@ -85,5 +85,15 @@
   "organization.purpose": "Ergama",
   "organization.goals": "Galmoota",
   "organization.values": "Gatiiwwan",
-  "organization.backToActivities": "Gara sochiiwwanitti deebi'i"
+  "organization.backToActivities": "Gara sochiiwwanitti deebi'i",
+  "transit.gettingHere": "Akkamitti as gahan",
+  "transit.walk": "{minutes} daqiiqaa miilaan",
+  "transit.mode.bus": "Baasii",
+  "transit.mode.tram": "Traamii",
+  "transit.mode.metro": "Meetroo",
+  "transit.mode.train": "Baabura",
+  "transit.mode.coach": "Baasii fageenya dheeraa",
+  "transit.mode.ferry": "Doonii",
+  "transit.mode.bike": "Biskileetii",
+  "transit.mode.other": "Sarara"
 }

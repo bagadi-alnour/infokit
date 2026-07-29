@@ -31,6 +31,25 @@ export const optionalUuid = z
   .transform(blankToNull)
   .pipe(z.string().uuid().nullable());
 
+/**
+ * Half of a member's name (`core.organization_members`). Required, because a
+ * roster of half-named people is not a roster; bounded by the column.
+ */
+export const personName = z.string().trim().min(1).max(120);
+
+/**
+ * A phone number as the association dials it. Stored as typed — an extension or
+ * a shared duty phone is a real answer — so validation only rejects what cannot
+ * be a number at all, rather than imposing one country's shape on a city where
+ * half the numbers are foreign.
+ */
+export const phoneNumber = z
+  .string()
+  .trim()
+  .min(6)
+  .max(40)
+  .regex(/^[+()\d][\d\s./()+-]*$/, "phone");
+
 /** A number typed into a text input, or `null` when left blank. */
 export const optionalNumber = z
   .string()

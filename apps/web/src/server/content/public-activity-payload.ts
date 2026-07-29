@@ -29,6 +29,7 @@ import {
   verifiedAgoLabel,
   type VerificationFormatters,
 } from "~/lib/activity-presentation";
+import { presentTransitLinks } from "~/lib/transit-presentation";
 import { localizedPath } from "~/i18n/routing";
 import {
   listPublishedActivities,
@@ -138,6 +139,7 @@ export function activityLabels(messages: Messages): PublicActivityLabels {
     mapTitle: messages["activities.mapTitle"],
     mapHint: messages["activities.mapHint"],
     noMap: messages["activities.noMap"],
+    gettingHere: messages["transit.gettingHere"],
     statusOpen: messages["activities.status.open"],
     statusClosed: messages["activities.status.closed"],
     statusCancelled: messages["activities.status.cancelled"],
@@ -276,6 +278,11 @@ export function activityDetail({
     }),
     description: activity.description,
     instructions: activity.instructions,
+    transit: presentTransitLinks({
+      links: activity.transit,
+      messages,
+      locale,
+    }),
     googleMapsHref: googleMapsHref({
       address: activity.address,
       latitude: activity.latitude,

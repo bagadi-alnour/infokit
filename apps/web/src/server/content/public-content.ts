@@ -12,6 +12,7 @@ import {
   type NextOpening,
 } from "~/lib/activity-current-status";
 import { parisToday } from "~/lib/freshness";
+import { type TransitLink } from "~/lib/transit-links";
 import { db } from "~/server/db";
 import {
   activities,
@@ -19,6 +20,7 @@ import {
   activityProviders,
   activityPublications,
   activityServices,
+  activityTransitLinks,
   activityTranslations,
   articleDetails,
   assets,
@@ -79,6 +81,13 @@ export interface PublishedActivity {
     endTime: string;
     endsNextDay: boolean;
   }>;
+  /**
+   * How to get there on public transport, in the order the editors listed. Not
+   * translated and not part of the publication: a line number is a line number
+   * in every language, and a reader who cannot reach the place is not served by
+   * waiting for a translation of the word "bus".
+   */
+  transit: TransitLink[];
   coverImage: PublishedCoverImage | null;
 }
 
@@ -176,6 +185,7 @@ export async function listPublishedActivities(
     serviceRows,
     scheduleRows,
     exceptionRows,
+    transitRows,
     coverRows,
   ] = await Promise.all([
     db
@@ -292,6 +302,20 @@ export async function listPublishedActivities(
           inArray(scheduleExceptions.activityId, activityIds),
           eq(scheduleExceptions.date, today),
         ),
+      ),
+    db
+      .select({
+        activityId: activityTransitLinks.activityId,
+        mode: activityTransitLinks.mode,
+        line: activityTransitLinks.line,
+        stopName: activityTransitLinks.stopName,
+        walkMinutes: activityTransitLinks.walkMinutes,
+      })
+      .from(activityTransitLinks)
+      .where(inArray(activityTransitLinks.activityId, activityIds))
+      .orderBy(
+        asc(activityTransitLinks.displayOrder),
+        asc(activityTransitLinks.createdAt),
       ),
     db
       .select({
@@ -452,6 +476,14 @@ export async function listPublishedActivities(
         lastVerifiedAt: publication.lastVerifiedAt,
         reviewDueAt: publication.reviewDueAt,
         schedules: activitySchedules,
+        transit: transitRows
+          .filter((row) => row.activityId === publication.activityId)
+          .map((row): TransitLink => ({
+            mode: row.mode,
+            line: row.line,
+            stopName: row.stopName,
+            walkMinutes: row.walkMinutes,
+          })),
         coverImage: covers.get(publication.activityId) ?? null,
       },
     ];

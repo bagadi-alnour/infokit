@@ -20,6 +20,7 @@ import {
   inlineLinkClass,
   statusWord,
 } from "~/components/public/primitives";
+import { TransitLinkCard } from "~/components/public/transit-links";
 import { TaxonomyIcon } from "~/components/taxonomy-icon";
 import { cn } from "~/lib/utils";
 
@@ -140,6 +141,11 @@ const statusRule: Record<PublicActivityStatus, string> = {
   uncertain: "bg-warn",
 };
 
+/** The rule itself, so both shapes of the card draw the same 6px band. */
+function StatusRule({ status }: { status: PublicActivityStatus }) {
+  return <div className={cn("h-1.5 w-full", statusRule[status])} />;
+}
+
 /**
  * One activity as a shelf card reads it: the state and how long ago it was
  * checked first, then what it is and who runs it, then where and when, then the
@@ -213,9 +219,13 @@ function ShelfBody({
       ) : null}
 
       <div className="mt-4 flex flex-col gap-2">
+        {/* Glyph in the accent, words in the metadata grey (rule 4): where it is
+            and when it opens are the two lines a reader scans a shelf by, and
+            an icon drawn in the same grey as its own sentence is not a
+            way in. */}
         {activity.placeName ? (
           <p className="text-copy-muted inline-flex items-start gap-1.5 text-sm">
-            <MapPin className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <MapPin className="text-brand mt-0.5 size-4 shrink-0" aria-hidden />
             {roomy
               ? activity.address || activity.placeName
               : activity.placeName}
@@ -224,7 +234,7 @@ function ShelfBody({
         {/* The week on one line — "Mon–Fri 13:00–17:00" — the same days the
             detail page lays out on a row each, collapsed by the server. */}
         <p className="text-copy-muted inline-flex items-start gap-1.5 text-sm">
-          <Clock className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <Clock className="text-brand mt-0.5 size-4 shrink-0" aria-hidden />
           {activity.scheduleSummary}
         </p>
       </div>
@@ -304,7 +314,7 @@ export function ActivityCard({
           familyStyles.activity.focusBorder,
         )}
       >
-        <div className={cn("h-1.5 w-full", statusRule[activity.status])} />
+        <StatusRule status={activity.status} />
         <div className="flex flex-col sm:flex-row">
           {activity.coverImage ? (
             // eslint-disable-next-line @next/next/no-img-element -- remote editorial media, no known intrinsic size
@@ -329,9 +339,20 @@ export function ActivityCard({
   return (
     <SurfaceCard
       as="li"
-      className={cn(cardShell, "h-full", familyStyles.activity.focusBorder)}
+      className={cn(
+        cardShell,
+        // The rule is the activity family's one carrier (§5), so the stacked
+        // card wears it too — it used to be on the wide card only, which left
+        // the shelves that show activities beside other content (the home page,
+        // an association's own page) as the one place the ramp went missing.
+        "h-full overflow-hidden p-0",
+        familyStyles.activity.focusBorder,
+      )}
     >
-      <ShelfBody activity={activity} labels={labels} roomy={false} />
+      <StatusRule status={activity.status} />
+      <div className="flex flex-1 flex-col p-5">
+        <ShelfBody activity={activity} labels={labels} roomy={false} />
+      </div>
     </SurfaceCard>
   );
 }
@@ -436,6 +457,14 @@ export function PublicActivityDetailView({
             to stand here, and a reader had to leave the page to learn whether
             the address was anywhere near them. */}
         {location}
+        {/* And how to reach it, under the map for the reader who has just seen
+            that it is across town. Written by the association, never guessed
+            from the address: this is the one thing on the page nobody can work
+            out from a pin. */}
+        <TransitLinkCard
+          links={activity.transit}
+          heading={labels.gettingHere}
+        />
       </aside>
     </div>
   );

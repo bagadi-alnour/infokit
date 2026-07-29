@@ -6,8 +6,10 @@ import { z } from "zod";
 
 import { localizedPath } from "~/i18n/routing";
 import { editorialLanguageCodes } from "~/lib/editorial-languages";
+import { maxUploadBytes } from "~/lib/image-compression";
 import { recordAudit } from "~/server/audit";
-import { createAssetUploadUrl, verifyAssetUpload } from "~/server/assets/s3";
+import { createAssetUploadUrl } from "~/server/assets/s3";
+import { scanUploadedAsset } from "~/server/assets/scan";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
@@ -27,11 +29,9 @@ function refreshActivity(locale: "fr" | "en" | "ar", activityId: string) {
 
 const imageUploadSchema = z.object({
   mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/avif"]),
-  byteSize: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(10 * 1024 * 1024),
+  // The same megabyte the console states and the browser encodes down to: this
+  // is where it is enforced, because this is where the upload URL is signed.
+  byteSize: z.coerce.number().int().positive().max(maxUploadBytes),
   languageCode: z.enum(editorialLanguageCodes),
   altText: z.string().trim().min(1).max(500),
   rightsConfirmed: z.literal("true"),
@@ -77,6 +77,21 @@ export const createActivityImageUpload = protectedPermissionAction(
         state: "draft",
       });
     });
+    // A signed URL is a short-lived write credential for the bucket, so who was
+    // handed one for which key belongs in the trail whether or not the upload
+    // that follows ever gets attached to anything.
+    await recordAudit({
+      action: "asset.upload_authorized",
+      subjectType: "asset",
+      subjectId: assetId,
+      metadata: {
+        kind: "image",
+        context: "activity",
+        mimeType: parsed.mimeType,
+        byteSize: parsed.byteSize,
+        languageCode: parsed.languageCode,
+      },
+    });
     return { assetId, uploadUrl };
   },
 );
@@ -99,9 +114,11 @@ export const setActivityCoverImage = protectedPermissionAction(
 
     const [uploadedAsset] = await db
       .select({
+        id: assets.id,
         storageKey: assets.storageKey,
         mimeType: assets.mimeType,
         byteSize: assets.byteSize,
+        scanState: assets.scanState,
       })
       .from(assets)
       .where(
@@ -115,7 +132,7 @@ export const setActivityCoverImage = protectedPermissionAction(
       )
       .limit(1);
     if (!uploadedAsset) throw new Error("The activity image is unavailable");
-    await verifyAssetUpload(uploadedAsset);
+    await scanUploadedAsset(uploadedAsset);
 
     await db.transaction(async (tx) => {
       const [activity] = await tx
@@ -217,6 +234,18 @@ export const createActivityDocumentUpload = protectedPermissionAction(
       scanState: "pending",
       rightsConfirmed: true,
     });
+    await recordAudit({
+      action: "asset.upload_authorized",
+      subjectType: "asset",
+      subjectId: assetId,
+      metadata: {
+        kind: "document",
+        context: "activity",
+        mimeType: "application/pdf",
+        byteSize: parsed.byteSize,
+        languageCode: parsed.languageCode,
+      },
+    });
     return { assetId, uploadUrl };
   },
 );
@@ -243,9 +272,11 @@ export const addActivityDownload = protectedPermissionAction(
 
     const [uploadedAsset] = await db
       .select({
+        id: assets.id,
         storageKey: assets.storageKey,
         mimeType: assets.mimeType,
         byteSize: assets.byteSize,
+        scanState: assets.scanState,
       })
       .from(assets)
       .where(
@@ -259,7 +290,7 @@ export const addActivityDownload = protectedPermissionAction(
       )
       .limit(1);
     if (!uploadedAsset) throw new Error("The document is unavailable");
-    await verifyAssetUpload(uploadedAsset);
+    await scanUploadedAsset(uploadedAsset);
 
     await db.transaction(async (tx) => {
       const [activity] = await tx

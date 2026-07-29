@@ -1,4 +1,4 @@
-import { CalendarDays, CalendarPlus, Clock, MapPin } from "lucide-react";
+import { CalendarPlus, MapPin } from "lucide-react";
 import Link from "next/link";
 
 import { ContactValue, contactIcon } from "~/components/public/contact-value";
@@ -7,6 +7,7 @@ import {
   ActionLink,
   Callout,
   Chip,
+  EventDateBlock,
   MetaRow,
   SurfaceCard,
   inlineLinkClass,
@@ -95,25 +96,12 @@ export function PublicEventList({
                 </Link>
               </h2>
               <div className="flex flex-wrap gap-2">
-                {/* An event is a date first, so the date gets the one washed
-                 * block on the card, in the family hue of the agenda
-                 * (docs/DESIGN-SYSTEM.md §5) — and it is also the control that
-                 * keeps it: one tap and it is in the reader's own calendar,
-                 * hour and timezone included. */}
-                <a
+                <EventDateBlock
                   href={event.icsHref}
-                  aria-label={`${labels.addToCalendar} — ${event.dateLabel} ${event.timeLabel}`}
-                  className="rounded-control focus-visible:outline-brand bg-event-wash text-event hover:shadow-ring inline-flex items-center gap-2 px-3 py-1.5 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  <CalendarDays className="size-4 shrink-0" aria-hidden />
-                  <span className="underline decoration-1 underline-offset-2">
-                    {event.dateLabel}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 font-medium">
-                    <Clock className="size-4 shrink-0" aria-hidden />
-                    {event.timeLabel}
-                  </span>
-                </a>
+                  dateLabel={event.dateLabel}
+                  timeLabel={event.timeLabel}
+                  ariaLabel={`${labels.addToCalendar} — ${event.dateLabel} ${event.timeLabel}`}
+                />
                 {event.mapHref ? (
                   <a
                     href={event.mapHref}

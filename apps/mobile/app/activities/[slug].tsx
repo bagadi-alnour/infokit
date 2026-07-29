@@ -17,7 +17,11 @@ import {
   ProviderLinks,
   ServiceChips,
 } from "~/components/content-cards";
-import { AddressLink, CoverImage } from "~/components/content-parts";
+import {
+  AddressLink,
+  CoverImage,
+  TransitLinks,
+} from "~/components/content-parts";
 import { PayloadScreen } from "~/components/payload-screen";
 import { TaxonomyIcon } from "~/components/taxonomy-icon";
 import { publicClient } from "~/lib/client";
@@ -89,6 +93,16 @@ function ActivityDetail({ payload }: { payload: PublicActivityDetailPayload }) {
           </>
         )}
       </Card>
+
+      {/* Inside the place card would hide it behind a pressable address; its own
+          card because a bus line is publishable when an address is not, and that
+          reader is the one who needs it most. */}
+      {activity.transit.length > 0 ? (
+        <Card>
+          <CardTitle>{labels.gettingHere}</CardTitle>
+          <TransitLinks links={activity.transit} />
+        </Card>
+      ) : null}
 
       {labels.audience || activity.services.length > 0 || hasProvider ? (
         <Card>

@@ -32,12 +32,14 @@ import { Label } from "~/components/ui/label";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { editorialLanguageCodes } from "~/lib/editorial-languages";
+import { memberFullName } from "~/lib/member-name";
 import {
   hasStewardContact,
   type StewardContactValues,
 } from "~/lib/steward-contact";
 import { buildWorkspaceLabels } from "~/lib/workspace-labels";
-import { getRoleTestState } from "~/server/auth/authorization";
+import { recordRestrictedRead } from "~/server/audit/reads";
+import { authorizationFor } from "~/server/auth/authorization";
 import { organizationWriteAccess } from "~/server/auth/org-access";
 import { hasPermission, requireEditor } from "~/server/auth/require";
 import { db } from "~/server/db";
@@ -125,7 +127,10 @@ export default async function OrganizationDetailPage({
 
   const [access, authorization] = await Promise.all([
     organizationWriteAccess(user.id, id),
-    getRoleTestState(user.id, id),
+    // Read for *this* organisation: the roster and lifecycle grants below are
+    // held per association, so asking without naming one would answer about
+    // permissions the actor only holds elsewhere.
+    authorizationFor(user.id, id),
   ]);
   const canWrite = access.canWrite;
   const canLifecycle =
@@ -365,16 +370,44 @@ export default async function OrganizationDetailPage({
     ? await db
         .select({
           id: organizationMembers.id,
-          displayName: organizationMembers.displayName,
+          firstName: organizationMembers.firstName,
+          lastName: organizationMembers.lastName,
           contactEmail: organizationMembers.contactEmail,
+          phone: organizationMembers.phone,
           title: organizationMembers.title,
           status: organizationMembers.status,
           userId: organizationMembers.userId,
         })
         .from(organizationMembers)
         .where(eq(organizationMembers.organizationId, id))
-        .orderBy(asc(organizationMembers.displayName))
+        .orderBy(
+          asc(organizationMembers.lastName),
+          asc(organizationMembers.firstName),
+        )
     : [];
+  /**
+   * The roster is the one thing on this page that is a list of people, so the
+   * read is recorded and the row says which kind of reader made it: an
+   * organisation's own administrator reading their team is the job, and a
+   * platform operator reading somebody else's team is a thing worth being able
+   * to ask about afterwards. Both are permitted above; only one of them is
+   * routine, and `readerRole` is what tells them apart later.
+   */
+  if (memberRows.length > 0) {
+    await recordRestrictedRead({
+      action: "member.directory_read",
+      subjectType: "organization",
+      subjectId: id,
+      subjectLabel: org.displayName,
+      organizationId: id,
+      metadata: {
+        members: memberRows.length,
+        emails: canReadMemberEmails,
+        readerRole: access.actor,
+      },
+    });
+  }
+
   const memberRoleRows =
     memberRows.length > 0
       ? await db
@@ -1029,7 +1062,7 @@ export default async function OrganizationDetailPage({
                       >
                         <div className="min-w-0">
                           <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                            {member.displayName}
+                            {memberFullName(member)}
                             <Chip tone={memberStatusTone[member.status]}>
                               {memberStatusLabel[member.status]}
                             </Chip>
@@ -1039,14 +1072,14 @@ export default async function OrganizationDetailPage({
                               </span>
                             ) : null}
                           </p>
-                          {member.title ? (
-                            <p className="text-copy-muted text-xs">
-                              {member.title}
-                            </p>
-                          ) : null}
-                          {canReadMemberEmails && member.contactEmail ? (
+                          <p className="text-copy-muted text-xs">
+                            {member.title}
+                          </p>
+                          {canReadMemberEmails ? (
                             <p className="text-copy-muted text-xs">
                               {member.contactEmail}
+                              {" · "}
+                              <span dir="ltr">{member.phone}</span>
                             </p>
                           ) : null}
                         </div>
@@ -1159,18 +1192,27 @@ export default async function OrganizationDetailPage({
               {canInvite ? (
                 <form
                   action={inviteOrganizationRepresentative}
-                  className="border-line mt-4 grid items-end gap-3 border-t pt-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,.8fr)_minmax(10rem,.7fr)_auto]"
+                  className="border-line mt-4 grid items-end gap-3 border-t pt-4 md:grid-cols-2 xl:grid-cols-3"
                 >
                   {localeHidden}
                   {hidden}
+                  {/* All five are required: reserving the membership row creates
+                   * the person on the roster, and `core.organization_members`
+                   * takes no half-filled rows. */}
+                  <Field label={t["invite.firstName"]}>
+                    <TextInput name="firstName" required />
+                  </Field>
+                  <Field label={t["invite.lastName"]}>
+                    <TextInput name="lastName" required />
+                  </Field>
+                  <Field label={t["invite.title"]} hint={t["invite.titleHint"]}>
+                    <TextInput name="title" required />
+                  </Field>
                   <Field label={t["invite.email"]}>
                     <TextInput name="email" type="email" required />
                   </Field>
-                  <Field
-                    label={t["invite.displayName"]}
-                    hint={t["console.optional"]}
-                  >
-                    <TextInput name="displayName" />
+                  <Field label={t["invite.phone"]}>
+                    <TextInput name="phone" type="tel" dir="ltr" required />
                   </Field>
                   <Field label={t["invite.role"]}>
                     {/* Roles are named by code here, as everywhere else in the

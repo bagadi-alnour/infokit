@@ -9,12 +9,77 @@ import { loadCatalog } from "@infokit/shared/i18n/catalogs";
 
 import { env } from "~/env";
 import type { EditorialLanguage } from "~/lib/editorial-languages";
-import { awsCredentials } from "~/server/aws-credentials";
-import { editorRecipient } from "./editors";
+// Imported from the file rather than from `~/server/audit`, whose index reaches
+// the session — and the session's configuration imports this module.
+import {
+  recordDelivery,
+  trackDelivery,
+  type DeliveryInput,
+} from "~/server/audit/deliveries";
+// `import type` only, for the same reason: it is erased at build time, so it
+// adds no runtime edge to `record`, which does reach the session.
+import type { AuditEventRef } from "~/server/audit/record";
+import {
+  messagingCredentials,
+  messagingRegion,
+} from "~/server/aws-credentials";
+import { canSignIn } from "./eligibility";
 
-const credentials = awsCredentials();
-const ses = new SESv2Client({ region: env.AWS_REGION, credentials });
-const sns = new SNSClient({ region: env.AWS_REGION, credentials });
+// Messaging may leave from a different AWS account than the asset bucket, and
+// the region travels with the credentials because a verified sending identity
+// and a registered sender ID are both regional. See `~/server/aws-credentials`.
+const credentials = messagingCredentials();
+const region = messagingRegion();
+const ses = new SESv2Client({ region, credentials });
+const sns = new SNSClient({ region, credentials });
+
+/**
+ * What the ledger needs to know about a message before anyone tries to send it,
+ * so the same facts describe the send, the skip and the failure.
+ */
+type LedgerFacts = Pick<
+  DeliveryInput,
+  | "channel"
+  | "template"
+  | "recipient"
+  | "locale"
+  | "userId"
+  | "organizationId"
+  | "auditEvent"
+>;
+
+/**
+ * A deliberate non-send, written down as one. Development logs the link to the
+ * console instead of sending, and the sign-in gate answers unknown addresses
+ * exactly as it answers known ones — both leave the console showing "we sent
+ * it", and only the ledger can say which of the two actually happened.
+ */
+function recordSkip(facts: LedgerFacts, errorCode: string): Promise<void> {
+  return recordDelivery({
+    ...facts,
+    status: "skipped",
+    provider: errorCode === "dev_log_transport" ? "dev-log" : null,
+    errorCode,
+  });
+}
+
+/**
+ * The verified From address, or a failure nobody has to guess at. A deployment
+ * that never configured it breaks every sign-in silently at the SES call; this
+ * way the ledger names the reason next to the recipient who did not receive it.
+ */
+async function senderAddress(
+  facts: LedgerFacts,
+  message: string,
+): Promise<string> {
+  if (env.AUTH_EMAIL_FROM) return env.AUTH_EMAIL_FROM;
+  await recordDelivery({
+    ...facts,
+    status: "failed",
+    errorCode: "email_from_missing",
+  });
+  throw new Error(message);
+}
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {
@@ -38,18 +103,28 @@ export async function sendMagicLinkEmail({
   url: string;
   locale: Locale;
 }) {
+  const facts: LedgerFacts = {
+    channel: "email",
+    template: "auth.magic_link",
+    recipient: email,
+    locale,
+  };
   // Auth.js still completes the generic verification-request response for an
-  // unapproved address, but no recipient data leaves this process.
-  if (!editorRecipient(email)) return;
-  if (env.AUTH_DEV_LOG_DELIVERY) {
-    console.warn(`\n[auth:dev] Magic link for ${email}:\n${url}\n`);
+  // address the database does not know, but no recipient data leaves this
+  // process.
+  if (!(await canSignIn(email))) {
+    await recordSkip(facts, "recipient_not_eligible");
     return;
   }
-  if (!env.AUTH_EMAIL_FROM) {
-    throw new Error(
-      "AUTH_EMAIL_FROM must be configured before an editor can sign in",
-    );
+  if (env.AUTH_DEV_LOG_DELIVERY) {
+    console.warn(`\n[auth:dev] Magic link for ${email}:\n${url}\n`);
+    await recordSkip(facts, "dev_log_transport");
+    return;
   }
+  const from = await senderAddress(
+    facts,
+    "AUTH_EMAIL_FROM must be configured before an editor can sign in",
+  );
 
   const messages = await loadCatalog(locale, "auth-delivery");
   const safeUrl = escapeHtml(url);
@@ -57,24 +132,27 @@ export async function sendMagicLinkEmail({
   const text = `${messages["auth.email.heading"]}\n\n${messages["auth.email.body"]}\n${url}\n\n${messages["auth.email.ignore"]}`;
   const html = `<section lang="${locale}" dir="${direction}"><h1>${escapeHtml(messages["auth.email.heading"])}</h1><p>${escapeHtml(messages["auth.email.body"])}</p><p><a href="${safeUrl}">${escapeHtml(messages["auth.email.action"])}</a></p><p>${escapeHtml(messages["auth.email.ignore"])}</p></section>`;
 
-  await ses.send(
-    new SendEmailCommand({
-      FromEmailAddress: env.AUTH_EMAIL_FROM,
-      Destination: { ToAddresses: [email] },
-      Content: {
-        Simple: {
-          Subject: {
-            Charset: "UTF-8",
-            Data: messages["auth.email.subject"],
-          },
-          Body: {
-            Text: { Charset: "UTF-8", Data: text },
-            Html: { Charset: "UTF-8", Data: html },
+  await trackDelivery(facts, async () => {
+    const sent = await ses.send(
+      new SendEmailCommand({
+        FromEmailAddress: from,
+        Destination: { ToAddresses: [email] },
+        Content: {
+          Simple: {
+            Subject: {
+              Charset: "UTF-8",
+              Data: messages["auth.email.subject"],
+            },
+            Body: {
+              Text: { Charset: "UTF-8", Data: text },
+              Html: { Charset: "UTF-8", Data: html },
+            },
           },
         },
-      },
-    }),
-  );
+      }),
+    );
+    return { provider: "ses", providerMessageId: sent.MessageId };
+  });
 }
 
 export async function sendPasswordResetEmail({
@@ -86,15 +164,21 @@ export async function sendPasswordResetEmail({
   url: string;
   locale: Locale;
 }) {
+  const facts: LedgerFacts = {
+    channel: "email",
+    template: "auth.password_reset",
+    recipient: email,
+    locale,
+  };
   if (env.AUTH_DEV_LOG_DELIVERY) {
     console.warn(`\n[auth:dev] Password reset for ${email}:\n${url}\n`);
+    await recordSkip(facts, "dev_log_transport");
     return;
   }
-  if (!env.AUTH_EMAIL_FROM) {
-    throw new Error(
-      "AUTH_EMAIL_FROM must be configured before password resets can be sent",
-    );
-  }
+  const from = await senderAddress(
+    facts,
+    "AUTH_EMAIL_FROM must be configured before password resets can be sent",
+  );
 
   const messages = await loadCatalog(locale, "auth-delivery");
   const safeUrl = escapeHtml(url);
@@ -102,24 +186,27 @@ export async function sendPasswordResetEmail({
   const text = `${messages["auth.reset.heading"]}\n\n${messages["auth.reset.body"]}\n${url}\n\n${messages["auth.reset.ignore"]}`;
   const html = `<section lang="${locale}" dir="${direction}"><h1>${escapeHtml(messages["auth.reset.heading"])}</h1><p>${escapeHtml(messages["auth.reset.body"])}</p><p><a href="${safeUrl}">${escapeHtml(messages["auth.reset.action"])}</a></p><p>${escapeHtml(messages["auth.reset.ignore"])}</p></section>`;
 
-  await ses.send(
-    new SendEmailCommand({
-      FromEmailAddress: env.AUTH_EMAIL_FROM,
-      Destination: { ToAddresses: [email] },
-      Content: {
-        Simple: {
-          Subject: {
-            Charset: "UTF-8",
-            Data: messages["auth.reset.subject"],
-          },
-          Body: {
-            Text: { Charset: "UTF-8", Data: text },
-            Html: { Charset: "UTF-8", Data: html },
+  await trackDelivery(facts, async () => {
+    const sent = await ses.send(
+      new SendEmailCommand({
+        FromEmailAddress: from,
+        Destination: { ToAddresses: [email] },
+        Content: {
+          Simple: {
+            Subject: {
+              Charset: "UTF-8",
+              Data: messages["auth.reset.subject"],
+            },
+            Body: {
+              Text: { Charset: "UTF-8", Data: text },
+              Html: { Charset: "UTF-8", Data: html },
+            },
           },
         },
-      },
-    }),
-  );
+      }),
+    );
+    return { provider: "ses", providerMessageId: sent.MessageId };
+  });
 }
 
 /**
@@ -139,6 +226,8 @@ export async function sendInvitationEmail({
   teamName,
   inviterName,
   expiresAt,
+  organizationId,
+  auditEvent,
 }: {
   email: string;
   url: string;
@@ -147,18 +236,30 @@ export async function sendInvitationEmail({
   teamName?: string;
   inviterName: string;
   expiresAt: Date;
+  /** Null for a platform staff invitation, which belongs to no organisation. */
+  organizationId?: string | null;
+  /** The `member.invited` event, so the ledger row points at who invited them. */
+  auditEvent?: AuditEventRef | null;
 }) {
+  const facts: LedgerFacts = {
+    channel: "email",
+    template: "invitation",
+    recipient: email,
+    locale,
+    organizationId,
+    auditEvent,
+  };
   if (env.AUTH_DEV_LOG_DELIVERY) {
     console.warn(
       `\n[auth:dev] Invitation for ${email} to ${organizationName}${teamName ? ` / ${teamName}` : ""} (by ${inviterName}):\n${url}\n`,
     );
+    await recordSkip(facts, "dev_log_transport");
     return;
   }
-  if (!env.AUTH_EMAIL_FROM) {
-    throw new Error(
-      "AUTH_EMAIL_FROM must be configured before invitations can be sent",
-    );
-  }
+  const from = await senderAddress(
+    facts,
+    "AUTH_EMAIL_FROM must be configured before invitations can be sent",
+  );
 
   const messages = await loadCatalog(locale, "auth-delivery");
   const { direction } = localeMetadata[locale];
@@ -184,24 +285,27 @@ export async function sendInvitationEmail({
   const text = `${heading}\n\n${body}\n${url}\n\n${expires}\n${messages["invite.ignore"]}`;
   const html = `<section lang="${locale}" dir="${direction}"><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(body)}</p><p><a href="${safeUrl}">${escapeHtml(action)}</a></p><p>${escapeHtml(expires)}</p><p>${escapeHtml(messages["invite.ignore"])}</p></section>`;
 
-  await ses.send(
-    new SendEmailCommand({
-      FromEmailAddress: env.AUTH_EMAIL_FROM,
-      Destination: { ToAddresses: [email] },
-      Content: {
-        Simple: {
-          Subject: {
-            Charset: "UTF-8",
-            Data: formatMessage(messages["invite.subject"], values),
-          },
-          Body: {
-            Text: { Charset: "UTF-8", Data: text },
-            Html: { Charset: "UTF-8", Data: html },
+  await trackDelivery(facts, async () => {
+    const sent = await ses.send(
+      new SendEmailCommand({
+        FromEmailAddress: from,
+        Destination: { ToAddresses: [email] },
+        Content: {
+          Simple: {
+            Subject: {
+              Charset: "UTF-8",
+              Data: formatMessage(messages["invite.subject"], values),
+            },
+            Body: {
+              Text: { Charset: "UTF-8", Data: text },
+              Html: { Charset: "UTF-8", Data: html },
+            },
           },
         },
-      },
-    }),
-  );
+      }),
+    );
+    return { provider: "ses", providerMessageId: sent.MessageId };
+  });
 }
 
 /** One-item, one-language external translator assignment. */
@@ -212,6 +316,7 @@ export async function sendTranslationAssignmentEmail({
   language,
   senderName,
   expiresAt,
+  organizationId,
 }: {
   email: string;
   url: string;
@@ -219,18 +324,27 @@ export async function sendTranslationAssignmentEmail({
   language: EditorialLanguage;
   senderName: string;
   expiresAt: Date;
+  /** Whose content is being translated, so its admins can see the send. */
+  organizationId?: string | null;
 }) {
+  const facts: LedgerFacts = {
+    channel: "email",
+    template: "translation.assignment",
+    recipient: email,
+    locale,
+    organizationId,
+  };
   if (env.AUTH_DEV_LOG_DELIVERY) {
     console.warn(
       `\n[translation:dev] ${language} assignment for ${email} (by ${senderName}):\n${url}\n`,
     );
+    await recordSkip(facts, "dev_log_transport");
     return;
   }
-  if (!env.AUTH_EMAIL_FROM) {
-    throw new Error(
-      "AUTH_EMAIL_FROM must be configured before translation assignments can be sent",
-    );
-  }
+  const from = await senderAddress(
+    facts,
+    "AUTH_EMAIL_FROM must be configured before translation assignments can be sent",
+  );
 
   const messages = await loadCatalog(locale, "auth-delivery");
   const { direction } = localeMetadata[locale];
@@ -249,58 +363,77 @@ export async function sendTranslationAssignmentEmail({
   const text = `${heading}\n\n${body}\n${url}\n\n${expires}\n${messages["translation.ignore"]}`;
   const html = `<section lang="${locale}" dir="${direction}"><h1>${escapeHtml(heading)}</h1><p>${escapeHtml(body)}</p><p><a href="${safeUrl}">${escapeHtml(messages["translation.action"])}</a></p><p>${escapeHtml(expires)}</p><p>${escapeHtml(messages["translation.ignore"])}</p></section>`;
 
-  await ses.send(
-    new SendEmailCommand({
-      FromEmailAddress: env.AUTH_EMAIL_FROM,
-      Destination: { ToAddresses: [email] },
-      Content: {
-        Simple: {
-          Subject: {
-            Charset: "UTF-8",
-            Data: formatMessage(messages["translation.subject"], values),
-          },
-          Body: {
-            Text: { Charset: "UTF-8", Data: text },
-            Html: { Charset: "UTF-8", Data: html },
+  await trackDelivery(facts, async () => {
+    const sent = await ses.send(
+      new SendEmailCommand({
+        FromEmailAddress: from,
+        Destination: { ToAddresses: [email] },
+        Content: {
+          Simple: {
+            Subject: {
+              Charset: "UTF-8",
+              Data: formatMessage(messages["translation.subject"], values),
+            },
+            Body: {
+              Text: { Charset: "UTF-8", Data: text },
+              Html: { Charset: "UTF-8", Data: html },
+            },
           },
         },
-      },
-    }),
-  );
+      }),
+    );
+    return { provider: "ses", providerMessageId: sent.MessageId };
+  });
 }
 
 export async function sendSmsCode({
   phone,
   code,
   locale,
+  userId,
 }: {
   phone: string;
   code: string;
   locale: Locale;
+  /** Whose step-up this is — the one lookup support needs to answer "no code?". */
+  userId?: string | null;
 }) {
+  const facts: LedgerFacts = {
+    channel: "sms",
+    template: "auth.sms_code",
+    recipient: phone,
+    locale,
+    userId,
+  };
   if (env.AUTH_DEV_LOG_DELIVERY) {
     console.warn(`\n[auth:dev] SMS code for ${phone}: ${code}\n`);
+    await recordSkip(facts, "dev_log_transport");
     return;
   }
   const messages = await loadCatalog(locale, "auth-delivery");
-  await sns.send(
-    new PublishCommand({
-      PhoneNumber: phone,
-      Message: formatMessage(messages["auth.sms.message"], { code }),
-      MessageAttributes: {
-        "AWS.SNS.SMS.SMSType": {
-          DataType: "String",
-          StringValue: "Transactional",
+  // The ledger records that a code was sent to this number and what SNS said
+  // about it. The code itself is never written down here or anywhere else.
+  await trackDelivery(facts, async () => {
+    const sent = await sns.send(
+      new PublishCommand({
+        PhoneNumber: phone,
+        Message: formatMessage(messages["auth.sms.message"], { code }),
+        MessageAttributes: {
+          "AWS.SNS.SMS.SMSType": {
+            DataType: "String",
+            StringValue: "Transactional",
+          },
+          ...(env.AWS_SNS_SENDER_ID
+            ? {
+                "AWS.SNS.SMS.SenderID": {
+                  DataType: "String",
+                  StringValue: env.AWS_SNS_SENDER_ID,
+                },
+              }
+            : {}),
         },
-        ...(env.AWS_SNS_SENDER_ID
-          ? {
-              "AWS.SNS.SMS.SenderID": {
-                DataType: "String",
-                StringValue: env.AWS_SNS_SENDER_ID,
-              },
-            }
-          : {}),
-      },
-    }),
-  );
+      }),
+    );
+    return { provider: "sns", providerMessageId: sent.MessageId };
+  });
 }

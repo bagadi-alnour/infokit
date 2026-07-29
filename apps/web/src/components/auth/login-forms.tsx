@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 
 import {
   requestMagicLink,
   requestPasswordReset,
   signInWithPassword,
 } from "~/app/[locale]/login/actions";
+import { AuthStatus } from "~/components/auth/auth-status";
 import { AuthTextField } from "~/components/auth/auth-text-field";
 import { SubmitButton } from "~/components/auth/submit-button";
 import { ActionButton } from "~/components/public/primitives";
@@ -29,6 +30,22 @@ export function LoginForms({
   labels: Labels;
 }) {
   const [mode, setMode] = useState<Mode>("password");
+  const [passwordEmail, setPasswordEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [magicEmail, setMagicEmail] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
+  const [passwordState, passwordAction, passwordPending] = useActionState(
+    signInWithPassword,
+    {},
+  );
+  const [resetState, resetAction, resetPending] = useActionState(
+    requestPasswordReset,
+    {},
+  );
+  const [magicState, magicAction, magicPending] = useActionState(
+    requestMagicLink,
+    {},
+  );
   const l = (key: string): string => labels[key] ?? key;
 
   if (mode === "reset") {
@@ -47,8 +64,16 @@ export function LoginForms({
             {l("auth.login.resetDescription")}
           </p>
         </div>
-        <form action={requestPasswordReset} className="flex flex-col gap-5">
+        <form action={resetAction} className="flex flex-col gap-5">
           <input type="hidden" name="locale" value={locale} />
+          <AuthStatus
+            status={resetState.error}
+            labels={{
+              account_not_found: l("auth.login.accountNotFound"),
+              invalid: l("auth.login.invalidEmail"),
+              unavailable: l("auth.login.accountUnavailable"),
+            }}
+          />
           <AuthTextField
             id="reset-email"
             label={l("auth.login.emailLabel")}
@@ -60,10 +85,15 @@ export function LoginForms({
             required
             autoFocus
             placeholder={l("auth.login.emailPlaceholder")}
+            value={resetEmail}
+            onChange={(event) => {
+              setResetEmail(event.target.value);
+            }}
           />
           <SubmitButton
             label={l("auth.login.resetSubmit")}
             pendingLabel={l("auth.login.resetSubmitting")}
+            pending={resetPending}
           />
         </form>
         <ActionButton
@@ -82,9 +112,17 @@ export function LoginForms({
   if (mode === "magic") {
     return (
       <div className="flex flex-col gap-5">
-        <form action={requestMagicLink} className="flex flex-col gap-5">
+        <form action={magicAction} className="flex flex-col gap-5">
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="returnTo" value={returnTo} />
+          <AuthStatus
+            status={magicState.error}
+            labels={{
+              account_not_found: l("auth.login.accountNotFound"),
+              invalid: l("auth.login.invalidEmail"),
+              unavailable: l("auth.login.accountUnavailable"),
+            }}
+          />
           <AuthTextField
             id="magic-link-email"
             label={l("auth.login.emailLabel")}
@@ -96,10 +134,15 @@ export function LoginForms({
             required
             autoFocus
             placeholder={l("auth.login.emailPlaceholder")}
+            value={magicEmail}
+            onChange={(event) => {
+              setMagicEmail(event.target.value);
+            }}
           />
           <SubmitButton
             label={l("auth.login.magicLinkSubmit")}
             pendingLabel={l("auth.login.magicLinkSubmitting")}
+            pending={magicPending}
           />
         </form>
         <ActionButton
@@ -117,9 +160,17 @@ export function LoginForms({
 
   return (
     <div className="flex flex-col gap-5">
-      <form action={signInWithPassword} className="flex flex-col gap-5">
+      <form action={passwordAction} className="flex flex-col gap-5">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="returnTo" value={returnTo} />
+        <AuthStatus
+          status={passwordState.error}
+          labels={{
+            account_not_found: l("auth.login.accountNotFound"),
+            invalid_credentials: l("auth.login.invalidCredentials"),
+            invalid: l("auth.login.invalidCredentials"),
+          }}
+        />
         <AuthTextField
           id="password-email"
           label={l("auth.login.emailLabel")}
@@ -127,9 +178,14 @@ export function LoginForms({
           type="email"
           autoComplete="username"
           inputMode="email"
+          aria-invalid={passwordState.error === "account_not_found"}
           required
           autoFocus
           placeholder={l("auth.login.emailPlaceholder")}
+          value={passwordEmail}
+          onChange={(event) => {
+            setPasswordEmail(event.target.value);
+          }}
         />
         <AuthTextField
           id="password"
@@ -149,11 +205,24 @@ export function LoginForms({
           name="password"
           type="password"
           autoComplete="current-password"
+          aria-invalid={
+            passwordState.error === "invalid_credentials" ||
+            passwordState.error === "invalid"
+          }
           required
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+          }}
+          visibilityLabels={{
+            show: l("auth.password.show"),
+            hide: l("auth.password.hide"),
+          }}
         />
         <SubmitButton
           label={l("auth.login.passwordSubmit")}
           pendingLabel={l("auth.login.passwordSubmitting")}
+          pending={passwordPending}
         />
       </form>
       <ActionButton

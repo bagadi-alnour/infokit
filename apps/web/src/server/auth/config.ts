@@ -3,11 +3,10 @@ import { type DefaultSession, type NextAuthConfig } from "next-auth";
 
 import { env } from "~/env";
 import { authPath } from "~/i18n/routing";
-import { db } from "~/server/db";
-import { auditEvents } from "~/server/db/schema";
+import { recordAudit } from "~/server/audit";
 import { authAdapter } from "./adapter";
 import { sendMagicLinkEmail } from "./aws";
-import { editorRecipient } from "./editors";
+import { canSignIn } from "./eligibility";
 import { linkPendingMemberships } from "./link-memberships";
 
 declare module "next-auth" {
@@ -66,14 +65,14 @@ export function createAuthConfig(locale: Locale): NextAuthConfig {
       updateAge: 60 * 60,
     },
     callbacks: {
-      signIn({ user, email }) {
+      async signIn({ user, email }) {
         if (!user.email) return false;
         // Anti-enumeration by design: the request phase reports success for
-        // any address so outsiders cannot probe the allowlist — but
-        // sendMagicLinkEmail() silently drops unlisted recipients, and this
-        // callback still blocks them at link consumption below.
+        // any address so outsiders cannot probe who has access — but
+        // sendMagicLinkEmail() silently drops addresses the database does not
+        // know, and this callback still blocks them at link consumption below.
         if (email?.verificationRequest) return true;
-        return Boolean(editorRecipient(user.email));
+        return canSignIn(user.email);
       },
       session: ({ session, user }) => {
         const databaseSession = session as typeof session & {
@@ -94,18 +93,22 @@ export function createAuthConfig(locale: Locale): NextAuthConfig {
         if (user.email && user.id) {
           await linkPendingMemberships({ userId: user.id, email: user.email });
         }
-        await db.insert(auditEvents).values({
-          actorUserId: user.id,
+        // The actor is named explicitly: this runs while the session is still
+        // being established, so asking `auth()` who it is would answer nobody.
+        await recordAudit({
           action: "auth.magic_link.signed_in",
           subjectType: "auth.session",
+          subjectId: user.id ?? null,
+          actorUserId: user.id ?? null,
         });
       },
       async signOut(message) {
         if (!("session" in message) || !message.session?.userId) return;
-        await db.insert(auditEvents).values({
-          actorUserId: message.session.userId,
+        await recordAudit({
           action: "auth.session.signed_out",
           subjectType: "auth.session",
+          subjectId: message.session.userId,
+          actorUserId: message.session.userId,
         });
       },
     },

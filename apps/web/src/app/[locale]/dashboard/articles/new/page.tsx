@@ -13,7 +13,7 @@ import { db } from "~/server/db";
 import { hasAiTranslationProvider } from "~/server/ai/provider";
 import { auth } from "~/server/auth";
 import { hasActualPlatformPermission } from "~/server/auth/authorization";
-import { hasPermission } from "~/server/auth/require";
+import { denyPageAccess, hasPermission } from "~/server/auth/require";
 import { platformVerifyPermission } from "~/server/content/language-review";
 import {
   cities,
@@ -35,6 +35,21 @@ export default async function NewArticlePage({
     auth(),
   ]);
   const editorLabels = buildWorkspaceLabels(overviewLabels, labels);
+  /**
+   * The form is refused to anyone `createArticle` would refuse. That wrapper
+   * reads platform grants only (server/auth/require.ts), so without this grant
+   * the form has nothing to file the draft under, and its custodian picker would
+   * still have named every association on the way to the throw.
+   */
+  if (!(
+    session?.user.id &&
+    (await hasActualPlatformPermission(
+      session.user.id,
+      "content.article.write",
+    ))
+  )) {
+    await denyPageAccess("content.article.write", locale);
+  }
   const canManageGlobalTags = Boolean(
     session?.user.id &&
     (await hasActualPlatformPermission(session.user.id, "support.superadmin")),

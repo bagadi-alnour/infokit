@@ -57,9 +57,11 @@ import {
   useWorkspaceForm,
 } from "~/hooks/use-workspace-form";
 import { articleScopes } from "~/lib/article-scope";
+import { familyStyles } from "~/lib/content-families";
 import { editorialLanguageCodes } from "~/lib/editorial-languages";
 import { readLabel, type FormMessages, type Labels } from "~/lib/form-messages";
 import { slugPattern } from "~/lib/slug";
+import { cn } from "~/lib/utils";
 
 export interface ArticleFormOption {
   id: string;
@@ -264,7 +266,17 @@ export function ArticleCreateForm({
             {copy("create.back")}
           </Button>
           <div className="flex items-center gap-3">
-            <span className="bg-brand-soft text-brand flex size-10 items-center justify-center rounded-lg">
+            {/* The badge is this page's opening, so it carries the reading
+                family (§5) rather than the accent: the activity editor and the
+                article editor are the same layout, and drawing both openings in
+                one teal made the two pages a heading apart. */}
+            <span
+              className={cn(
+                "flex size-10 items-center justify-center rounded-lg",
+                familyStyles.article.wash,
+                familyStyles.article.text,
+              )}
+            >
               <FileText aria-hidden />
             </span>
             <div>

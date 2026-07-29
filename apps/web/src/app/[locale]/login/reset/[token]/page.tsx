@@ -4,8 +4,8 @@ import type { Metadata } from "next";
 import { resetPassword } from "../../actions";
 import { AuthShell } from "~/components/auth/auth-shell";
 import { AuthStatus } from "~/components/auth/auth-status";
+import { PasswordCreationFields } from "~/components/auth/password-creation-fields";
 import { SubmitButton } from "~/components/auth/submit-button";
-import { Field, TextInput } from "~/components/admin/workspace";
 import { ActionLink } from "~/components/public/primitives";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { authPath } from "~/i18n/routing";
@@ -78,29 +78,26 @@ export default async function ResetPasswordPage({
         <form action={resetPassword} className="space-y-4">
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="token" value={token} />
-          <Field
-            label={messages["auth.reset.passwordLabel"]}
-            hint={messages["auth.reset.passwordHint"]}
-          >
-            <TextInput
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={12}
-              maxLength={128}
-              required
-            />
-          </Field>
-          <Field label={messages["auth.reset.passwordConfirmationLabel"]}>
-            <TextInput
-              name="passwordConfirmation"
-              type="password"
-              autoComplete="new-password"
-              minLength={12}
-              maxLength={128}
-              required
-            />
-          </Field>
+          <PasswordCreationFields
+            idPrefix="reset"
+            passwordLabel={messages["auth.reset.passwordLabel"]}
+            confirmationLabel={messages["auth.reset.passwordConfirmationLabel"]}
+            showPasswordLabel={messages["auth.password.show"]}
+            hidePasswordLabel={messages["auth.password.hide"]}
+            strengthLabels={{
+              label: messages["auth.passwordStrength.label"],
+              weak: messages["auth.passwordStrength.weak"],
+              fair: messages["auth.passwordStrength.fair"],
+              good: messages["auth.passwordStrength.good"],
+              strong: messages["auth.passwordStrength.strong"],
+              veryStrong: messages["auth.passwordStrength.veryStrong"],
+              minLength: messages["auth.passwordStrength.minLength"],
+              uppercase: messages["auth.passwordStrength.uppercase"],
+              lowercase: messages["auth.passwordStrength.lowercase"],
+              number: messages["auth.passwordStrength.number"],
+              special: messages["auth.passwordStrength.special"],
+            }}
+          />
           <SubmitButton
             label={messages["auth.reset.submit"]}
             pendingLabel={messages["auth.reset.submitting"]}

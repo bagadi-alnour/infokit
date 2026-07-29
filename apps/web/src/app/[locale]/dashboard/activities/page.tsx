@@ -16,6 +16,7 @@ import {
   type ActivitiesTableLabels,
   type ActivityTableRow,
 } from "~/components/admin/activities-table";
+import { ActivityDetailsForm } from "~/components/admin/activity-classification";
 import { ActivityEditorForm } from "~/components/admin/activity-content-form";
 import {
   ActivityCoverManager,
@@ -23,13 +24,12 @@ import {
 } from "~/components/admin/activity-media-manager";
 import { ActivityScheduleForm } from "~/components/admin/activity-schedule-form";
 import { ActivityScheduleRules } from "~/components/admin/activity-schedule-rules";
-import { ActivityServiceManager } from "~/components/admin/activity-service-manager";
-import { ActivityTranslationInbox } from "~/components/admin/activity-translation-inbox";
 import {
   ACTIVITY_STATES,
   type ActivityStateValue,
 } from "~/components/admin/content-states";
 import { StewardContactForm } from "~/components/admin/steward-contact-form";
+import { TransitLinkFields } from "~/components/admin/transit-links";
 import type { WorkspaceTranslation } from "~/components/admin/translation-workspace";
 import {
   PageHeader,
@@ -52,15 +52,19 @@ import {
   editorialLanguageCodes,
   type EditorialLanguage,
 } from "~/lib/editorial-languages";
-import { formMessageLabels } from "~/lib/form-messages";
 import { buildWorkspaceLabels } from "~/lib/workspace-labels";
 import { zonedDateKey } from "~/lib/zoned-time";
 import { hasAiTranslationProvider } from "~/server/ai/provider";
 import { createAssetReadUrl } from "~/server/assets/s3";
 import { db } from "~/server/db";
 import { auth } from "~/server/auth";
-import { hasActualPlatformPermission } from "~/server/auth/authorization";
-import { hasPermission } from "~/server/auth/require";
+import {
+  activityWorkspacePermissions,
+  hasActualPlatformPermission,
+  ownedWithin,
+  permissionScopeAny,
+} from "~/server/auth/authorization";
+import { denyPageAccess, hasPermission } from "~/server/auth/require";
 import { platformVerifyPermission } from "~/server/content/language-review";
 import { loadStewardCandidates } from "~/server/content/steward-candidates";
 import {
@@ -69,6 +73,7 @@ import {
   activityPublications,
   activityServices,
   activityTags,
+  activityTransitLinks,
   activityTranslations,
   assets,
   assetTranslations,
@@ -156,6 +161,16 @@ export default async function ActivitiesPage({
     (await hasActualPlatformPermission(session.user.id, "support.superadmin")),
   );
 
+  // What this reader administers. An association's editor manages its own
+  // activities; the list is where that stops being a claim about the buttons and
+  // starts being a claim about the rows, since anything listed here is one click
+  // from its steward's name and mobile number.
+  const scope =
+    (session?.user.id
+      ? await permissionScopeAny(session.user.id, activityWorkspacePermissions)
+      : null) ??
+    (await denyPageAccess(activityWorkspacePermissions[0], locale));
+
   // The editor, its language accordion and every dialog those open speak one
   // vocabulary: the create catalogue, filled from this page's own words.
   const editorLabels = buildWorkspaceLabels(
@@ -213,7 +228,12 @@ export default async function ActivitiesPage({
       ),
     )
     .leftJoin(users, eq(users.id, activities.createdById))
-    .where(isNull(activities.archivedAt))
+    .where(
+      and(
+        isNull(activities.archivedAt),
+        ownedWithin(activities.organizationId, scope),
+      ),
+    )
     .orderBy(asc(organizations.displayName), asc(cities.code));
   /**
    * An activity with no organisation is one the platform holds itself, so the
@@ -453,19 +473,24 @@ export default async function ActivitiesPage({
   const selected = search.activity
     ? list.find((row) => row.id === search.activity)
     : undefined;
-  /** Who the custodian organisation already knows, for the contact card. */
-  const stewardCandidates = await loadStewardCandidates(
-    selected?.organizationId,
-  );
+  /**
+   * Who the platform can already name for the contact card: the custodian
+   * organisation's roster, and whoever entered the activity — the only
+   * candidate there is on one the platform holds itself.
+   */
+  const stewardCandidates = await loadStewardCandidates({
+    organizationId: selected?.organizationId,
+    authorId: selected?.createdById,
+  });
 
   // ---- Selected activity detail ----------------------------------------
   const [
     initialTranslationRows,
     assignedServices,
     scheduleRows,
+    transitRows,
     serviceCatalogRows,
     serviceCatalogTranslations,
-    categoryRows,
   ] = selected
     ? await Promise.all([
         db
@@ -501,6 +526,22 @@ export default async function ActivitiesPage({
           .from(scheduleRules)
           .where(eq(scheduleRules.activityId, selected.id))
           .orderBy(asc(scheduleRules.weekday), asc(scheduleRules.startTime)),
+        // How to get here without a car, in the order the editor put the rows
+        // in; the insertion time only breaks a tie between two rows saved at
+        // position zero, which nothing in the form can produce.
+        db
+          .select({
+            mode: activityTransitLinks.mode,
+            line: activityTransitLinks.line,
+            stopName: activityTransitLinks.stopName,
+            walkMinutes: activityTransitLinks.walkMinutes,
+          })
+          .from(activityTransitLinks)
+          .where(eq(activityTransitLinks.activityId, selected.id))
+          .orderBy(
+            asc(activityTransitLinks.displayOrder),
+            asc(activityTransitLinks.createdAt),
+          ),
         db
           .select({
             id: services.id,
@@ -538,23 +579,6 @@ export default async function ActivitiesPage({
           )
           .orderBy(asc(serviceCategories.displayOrder)),
         db.select().from(serviceTranslations),
-        db
-          .select({
-            id: serviceCategories.id,
-            label: serviceCategoryTranslations.label,
-            code: serviceCategories.code,
-            icon: serviceCategories.icon,
-          })
-          .from(serviceCategories)
-          .leftJoin(
-            serviceCategoryTranslations,
-            and(
-              eq(serviceCategoryTranslations.categoryId, serviceCategories.id),
-              eq(serviceCategoryTranslations.languageCode, locale),
-            ),
-          )
-          .where(eq(serviceCategories.enabled, true))
-          .orderBy(asc(serviceCategories.displayOrder)),
       ])
     : [[], [], [], [], [], []];
 
@@ -692,6 +716,7 @@ export default async function ActivitiesPage({
           .select({
             assetId: activityAssets.assetId,
             storageKey: assets.storageKey,
+            mimeType: assets.mimeType,
             altText: assetTranslations.altText,
           })
           .from(activityAssets)
@@ -884,7 +909,9 @@ export default async function ActivitiesPage({
   const coverMedia = coverRows[0]
     ? {
         assetId: coverRows[0].assetId,
-        previewUrl: await createAssetReadUrl(coverRows[0].storageKey),
+        previewUrl: await createAssetReadUrl(coverRows[0].storageKey, {
+          contentType: coverRows[0].mimeType,
+        }),
         altText: coverRows[0].altText ?? t["media.coverAttached"],
       }
     : null;
@@ -948,11 +975,13 @@ export default async function ActivitiesPage({
       {t["activity.create.action"]}
     </Button>
   );
+  const activityFormId = selected ? `activity-content-${selected.id}` : "";
 
   return (
     <WorkspacePage>
       {!selected ? (
         <PageHeader
+          family="activity"
           title={t["activities.title"]}
           sub={t["activities.sub"]}
           action={rows.length === 0 ? createActivity : null}
@@ -1042,9 +1071,9 @@ export default async function ActivitiesPage({
             </CardContent>
           </Card>
 
-          {/* The text spans the full width: the source pane and the language
-           * accordion each need the room, and the photo and the documents lay
-           * out below both. Everything under it is short-field work. */}
+          {/* The editing workspace spans the full width: source text and its
+           * record fields stay on the left, while translations and media stay
+           * on the right. */}
           <Card className="min-w-0">
             <CardHeader>
               <CardTitle className="text-base">{t["detail.content"]}</CardTitle>
@@ -1053,6 +1082,7 @@ export default async function ActivitiesPage({
             <CardContent>
               <ActivityEditorForm
                 key={selected.id}
+                formId={activityFormId}
                 locale={locale}
                 activityId={selected.id}
                 organizationId={selected.organizationId}
@@ -1068,20 +1098,212 @@ export default async function ActivitiesPage({
                 archived={false}
                 canVerify={canVerifyTranslations}
                 returnPath={`/${locale}/dashboard/activities?activity=${selected.id}`}
-                categories={categoryOptions}
-                audiences={audienceOptions}
-                tags={tagOptions}
-                initialCategoryId={selected.categoryId}
-                initialAudienceId={selected.audienceCategoryId}
-                initialTagIds={currentTagIds}
+                details={
+                  <div className="@container mt-1">
+                    {/* Record-level controls follow the source text. Their
+                     * fields point to the one Save action below the workspace. */}
+                    <div className="@xl:grid-cols-2 grid items-start gap-4">
+                      <ActivityDetailsForm
+                        key={selected.id}
+                        formId={activityFormId}
+                        categories={categoryOptions}
+                        audiences={audienceOptions}
+                        tags={tagOptions}
+                        services={managedServices
+                          .filter(
+                            (service) => service.active && !service.archived,
+                          )
+                          .map((service) => ({
+                            value: service.id,
+                            label: service.displayName,
+                            description: service.category,
+                            icon: service.icon,
+                          }))}
+                        initialCategoryId={selected.categoryId}
+                        initialAudienceId={selected.audienceCategoryId}
+                        initialTagIds={currentTagIds}
+                        initialServiceIds={[
+                          ...new Set(
+                            assignedServices.map((service) => service.id),
+                          ),
+                        ]}
+                        labels={t}
+                      />
+
+                      {/* The lower pair uses independent column stacks. That
+                       * keeps the contact directly beneath Schedule even when
+                       * the transport editor grows much taller. */}
+                      <div className="@xl:col-span-2 @xl:grid-cols-2 grid items-start gap-4">
+                        <div className="grid min-w-0 content-start gap-4">
+                          <Card className="min-w-0">
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2">
+                                <CalendarClock className="size-4" aria-hidden />
+                                {t["activity.schedule"]}
+                              </CardTitle>
+                              <CardDescription>
+                                {t["activity.scheduleHint"]}
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent className="grid gap-4">
+                              <ActivityScheduleRules
+                                activityId={selected.id}
+                                locale={locale}
+                                rules={scheduleRows}
+                                labels={{
+                                  empty: t["activity.scheduleEmpty"],
+                                  remove: t["activity.scheduleRemove"],
+                                  confirmTitle:
+                                    t["activity.scheduleRemoveTitle"],
+                                  confirmDescription:
+                                    t["activity.scheduleRemoveDescription"],
+                                  confirm: t["activity.scheduleRemoveConfirm"],
+                                  cancel: t["activity.scheduleRemoveCancel"],
+                                  weekdays: Object.fromEntries(
+                                    weekdays.map((weekday) => [
+                                      weekday,
+                                      t[
+                                        `weekday.${String(weekday)}` as keyof typeof t
+                                      ],
+                                    ]),
+                                  ),
+                                  oneOff: t["activity.create.oneOff"],
+                                  recurring: t["activity.create.recurring"],
+                                  fixed: t["activity.create.fixedTime"],
+                                  flexible: t["activity.create.flexibleTime"],
+                                }}
+                              />
+                              <ActivityScheduleForm
+                                key={selected.id}
+                                activityId={selected.id}
+                                locale={locale}
+                                schedules={scheduleRows}
+                                labels={{
+                                  scheduleType:
+                                    t["activity.create.scheduleType"],
+                                  recurring: t["activity.create.recurring"],
+                                  oneOff: t["activity.create.oneOff"],
+                                  date: t["activity.create.date"],
+                                  selectDate: t["activity.create.selectDate"],
+                                  clearDate: t["activity.create.clearDate"],
+                                  timingMode: t["activity.create.timingMode"],
+                                  fixed: t["activity.create.fixedTime"],
+                                  flexible: t["activity.create.flexibleTime"],
+                                  weekday: t["activity.weekday"],
+                                  startTime: t["activity.startTime"],
+                                  endTime: t["activity.endTime"],
+                                  addHours: t["activity.addHours"],
+                                  cancel: t["activity.scheduleRemoveCancel"],
+                                  required: t["form.required"],
+                                  invalidRange:
+                                    t["activity.scheduleInvalidRange"],
+                                  overlap: t["activity.scheduleOverlap"],
+                                  invalid: t["activity.scheduleInvalid"],
+                                  weekdays: Object.fromEntries(
+                                    weekdays.map((weekday) => [
+                                      weekday,
+                                      t[
+                                        `weekday.${String(weekday)}` as keyof typeof t
+                                      ],
+                                    ]),
+                                  ),
+                                }}
+                              />
+                            </CardContent>
+                          </Card>
+
+                          <Card className="min-w-0">
+                            <CardHeader>
+                              <CardTitle className="text-base">
+                                {t["steward.title"]}
+                              </CardTitle>
+                              <CardDescription>
+                                {t["steward.hint"]}
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <StewardContactForm
+                                key={selected.id}
+                                action={updateActivitySteward}
+                                locale={locale}
+                                recordId={selected.id}
+                                values={selected}
+                                members={stewardCandidates}
+                                labels={t}
+                                columns={false}
+                                embedded
+                                formId={activityFormId}
+                              />
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        <Card className="min-w-0">
+                          <CardHeader>
+                            <CardTitle className="text-base">
+                              {t["transit.title"]}
+                            </CardTitle>
+                            <CardDescription>
+                              {t["transit.hint"]}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <TransitLinkFields
+                              key={selected.id}
+                              links={transitRows}
+                              labels={t}
+                              formId={activityFormId}
+                            />
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  </div>
+                }
                 media={
                   <Card>
                     <CardHeader className="border-b">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <FileImage className="size-4 shrink-0" aria-hidden />
-                        {t["media.title"]}
-                      </CardTitle>
-                      <CardDescription>{t["media.hint"]}</CardDescription>
+                      {/* The documents are one button in the corner: this panel
+                       * is the photo, and most activities have no PDF at all. */}
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <CardTitle className="flex items-center gap-2 text-base">
+                            <FileImage
+                              className="size-4 shrink-0"
+                              aria-hidden
+                            />
+                            {t["media.title"]}
+                          </CardTitle>
+                          <CardDescription className="mt-1">
+                            {t["media.hint"]}
+                          </CardDescription>
+                        </div>
+                        <ActivityDownloadsManager
+                          key={selected.id}
+                          locale={locale}
+                          activityId={selected.id}
+                          sourceLanguage={
+                            selected.sourceLanguageCode as EditorialLanguage
+                          }
+                          downloads={downloadMedia}
+                          labels={{
+                            downloadsAction: t["media.downloadsAction"],
+                            downloadsHeading: t["media.downloadsHeading"],
+                            downloadsHint: t["media.downloadsHint"],
+                            downloadsEmpty: t["media.downloadsEmpty"],
+                            downloadTitle: t["media.downloadTitle"],
+                            rights: t["media.rights"],
+                            addDownload: t["media.addDownload"],
+                            remove: t["media.remove"],
+                            uploading: t["media.uploading"],
+                            uploadError: t["media.uploadError"],
+                            downloadAdded: t["media.downloadAdded"],
+                            downloadRemoved: t["media.downloadRemoved"],
+                            removeError: t["media.removeError"],
+                            downloadConstraints: t["media.downloadConstraints"],
+                          }}
+                        />
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <ActivityCoverManager
@@ -1110,250 +1332,15 @@ export default async function ActivitiesPage({
                     </CardContent>
                   </Card>
                 }
-                downloads={
-                  <ActivityDownloadsManager
-                    key={selected.id}
-                    locale={locale}
-                    activityId={selected.id}
-                    sourceLanguage={
-                      selected.sourceLanguageCode as EditorialLanguage
-                    }
-                    downloads={downloadMedia}
-                    labels={{
-                      downloadsHeading: t["media.downloadsHeading"],
-                      downloadsHint: t["media.downloadsHint"],
-                      downloadsEmpty: t["media.downloadsEmpty"],
-                      downloadTitle: t["media.downloadTitle"],
-                      rights: t["media.rights"],
-                      addDownload: t["media.addDownload"],
-                      remove: t["media.remove"],
-                      uploading: t["media.uploading"],
-                      uploadError: t["media.uploadError"],
-                      downloadAdded: t["media.downloadAdded"],
-                      downloadRemoved: t["media.downloadRemoved"],
-                      removeError: t["media.removeError"],
-                      downloadConstraints: t["media.downloadConstraints"],
-                    }}
-                  />
-                }
                 editorLabels={editorLabels}
                 labels={{
-                  save: t["editor.save"],
-                  saved: t["editor.saved"],
-                  saveError: t["editor.saveError"],
-                  category: t["table.category"],
-                  audience: t["table.audience"],
-                  tags: t["activity.create.tags"],
-                  tagsHint: t["editor.tagsHint"],
-                  tagsEmpty: t["editor.tagsEmpty"],
-                  tagsPlaceholder: t["activity.create.chooseTags"],
-                  noMatch: t["activity.create.noMatch"],
+                  save: t["console.save"],
+                  saved: t["console.saved"],
+                  saveError: t["form.saveFailed"],
                 }}
               />
             </CardContent>
           </Card>
-
-          {/* Keyed to the space this page has, not the window: the console's
-           * sidebar takes a few hundred pixels, so a viewport rule would leave
-           * the rail stacked underneath on an ordinary laptop. */}
-          <div className="@container">
-            <div className="@4xl:grid-cols-[minmax(0,1fr)_24rem] grid items-start gap-5">
-              <div className="@4xl:col-start-1 @4xl:row-start-1 grid min-w-0 gap-5">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">
-                      {t["activity.services"]}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ActivityServiceManager
-                      key={selected.id}
-                      activityId={selected.id}
-                      organizationId={selected.organizationId}
-                      locale={locale}
-                      assignedIds={[
-                        ...new Set(
-                          assignedServices.map((service) => service.id),
-                        ),
-                      ]}
-                      services={managedServices}
-                      categories={categoryRows.map((category) => ({
-                        value: category.id,
-                        label: category.label ?? category.code,
-                        icon: category.icon,
-                      }))}
-                      labels={{
-                        ...formMessageLabels(t),
-                        assignment: t["serviceManager.assignment"],
-                        assignmentPlaceholder:
-                          t["serviceManager.assignmentPlaceholder"],
-                        empty: t["serviceManager.empty"],
-                        saveAssignment: t["serviceManager.saveAssignment"],
-                        assignmentSaved: t["serviceManager.assignmentSaved"],
-                        assignmentSaveError:
-                          t["serviceManager.assignmentSaveError"],
-                        catalogue: t["serviceManager.catalogue"],
-                        catalogueHint: t["serviceManager.catalogueHint"],
-                        catalogueEmpty: t["serviceManager.catalogueEmpty"],
-                        create: t["serviceManager.create"],
-                        createTitle: t["serviceManager.createTitle"],
-                        createHint: t["serviceManager.createHint"],
-                        createAndAssign: t["serviceManager.createAndAssign"],
-                        edit: t["serviceManager.edit"],
-                        editTitle: t["serviceManager.editTitle"],
-                        editHint: t["serviceManager.editHint"],
-                        save: t["serviceManager.save"],
-                        archive: t["serviceManager.archive"],
-                        archiveTitle: t["serviceManager.archiveTitle"],
-                        archiveHint: t["serviceManager.archiveHint"],
-                        archiveConfirm: t["serviceManager.archiveConfirm"],
-                        archived: t["serviceManager.archived"],
-                        restore: t["serviceManager.restore"],
-                        cancel: t["serviceManager.cancel"],
-                        category: t["serviceManager.category"],
-                        categoryPlaceholder:
-                          t["serviceManager.categoryPlaceholder"],
-                        noOptions: t["serviceManager.noOptions"],
-                        "name.fr": t["serviceManager.nameFr"],
-                        "name.en": t["serviceManager.nameEn"],
-                        "name.ar": t["serviceManager.nameAr"],
-                        "description.fr": t["serviceManager.descriptionFr"],
-                        "description.en": t["serviceManager.descriptionEn"],
-                        "description.ar": t["serviceManager.descriptionAr"],
-                        sourceNote: t["serviceManager.sourceNote"],
-                        sourceHint: t["serviceManager.sourceHint"],
-                        icon: t["serviceManager.icon"],
-                        iconHint: t["serviceManager.iconHint"],
-                        scope: t["serviceManager.scope"],
-                        scopeGlobal: t["scope.global"],
-                        scopeOrganization: t["scope.organization"],
-                      }}
-                      canManageGlobal={canManageGlobal}
-                      showCatalogue={false}
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CalendarClock className="size-4" aria-hidden />
-                      {t["activity.schedule"]}
-                    </CardTitle>
-                    <CardDescription>
-                      {t["activity.scheduleHint"]}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-4">
-                    <ActivityScheduleRules
-                      activityId={selected.id}
-                      locale={locale}
-                      rules={scheduleRows}
-                      labels={{
-                        empty: t["activity.scheduleEmpty"],
-                        remove: t["activity.scheduleRemove"],
-                        confirmTitle: t["activity.scheduleRemoveTitle"],
-                        confirmDescription:
-                          t["activity.scheduleRemoveDescription"],
-                        confirm: t["activity.scheduleRemoveConfirm"],
-                        cancel: t["activity.scheduleRemoveCancel"],
-                        weekdays: Object.fromEntries(
-                          weekdays.map((weekday) => [
-                            weekday,
-                            t[`weekday.${String(weekday)}` as keyof typeof t],
-                          ]),
-                        ),
-                        oneOff: t["activity.create.oneOff"],
-                        recurring: t["activity.create.recurring"],
-                        fixed: t["activity.create.fixedTime"],
-                        flexible: t["activity.create.flexibleTime"],
-                      }}
-                    />
-                    <ActivityScheduleForm
-                      key={selected.id}
-                      activityId={selected.id}
-                      locale={locale}
-                      schedules={scheduleRows}
-                      labels={{
-                        scheduleType: t["activity.create.scheduleType"],
-                        recurring: t["activity.create.recurring"],
-                        oneOff: t["activity.create.oneOff"],
-                        date: t["activity.create.date"],
-                        selectDate: t["activity.create.selectDate"],
-                        clearDate: t["activity.create.clearDate"],
-                        timingMode: t["activity.create.timingMode"],
-                        fixed: t["activity.create.fixedTime"],
-                        flexible: t["activity.create.flexibleTime"],
-                        weekday: t["activity.weekday"],
-                        startTime: t["activity.startTime"],
-                        endTime: t["activity.endTime"],
-                        addHours: t["activity.addHours"],
-                        cancel: t["activity.scheduleRemoveCancel"],
-                        required: t["form.required"],
-                        invalidRange: t["activity.scheduleInvalidRange"],
-                        overlap: t["activity.scheduleOverlap"],
-                        invalid: t["activity.scheduleInvalid"],
-                        weekdays: Object.fromEntries(
-                          weekdays.map((weekday) => [
-                            weekday,
-                            t[`weekday.${String(weekday)}` as keyof typeof t],
-                          ]),
-                        ),
-                      }}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="@4xl:col-start-2 @4xl:row-start-1 grid gap-5">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">
-                      {t["publication.heading"]}
-                    </CardTitle>
-                    <CardDescription>
-                      {t["detail.translationsHint"]}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ActivityTranslationInbox
-                      key={selected.id}
-                      locale={locale}
-                      activityId={selected.id}
-                      sourceLanguage={
-                        selected.sourceLanguageCode as EditorialLanguage
-                      }
-                      languages={languageStatuses}
-                      labels={{ ...translationLabels, ...t }}
-                    />
-                  </CardContent>
-                </Card>
-
-                {/* Who to ask when this activity turns out to be wrong. Saved on
-                 * its own, so recording a phone number never means re-submitting
-                 * the whole record. */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">
-                      {t["steward.title"]}
-                    </CardTitle>
-                    <CardDescription>{t["steward.hint"]}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <StewardContactForm
-                      key={selected.id}
-                      action={updateActivitySteward}
-                      locale={locale}
-                      recordId={selected.id}
-                      values={selected}
-                      members={stewardCandidates}
-                      labels={t}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </div>
         </div>
       ) : null}
     </WorkspacePage>

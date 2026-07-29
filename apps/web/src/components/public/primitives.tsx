@@ -1,5 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
 import {
+  CalendarDays,
   CircleAlert,
   Clock,
   Info,
@@ -16,6 +17,7 @@ import type {
 } from "react";
 
 import type { PublicActivityStatus } from "@infokit/shared/public-content";
+import { familyStyles, type ContentFamily } from "~/lib/content-families";
 import { cn } from "~/lib/utils";
 
 /**
@@ -137,71 +139,10 @@ export function SurfaceCard({
 }
 
 /**
- * The four kinds of content the public site carries (docs/DESIGN-SYSTEM.md §5).
- * Activities are the subject of the site and keep the accent; the agenda is
- * indigo, articles plum, guides copper — the same four hues the app uses, so a
- * reader who came in through one of them recognises the other.
+ * The families are shared with the console (docs/DESIGN-SYSTEM.md §5), so the
+ * table itself lives in ~/lib/content-families and both surfaces read it.
  */
-export type ContentFamily = "activity" | "event" | "article" | "guide";
-
-/**
- * Where a family hue is allowed to appear. Exactly one element per surface
- * carries it: the eyebrow of a section opening, and the one element named per
- * family on a card. A hue is never the only thing saying what something is.
- */
-export const familyStyles: Record<
-  ContentFamily,
-  {
-    /** Label and affordance text. */
-    text: string;
-    /** The eyebrow's dot. */
-    dot: string;
-    /** Fill behind family text — a block, a bubble, a whole card. */
-    wash: string;
-    border: string;
-    /** Ring on hover and while a child holds focus. */
-    hoverBorder: string;
-    /**
-     * The same ring for focus only. A keyboard reader has no hover, so the ring
-     * is the only thing telling them which card they are on: a card that drops
-     * the pointer affordance keeps this one.
-     */
-    focusBorder: string;
-  }
-> = {
-  activity: {
-    text: "text-brand-deep",
-    dot: "bg-brand",
-    wash: "bg-brand-soft",
-    border: "border-brand",
-    hoverBorder: "hover:border-brand focus-within:border-brand",
-    focusBorder: "focus-within:border-brand",
-  },
-  event: {
-    text: "text-event",
-    dot: "bg-event",
-    wash: "bg-event-wash",
-    border: "border-event",
-    hoverBorder: "hover:border-event focus-within:border-event",
-    focusBorder: "focus-within:border-event",
-  },
-  article: {
-    text: "text-article",
-    dot: "bg-article",
-    wash: "bg-article-wash",
-    border: "border-article",
-    hoverBorder: "hover:border-article focus-within:border-article",
-    focusBorder: "focus-within:border-article",
-  },
-  guide: {
-    text: "text-guide",
-    dot: "bg-guide",
-    wash: "bg-guide-wash",
-    border: "border-guide",
-    hoverBorder: "hover:border-guide focus-within:border-guide",
-    focusBorder: "focus-within:border-guide",
-  },
-};
+export { familyStyles, type ContentFamily };
 
 export function Eyebrow({
   children,
@@ -225,6 +166,50 @@ export function Eyebrow({
       />
       {children}
     </p>
+  );
+}
+
+/**
+ * An event is a date first, so the date gets the one washed block the agenda
+ * family is allowed (docs/DESIGN-SYSTEM.md §5) — and it doubles as the control
+ * that keeps it: one tap and the event is in the reader's own calendar, hour and
+ * timezone included, instead of being re-typed onto the wrong day.
+ *
+ * Shared by the agenda and the single-event page so the hue follows the content
+ * from the list into the detail screen on the same element, rather than the page
+ * drawing the date as one more neutral chip.
+ */
+export function EventDateBlock({
+  href,
+  dateLabel,
+  timeLabel,
+  ariaLabel,
+  className,
+}: {
+  href: string;
+  dateLabel: string;
+  timeLabel: string;
+  ariaLabel: string;
+  className?: string;
+}) {
+  return (
+    <a
+      href={href}
+      aria-label={ariaLabel}
+      className={cn(
+        "rounded-control focus-visible:outline-brand bg-event-wash text-event hover:shadow-ring inline-flex items-center gap-2 px-3 py-1.5 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2",
+        className,
+      )}
+    >
+      <CalendarDays className="size-4 shrink-0" aria-hidden />
+      <span className="underline decoration-1 underline-offset-2">
+        {dateLabel}
+      </span>
+      <span className="inline-flex items-center gap-1.5 font-medium">
+        <Clock className="size-4 shrink-0" aria-hidden />
+        {timeLabel}
+      </span>
+    </a>
   );
 }
 
@@ -499,7 +484,14 @@ export function MetaRow({
       className={cn("flex flex-wrap items-baseline gap-x-2 gap-y-1", className)}
     >
       <dt className="text-copy-muted inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.08em]">
-        {icon}
+        {/* The glyph is the accent, the word is not: rule 4 gives the mid-tone
+            accent to fills, icons and borders, and a row whose icon is drawn in
+            the metadata grey has two greys where it needs one — the eye has
+            nothing to run down the column by. This is what `Chip` already does
+            with its own icon. */}
+        {icon ? (
+          <span className="text-brand flex items-center">{icon}</span>
+        ) : null}
         {label}
       </dt>
       <dd className="text-ink min-w-0 flex-1 text-[0.95rem] leading-snug">

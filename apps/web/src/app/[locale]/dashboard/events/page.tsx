@@ -168,6 +168,7 @@ export default async function EventsPage({
   return (
     <WorkspacePage>
       <PageHeader
+        family="event"
         title={t["events.title"]}
         sub={t["events.subtitle"]}
         action={listCarriesCreate ? null : createEvent}

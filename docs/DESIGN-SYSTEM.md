@@ -110,6 +110,11 @@ from the blue of border-police and government sites to not be mistaken for one.
   the service — there is no per-service hue.
 - **Stat blocks.** Big number in Work Sans over a `textMuted` uppercase label;
   used for counts, never for anything the reader must act on.
+- **Metadata rows.** A `textMuted` uppercase label, its glyph in the mid-tone
+  `accent` (rule 4), then the value in `ink`. The glyph is what a reader runs the
+  eye down a column of rows by, so drawing it in the label's own grey gives the
+  row two greys where it needs one. Same for the place and the hours on a shelf
+  card: glyph in the `accent`, sentence in `textMuted`.
 - **Freshness marker.** "Checked <date>" with a check icon in `success`;
   degrades to `warning` + "to confirm" when the check is older than the
   content's review window, and to `neutralStatus` + "not available" when unknown.
@@ -135,20 +140,37 @@ from the blue of border-police and government sites to not be mistaken for one.
   | article  | `articleAccent`             | a short rule under the title; nothing filled   |
   | guide    | `guideAccent` / `guideWash` | the whole card is washed — it is an invitation |
 
+  The carrier is drawn on **every shape** the card takes. The activity rule is on
+  the tall shelf card as well as the wide list card, and the event's washed date
+  block is on the agenda row as well as the event's own page: a card that drops
+  its carrier when it narrows drops the family with it, and the shelves that mix
+  activities with other content are exactly where telling them apart matters.
+
   Family hues are **structural, never signals**: they carry no state, they never
   appear inside a status pill or a notice, and rule 1 still holds — nothing is
   understood from a family colour alone. A family hue follows its content from
   the list into the detail screen, on exactly one element there too.
 
-  The four hues are the **same four on the site and in the app**, under the same
-  utility names (`text-event`, `bg-guide-wash`, …) so a screen and a page cannot
-  drift apart. Beyond the card itself a family may colour two more things, and
-  only these:
+  The four hues are the **same four on the site, in the console and in the app**,
+  under the same utility names (`text-event`, `bg-guide-wash`, …) and read from
+  one table, so a section cannot be plum on one surface and neutral on the other.
+  Beyond the card itself a family may colour three more things, and only these:
 
   - **the opening of a page or a section** — a tinted eyebrow plus a short rule
     before the heading, so the reader meets the hue before the first card;
   - **the card's own affordance word** — "Read article", "Event details",
-    "Open" — because that word is the promise of what the hue leads to.
+    "Open" — because that word is the promise of what the hue leads to;
+  - **the opening of a workspace page** — the console tints the short rule under
+    the page title, one family per page. An editor moving between table pages that
+    share one layout can then tell the agenda from the articles before reading the
+    heading. The standard header adds no eyebrow of its own — the title already
+    names the section — but where a page authors its own opening, that eyebrow or
+    glyph badge is the element that takes the hue instead, never both.
+
+  The console's own chrome — the sidebar, the toolbar, every active state — stays
+  in the `accent` whichever section is open: "you are here" must not change colour
+  with the content, and four hues in one sidebar would say nothing except that the
+  sidebar is coloured.
 
   Everything else on the surface stays neutral. The home page is where all four
   meet, and it is the only place they appear side by side.
@@ -216,6 +238,7 @@ distress. No image is required for a card to make sense.
 | Token values                  | `packages/tokens/src/index.ts`                                     |
 | CSS variables (`--infokit-*`) | `apps/web/src/components/design-tokens.tsx`                        |
 | Tailwind role mapping         | `apps/web/src/styles/globals.css`                                  |
+| Content families (§5)         | `apps/web/src/lib/content-families.ts` — read by both surfaces     |
 | Public surface                | `apps/web/src/components/public/*`                                 |
 | Native surface                | `packages/ui` (React Native Reusables + NativeWind), `apps/mobile` |
 

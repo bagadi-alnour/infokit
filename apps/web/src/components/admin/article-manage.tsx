@@ -4,6 +4,7 @@ import { formatMessage, type Locale } from "@infokit/shared/i18n";
 import {
   Archive,
   CheckCircle2,
+  Ellipsis,
   Eye,
   Plus,
   Send,
@@ -28,6 +29,7 @@ import {
   requestArticleTranslation,
   reviewArticleTranslation,
 } from "~/app/[locale]/dashboard/articles/translation-actions";
+import { updateEditorialSteward } from "~/app/[locale]/dashboard/steward-actions";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import type { LanguageMenuAbilities } from "~/components/admin/language-actions-menu";
 import {
@@ -55,6 +57,7 @@ import {
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { DatePicker } from "~/components/ui/date-picker";
 import {
@@ -70,6 +73,12 @@ import {
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { SelectField } from "~/components/ui/select-field";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -92,6 +101,7 @@ type Labels = Record<string, string>;
 /* ------------------------------------------------------------------ */
 
 export function ArticleEditorForm({
+  formId,
   locale,
   entryId,
   organizationId,
@@ -106,11 +116,13 @@ export function ArticleEditorForm({
   aiEnabled,
   canVerify,
   returnPath,
+  details,
   media,
-  downloads,
   labels,
+  saveLabels,
   editorLabels,
 }: {
+  formId: string;
   locale: string;
   entryId: string;
   /** The association answering for the entry, when one does. */
@@ -129,11 +141,12 @@ export function ArticleEditorForm({
   canVerify: boolean;
   /** Dashboard path to revalidate after a per-language action. */
   returnPath: string;
-  /** The cover image, laid out below both editor columns. */
+  /** Record-level cards shown beneath the source-language fields. */
+  details?: React.ReactNode;
+  /** Photo, PDFs and revision history beneath the translation panel. */
   media?: React.ReactNode;
-  /** The downloadable documents, laid out beside the tags field. */
-  downloads?: React.ReactNode;
   labels: Labels;
+  saveLabels: { save: string; saved: string; saveError: string };
   /** The workspace's own vocabulary; see `~/lib/workspace-labels`. */
   editorLabels: Labels;
 }) {
@@ -142,9 +155,11 @@ export function ArticleEditorForm({
   const submit = async (formData: FormData) => {
     try {
       await saveArticleContent(formData);
-      toast.success(labels["toast.saved"]);
+      await updateArticleFreshness(formData);
+      await updateEditorialSteward(formData);
+      toast.success(saveLabels.saved);
     } catch (error) {
-      showActionError(error, labels["toast.saveError"] ?? "");
+      showActionError(error, saveLabels.saveError);
     }
   };
 
@@ -203,9 +218,7 @@ export function ArticleEditorForm({
   );
 
   return (
-    <form action={submit} className="grid gap-5">
-      <input type="hidden" name="locale" value={locale} />
-      <input type="hidden" name="entryId" value={entryId} />
+    <div className="grid gap-5">
       <TranslationWorkspace
         entityKind="editorial_entry"
         entityId={entryId}
@@ -220,63 +233,91 @@ export function ArticleEditorForm({
         aiEnabled={aiEnabled}
         returnPath={returnPath}
         workflow={workflow}
+        formId={formId}
         media={media}
-      />
-      {/* Tags and the downloadable documents side by side: both are things
-       * attached to the article rather than words in it, and each is short
-       * enough that stacking them only adds scrolling. Keyed to this row's own
-       * width, which the console's sidebar narrows. */}
-      <div className="@container">
-        <div className="@xl:grid-cols-2 grid items-start gap-4">
-          <Field>
-            <FieldLabel>{labels["field.tags"]}</FieldLabel>
-            {tags.length > 0 ? (
-              <SearchableMultiSelect
-                name="tagIds"
-                maxSelections={3}
-                options={tags}
-                value={selectedTagIds}
-                onValueChange={setSelectedTagIds}
-                label={labels["field.tags"]}
-                placeholder={labels["field.tagsPlaceholder"]}
-                emptyLabel={labels.noMatch}
-              />
-            ) : (
-              <p className="text-copy-muted text-sm">
-                {labels["field.tagsEmpty"]}
-              </p>
-            )}
-            <FieldDescription>{labels["field.tagsHint"]}</FieldDescription>
-          </Field>
-          {downloads}
+      >
+        <div className="@container mt-1">
+          <div className="@xl:grid-cols-2 grid items-start gap-4">
+            <Card className="min-w-0">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {labels["field.tags"]}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Field>
+                  {tags.length > 0 ? (
+                    <SearchableMultiSelect
+                      name="tagIds"
+                      form={formId}
+                      maxSelections={3}
+                      options={tags}
+                      value={selectedTagIds}
+                      onValueChange={setSelectedTagIds}
+                      label={labels["field.tags"]}
+                      placeholder={labels["field.tagsPlaceholder"]}
+                      emptyLabel={labels.noMatch}
+                    />
+                  ) : (
+                    <p className="text-copy-muted text-sm">
+                      {labels["field.tagsEmpty"]}
+                    </p>
+                  )}
+                  <FieldDescription>
+                    {labels["field.tagsHint"]}
+                  </FieldDescription>
+                </Field>
+              </CardContent>
+            </Card>
+
+            <Card className="min-w-0">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {labels["detail.overview"]}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <Field>
+                  <FieldLabel htmlFor="edit-article-date">
+                    {labels["field.articleDate"]}
+                  </FieldLabel>
+                  <DatePicker
+                    id="edit-article-date"
+                    name="articleDate"
+                    form={formId}
+                    locale={locale as Locale}
+                    defaultValue={articleDate ?? undefined}
+                    placeholder={labels["date.select"] ?? ""}
+                    clearLabel={labels["date.clear"] ?? ""}
+                  />
+                </Field>
+                <label className="border-line bg-subtle flex items-center gap-3 rounded-lg border p-3 text-sm">
+                  <Checkbox
+                    name="featured"
+                    form={formId}
+                    defaultChecked={featured}
+                  />
+                  <span className="font-medium">
+                    {labels["field.featured"]}
+                  </span>
+                </label>
+              </CardContent>
+            </Card>
+
+            {details}
+          </div>
         </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="edit-article-date">
-            {labels["field.articleDate"]}
-          </FieldLabel>
-          <DatePicker
-            id="edit-article-date"
-            name="articleDate"
-            locale={locale as Locale}
-            defaultValue={articleDate ?? undefined}
-            placeholder={labels["date.select"] ?? ""}
-            clearLabel={labels["date.clear"] ?? ""}
-          />
-        </Field>
-        <label className="border-line bg-subtle flex items-center gap-3 self-end rounded-lg border p-3 text-sm">
-          <Checkbox name="featured" defaultChecked={featured} />
-          <span className="font-medium">{labels["field.featured"]}</span>
-        </label>
-      </div>
-      <div className="flex justify-end">
+      </TranslationWorkspace>
+      <form id={formId} action={submit} className="grid justify-items-end">
+        <input type="hidden" name="locale" value={locale} />
+        <input type="hidden" name="entryId" value={entryId} />
+        <input type="hidden" name="recordId" value={entryId} />
         <PendingButton>
           <CheckCircle2 aria-hidden />
-          {labels["action.saveContent"]}
+          {saveLabels.save}
         </PendingButton>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 }
 
@@ -291,6 +332,8 @@ export function ArticleFreshnessForm({
   unreliableFrom,
   sourceSummary,
   labels,
+  embedded = false,
+  formId,
 }: {
   locale: string;
   entryId: string;
@@ -298,6 +341,9 @@ export function ArticleFreshnessForm({
   unreliableFrom: string | null;
   sourceSummary: string | null;
   labels: Labels;
+  /** Render only fields associated with the article editor's shared form. */
+  embedded?: boolean;
+  formId?: string;
 }) {
   const [canOutdate, setCanOutdate] = useState(canBecomeOutdated);
   const showActionError = useActionErrorToast();
@@ -309,13 +355,12 @@ export function ArticleFreshnessForm({
       showActionError(error, labels["toast.actionError"] ?? "");
     }
   };
-  return (
-    <form action={submit} className="grid gap-4">
-      <input type="hidden" name="locale" value={locale} />
-      <input type="hidden" name="entryId" value={entryId} />
+  const fields = (
+    <>
       <label className="border-line bg-subtle flex items-start gap-3 rounded-lg border p-3 text-sm">
         <Checkbox
           name="canBecomeOutdated"
+          form={formId}
           className="mt-0.5"
           checked={canOutdate}
           onCheckedChange={(value) => {
@@ -339,6 +384,7 @@ export function ArticleFreshnessForm({
           <DatePicker
             id="freshness-unreliable"
             name="unreliableFrom"
+            form={formId}
             locale={locale as Locale}
             defaultValue={unreliableFrom ?? undefined}
             placeholder={labels["date.select"] ?? ""}
@@ -357,6 +403,7 @@ export function ArticleFreshnessForm({
         <Textarea
           id="freshness-summary"
           name="sourceSummary"
+          form={formId}
           rows={2}
           defaultValue={sourceSummary ?? undefined}
         />
@@ -364,6 +411,16 @@ export function ArticleFreshnessForm({
           {labels["freshness.sourceSummaryHint"]}
         </FieldDescription>
       </Field>
+    </>
+  );
+
+  if (embedded) return <div className="grid gap-4">{fields}</div>;
+
+  return (
+    <form action={submit} className="grid gap-4">
+      <input type="hidden" name="locale" value={locale} />
+      <input type="hidden" name="entryId" value={entryId} />
+      {fields}
       <div className="flex justify-end">
         <PendingButton variant="secondary">
           {labels["freshness.save"]}
@@ -549,8 +606,7 @@ export type ArticleTranslationAssignment = TranslationSubmission;
 
 /**
  * What is left to say about a language once its own menu carries the actions:
- * how far along it is, the article as a reader would receive it, and a
- * translator's submission waiting to be accepted.
+ * how far along it is and a translator's submission waiting to be accepted.
  *
  * Publishing, scheduling, unpublishing and inviting a translator all live in
  * the accordion beside the text they act on — offering them twice would mean
@@ -582,11 +638,6 @@ export function ArticleTranslationInbox({
   }
   return (
     <div className="grid min-w-0 gap-4">
-      <ArticlePreviewLauncher
-        sourceLanguage={sourceLanguage}
-        languages={languages}
-        labels={labels}
-      />
       <ul className="grid gap-2.5">
         {rows.map((language) => (
           <li
@@ -618,15 +669,15 @@ export function ArticleTranslationInbox({
 }
 
 /**
- * One preview button for the whole article: it asks which language to read
- * before it opens.
+ * The article-level Actions menu opens the preview flow. It asks which language
+ * to read before showing the same side sheet the old permanent card used.
  *
  * A button per language turned the card into a column of near-identical
  * controls, and reading is one intention — the language is a parameter of it,
  * not a different action. Only languages with text are offered, so the choice
  * can never lead to an empty sheet.
  */
-function ArticlePreviewLauncher({
+function ArticlePreviewActionsMenu({
   sourceLanguage,
   languages,
   labels,
@@ -653,18 +704,30 @@ function ArticlePreviewLauncher({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="w-fit gap-1.5"
-        onClick={() => {
-          setAsking(true);
-        }}
-      >
-        <Eye className="size-4" aria-hidden />
-        {labels["preview.open"]}
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={labels["table.actions"]}
+            />
+          }
+        >
+          <Ellipsis aria-hidden />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => {
+              setAsking(true);
+            }}
+          >
+            <Eye aria-hidden />
+            {labels["detail.preview"]}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Dialog open={asking} onOpenChange={setAsking}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -806,6 +869,8 @@ function ArticlePreview({
 export function ArticleWorkflowBar({
   locale,
   entryId,
+  sourceLanguage,
+  languages,
   workflowState,
   archived,
   canArchive,
@@ -813,6 +878,8 @@ export function ArticleWorkflowBar({
 }: {
   locale: string;
   entryId: string;
+  sourceLanguage: Language;
+  languages: ArticleLanguageStatus[];
   workflowState: string;
   archived: boolean;
   /**
@@ -839,18 +906,25 @@ export function ArticleWorkflowBar({
 
   if (archived) {
     return (
-      <form
-        action={(formData) =>
-          run(restoreArticle, formData, labels["toast.restored"])
-        }
-      >
-        <input type="hidden" name="locale" value={locale} />
-        <input type="hidden" name="entryId" value={entryId} />
-        <PendingButton variant="secondary">
-          <Undo2 aria-hidden />
-          {labels["action.restore"]}
-        </PendingButton>
-      </form>
+      <div className="flex flex-wrap items-center gap-2">
+        <form
+          action={(formData) =>
+            run(restoreArticle, formData, labels["toast.restored"])
+          }
+        >
+          <input type="hidden" name="locale" value={locale} />
+          <input type="hidden" name="entryId" value={entryId} />
+          <PendingButton variant="secondary">
+            <Undo2 aria-hidden />
+            {labels["action.restore"]}
+          </PendingButton>
+        </form>
+        <ArticlePreviewActionsMenu
+          sourceLanguage={sourceLanguage}
+          languages={languages}
+          labels={labels}
+        />
+      </div>
     );
   }
 
@@ -870,6 +944,11 @@ export function ArticleWorkflowBar({
           </PendingButton>
         </form>
       ) : null}
+      <ArticlePreviewActionsMenu
+        sourceLanguage={sourceLanguage}
+        languages={languages}
+        labels={labels}
+      />
       {canArchive ? (
         <AlertDialog>
           <AlertDialogTrigger

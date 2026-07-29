@@ -103,6 +103,7 @@ export function SearchableSelect({
 
 export function SearchableMultiSelect({
   name,
+  form,
   options,
   value,
   onValueChange,
@@ -112,6 +113,8 @@ export function SearchableMultiSelect({
   maxSelections,
 }: {
   name: string;
+  /** Associate the posted values with a form elsewhere on the page. */
+  form?: string;
   options: readonly SearchableOption[];
   value: readonly string[];
   onValueChange: (value: string[]) => void;
@@ -135,7 +138,15 @@ export function SearchableMultiSelect({
       items={options}
       multiple
       value={selected}
-      onValueChange={(nextValue) => {
+      onValueChange={(nextValue, details) => {
+        /**
+         * Base UI empties a closed combobox when Escape is pressed on its
+         * input. On a chips field that wipes every choice at once, with nothing
+         * to show it happened — so Escape here only closes the list. A chip is
+         * removed by its own × or by Backspace, which both report another
+         * reason.
+         */
+        if (details.reason === "escape-key") return;
         if (maxSelections === undefined || nextValue.length <= maxSelections) {
           onValueChange(nextValue.map((option) => option.value));
         }
@@ -150,6 +161,7 @@ export function SearchableMultiSelect({
           key={selectedValue}
           type="hidden"
           name={name}
+          form={form}
           value={selectedValue}
         />
       ))}

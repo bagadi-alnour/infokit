@@ -21,7 +21,10 @@ import { Icon } from "~/components/icons";
 import { Button } from "~/components/ui/button";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
-import { getRoleTestState, isPlatformAdmin } from "~/server/auth/authorization";
+import {
+  hasActualPlatformPermission,
+  isPlatformAdmin,
+} from "~/server/auth/authorization";
 import { requireEditor } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
@@ -47,16 +50,11 @@ export default async function OrganizationsPage({
   const locale = requireRouteLocale((await params).locale);
   const t = await loadPageCatalog(locale, "dashboard-console");
   const user = await requireEditor(locale);
-  const [authorization, platformAdmin] = await Promise.all([
-    getRoleTestState(user.id),
-    isPlatformAdmin(user.id),
-  ]);
   /**
-   * While a superadmin tests an organisation role, they are that organisation's
-   * member for the duration — the directory closes with everything else.
+   * Listing every association is administration. An association's own members
+   * get their memberships below and nothing else.
    */
-  const directoryAccess =
-    platformAdmin && authorization.assumedOrganizationId === null;
+  const directoryAccess = await isPlatformAdmin(user.id);
 
   if (!directoryAccess) {
     const memberships = await db
@@ -117,7 +115,8 @@ export default async function OrganizationsPage({
     );
   }
 
-  const canCreate = authorization.effectivePermissions.has(
+  const canCreate = await hasActualPlatformPermission(
+    user.id,
     "organization.verify",
   );
 

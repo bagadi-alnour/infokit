@@ -1,6 +1,7 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import { createAssetReadUrl } from "~/server/assets/s3";
+import { sanitizedImageRendition } from "~/server/assets/scan";
 import { db } from "~/server/db";
 import {
   assetTranslations,
@@ -197,9 +198,18 @@ export async function eventMediaFile({
   if (!first) return null;
   const text = pickText(assetRows, first.assetLanguage ?? "fr");
   const isDocument = first.role === EVENT_FLYER_ROLE;
+  /**
+   * A cover is served as the rendition the safety pass encoded, never as the
+   * bytes the uploader's browser produced. A flyer has no rendition — nothing
+   * re-encodes a PDF — and an image cleared before renditions existed has none
+   * either; both keep the original.
+   */
+  const served = isDocument
+    ? null
+    : await sanitizedImageRendition(first.assetId);
   return {
-    storageKey: first.storageKey,
-    mimeType: first.mimeType,
+    storageKey: served?.storageKey ?? first.storageKey,
+    mimeType: served?.mimeType ?? first.mimeType,
     isDocument,
     fileName: documentFileName(text?.title ?? "", first.mimeType),
   };
@@ -241,10 +251,11 @@ export interface WorkspaceEventMedia {
  */
 async function safeReadUrl(
   storageKey: string,
+  contentType: string,
   fileName?: string,
 ): Promise<string | null> {
   try {
-    return await createAssetReadUrl(storageKey, fileName);
+    return await createAssetReadUrl(storageKey, { contentType, fileName });
   } catch {
     return null;
   }
@@ -271,7 +282,7 @@ export async function workspaceEventMedia({
     if (first.role === EVENT_COVER_ROLE) {
       result.cover = {
         assetId: first.assetId,
-        previewUrl: await safeReadUrl(first.storageKey),
+        previewUrl: await safeReadUrl(first.storageKey, first.mimeType),
         altText: text?.altText ?? "",
         scanState: first.scanState,
       };
@@ -283,6 +294,7 @@ export async function workspaceEventMedia({
         languageCode: first.linkLanguage ?? first.assetLanguage,
         downloadUrl: await safeReadUrl(
           first.storageKey,
+          first.mimeType,
           documentFileName(text?.title ?? "", first.mimeType),
         ),
         scanState: first.scanState,

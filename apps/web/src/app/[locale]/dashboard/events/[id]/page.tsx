@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { EventForm, type EventFormValues } from "~/components/admin/event-form";
 import { EventMediaManager } from "~/components/admin/event-media-manager";
+import { TransitLinkSummary } from "~/components/admin/transit-links";
 import {
   Card,
   Chip,
@@ -19,6 +20,7 @@ import { PendingButton } from "~/components/pending-button";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { eventLanguages, type EventLanguage } from "~/lib/event-languages";
+import { recordRestrictedRead } from "~/server/audit/reads";
 import { requireEditor } from "~/server/auth/require";
 import {
   canManageCoordinationEvents,
@@ -66,7 +68,24 @@ export default async function EventPage({
     findCoordinationEvent({ eventId: id, viewer, locale }),
     canManageCoordinationEvents(user.id),
   ]);
-  if (!event) notFound();
+  /**
+   * `findCoordinationEvent` answers through the reader's own memberships, so a
+   * miss here is either an event that is gone or one that belongs to somebody
+   * else — and from a single request those look identical, which is exactly why
+   * the attempt is recorded. The reader still gets the same 404: what a tier
+   * hides includes whether the thing exists.
+   */
+  if (!event) {
+    await recordRestrictedRead({
+      action: "event.detail_read_refused",
+      subjectType: "coordination_event",
+      subjectId: id,
+      actorUserId: user.id,
+      outcome: "denied",
+      errorCode: "event_not_readable",
+    });
+    notFound();
+  }
 
   const [cityList, organizationRows, placeRows, media] = await Promise.all([
     listCityViews(locale),
@@ -134,12 +153,14 @@ export default async function EventPage({
       stewardPhone: event.stewardPhone,
       stewardEmail: event.stewardEmail,
     },
+    transit: event.transit,
     ...fields,
   };
 
   return (
     <WorkspacePage width="content">
       <PageHeader
+        family="event"
         title={event.title || t["events.untitled"]}
         sub={`${when.dateLabel} · ${when.timeLabel}`}
         back={{ href: agendaPath, label: t["events.backToAgenda"] }}
@@ -192,6 +213,20 @@ export default async function EventPage({
                   .join(" · ") || null
               }
             />
+            {/* Only when somebody recorded a way in: an empty list would read
+             * as "you cannot get here without a car". */}
+            {event.transit.length > 0 ? (
+              <div>
+                <p className="text-copy-muted text-xs font-semibold uppercase tracking-wide">
+                  {consoleLabels["transit.title"]}
+                </p>
+                <TransitLinkSummary
+                  links={event.transit}
+                  labels={consoleLabels}
+                  className="mt-0.5 grid gap-1 text-sm"
+                />
+              </div>
+            ) : null}
           </div>
         </Card>
         <Card title={t["events.reachTitle"]}>

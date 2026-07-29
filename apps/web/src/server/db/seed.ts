@@ -6,6 +6,7 @@ import postgres from "postgres";
 
 import { hashPassword } from "../auth/password";
 import { catalogueScopeKey } from "../content/catalogue-scope";
+import { migratorUrl } from "./migrator-url";
 import {
   GLOBAL_SERVICES,
   GLOBAL_TAGS,
@@ -15,6 +16,7 @@ import {
   SPECIALITIES,
 } from "./seed-public-catalog";
 import * as s from "./schema";
+import { sslFor } from "./ssl";
 
 /**
  * Catalogue seeds — idempotent upserts keyed on `code` (ENGINEERING-NOTES §4).
@@ -26,9 +28,17 @@ import * as s from "./schema";
  * Demo fixtures must carry the "Demo data — do not publish" label (AGENTS.md).
  */
 
-const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL is not set");
-const client = postgres(url, { max: 1 });
+// The owner: this writes catalogues the app is not allowed to write, and the
+// bootstrap account's grants live in tables `infokit_app` can only read.
+//
+// TLS by the same rule as every other entry point (`./ssl`), which is not
+// optional here: this seed is pointed at production deliberately — it is how the
+// bootstrap account comes into existence — and `rds.force_ssl` refuses an
+// unencrypted connection. Omitting the option did not fail at connect, which is
+// what made it confusing: postgres.js completed a cleartext handshake and RDS
+// rejected the first statement with `no pg_hba.conf entry … no encryption`.
+const seedUrl = migratorUrl();
+const client = postgres(seedUrl, { ssl: sslFor(seedUrl), max: 1 });
 const db = drizzle(client);
 
 const LOCALES = ["en", "fr", "ar"] as const;
@@ -82,16 +92,17 @@ const LANGUAGES: {
     fallbackCode: "fr",
     publicSortOrder: 3,
   },
-  // Supported public-information languages for Calais. Present but disabled:
-  // a language ships only when a named person owns its review (PRODUCT.md §17).
-  // Enabling is then a single flag flip.
+  // The configured public catalogue is eleven routable, publishable languages.
+  // Content still reaches visitors only after its own human verification and
+  // per-language publication; `enabled` distinguishes these from the additional
+  // spoken-only catalogue below (PRODUCT.md §17).
   {
     code: "fa",
     nativeName: "فارسی",
     englishName: "Persian (Farsi)",
     frenchName: "Persan (farsi)",
     direction: "rtl",
-    enabled: false,
+    enabled: true,
     fallbackCode: "fr",
     publicSortOrder: 4,
   },
@@ -101,7 +112,7 @@ const LANGUAGES: {
     englishName: "Dari",
     frenchName: "Dari",
     direction: "rtl",
-    enabled: false,
+    enabled: true,
     fallbackCode: "fr",
     publicSortOrder: 5,
   },
@@ -111,7 +122,7 @@ const LANGUAGES: {
     englishName: "Pashto",
     frenchName: "Pachto",
     direction: "rtl",
-    enabled: false,
+    enabled: true,
     fallbackCode: "fr",
     publicSortOrder: 6,
   },
@@ -122,7 +133,7 @@ const LANGUAGES: {
     englishName: "Kurdish (Sorani)",
     frenchName: "Kurde (sorani)",
     direction: "rtl",
-    enabled: false,
+    enabled: true,
     fallbackCode: "fr",
     publicSortOrder: 7,
   },
@@ -132,7 +143,7 @@ const LANGUAGES: {
     englishName: "Tigrinya",
     frenchName: "Tigrigna",
     direction: "ltr",
-    enabled: false,
+    enabled: true,
     fallbackCode: "fr",
     publicSortOrder: 8,
   },
@@ -142,7 +153,7 @@ const LANGUAGES: {
     englishName: "Amharic",
     frenchName: "Amharique",
     direction: "ltr",
-    enabled: false,
+    enabled: true,
     fallbackCode: "fr",
     publicSortOrder: 9,
   },
@@ -152,7 +163,7 @@ const LANGUAGES: {
     englishName: "Oromo",
     frenchName: "Oromo",
     direction: "ltr",
-    enabled: false,
+    enabled: true,
     fallbackCode: "fr",
     publicSortOrder: 10,
   },
@@ -162,13 +173,154 @@ const LANGUAGES: {
     englishName: "Somali",
     frenchName: "Somali",
     direction: "ltr",
-    enabled: false,
+    enabled: true,
     fallbackCode: "fr",
     publicSortOrder: 11,
+  },
+  // Spoken only. These are not publication candidates: they are here so a
+  // member or a translator can say which languages they welcome people in, and
+  // so a mission can require one. `enabled` answers a different question — can
+  // the platform publish content in it — and stays false for all of them.
+  {
+    code: "ru",
+    nativeName: "Русский",
+    englishName: "Russian",
+    frenchName: "Russe",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 20,
+  },
+  {
+    code: "uk",
+    nativeName: "Українська",
+    englishName: "Ukrainian",
+    frenchName: "Ukrainien",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 21,
+  },
+  {
+    code: "tr",
+    nativeName: "Türkçe",
+    englishName: "Turkish",
+    frenchName: "Turc",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 22,
+  },
+  {
+    code: "ku",
+    nativeName: "Kurmancî",
+    englishName: "Kurdish (Kurmanji)",
+    frenchName: "Kurde (kurmandji)",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 23,
+  },
+  {
+    code: "sq",
+    nativeName: "Shqip",
+    englishName: "Albanian",
+    frenchName: "Albanais",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 24,
+  },
+  {
+    code: "ur",
+    nativeName: "اردو",
+    englishName: "Urdu",
+    frenchName: "Ourdou",
+    direction: "rtl",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 25,
+  },
+  {
+    code: "bn",
+    nativeName: "বাংলা",
+    englishName: "Bengali",
+    frenchName: "Bengali",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 26,
+  },
+  {
+    code: "vi",
+    nativeName: "Tiếng Việt",
+    englishName: "Vietnamese",
+    frenchName: "Vietnamien",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 27,
+  },
+  {
+    code: "es",
+    nativeName: "Español",
+    englishName: "Spanish",
+    frenchName: "Espagnol",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 28,
+  },
+  {
+    code: "it",
+    nativeName: "Italiano",
+    englishName: "Italian",
+    frenchName: "Italien",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 29,
+  },
+  {
+    code: "pt",
+    nativeName: "Português",
+    englishName: "Portuguese",
+    frenchName: "Portugais",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 30,
+  },
+  {
+    code: "de",
+    nativeName: "Deutsch",
+    englishName: "German",
+    frenchName: "Allemand",
+    direction: "ltr",
+    enabled: false,
+    fallbackCode: "fr",
+    publicSortOrder: 31,
   },
 ];
 
 async function seedLanguages() {
+  const configuredCodes = new Set<string>(publicLanguageCodes);
+  const enabledCodes = new Set(
+    LANGUAGES.filter((language) => language.enabled).map(
+      (language) => language.code,
+    ),
+  );
+  const missingPublic = publicLanguageCodes.filter(
+    (code) => !enabledCodes.has(code),
+  );
+  const unexpectedPublic = [...enabledCodes].filter(
+    (code) => !configuredCodes.has(code),
+  );
+  if (missingPublic.length > 0 || unexpectedPublic.length > 0) {
+    throw new Error(
+      `Seed integrity: enabled languages must match the public catalogue (missing: ${missingPublic.join(", ") || "none"}; unexpected: ${unexpectedPublic.join(", ") || "none"})`,
+    );
+  }
   for (const row of LANGUAGES) {
     await db
       .insert(s.languages)
@@ -880,6 +1032,322 @@ async function seedConcepts(categoryIds: Map<string, string>) {
   console.log(`search concepts: ${String(CONCEPTS.length)}`);
 }
 
+/* ------------------------- skills and courses ------------------------ */
+
+/**
+ * The global half of `operations.skills` (docs/DATABASE-SCHEMA.md §12). A permit
+ * category, a first-aid certificate and a shared tool mean the same thing in
+ * every association, so InfoKit authors them once and nobody retypes them — an
+ * association only creates what is genuinely its own. `organization_id` is null
+ * on every row here, which the table's check turns into network-wide reach.
+ *
+ * `verificationRequired` is the honest question "would a coordinator want this
+ * looked at before counting on it?": a licence category yes, a tool somebody was
+ * shown how to use no. `validityMonths` is only set where the certificate itself
+ * has to be renewed. No `referenceUrl` is seeded: a link belongs to whoever
+ * maintains the row, and a wrong one is worse than none.
+ */
+const GLOBAL_SKILLS: {
+  kind: (typeof s.skillKind.enumValues)[number];
+  code: string;
+  name: Tri;
+  descriptionFr?: string;
+  verificationRequired: boolean;
+  validityMonths?: number;
+}[] = [
+  {
+    kind: "driving_permit",
+    code: "permit-b",
+    name: {
+      fr: "Permis B (voiture)",
+      en: "Category B licence (car)",
+      ar: "رخصة الفئة B (سيارة)",
+    },
+    descriptionFr:
+      "Permis de conduire de catégorie B. La condition la plus courante d’une maraude motorisée.",
+    verificationRequired: true,
+  },
+  {
+    kind: "driving_permit",
+    code: "permit-be",
+    name: {
+      fr: "Permis BE (voiture avec remorque)",
+      en: "Category BE licence (car with trailer)",
+      ar: "رخصة الفئة BE (سيارة مع مقطورة)",
+    },
+    descriptionFr:
+      "Permis de catégorie BE, pour tirer une remorque au-delà du poids autorisé par le permis B.",
+    verificationRequired: true,
+  },
+  {
+    kind: "driving_permit",
+    code: "permit-c",
+    name: {
+      fr: "Permis C (poids lourd)",
+      en: "Category C licence (lorry)",
+      ar: "رخصة الفئة C (شاحنة)",
+    },
+    descriptionFr: "Permis de catégorie C, pour les camions de livraison.",
+    verificationRequired: true,
+  },
+  {
+    kind: "driving_permit",
+    code: "permit-d",
+    name: {
+      fr: "Permis D (transport de personnes)",
+      en: "Category D licence (passenger transport)",
+      ar: "رخصة الفئة D (نقل الأشخاص)",
+    },
+    descriptionFr:
+      "Permis de catégorie D, pour les minibus et autocars transportant des personnes.",
+    verificationRequired: true,
+  },
+  {
+    kind: "certification",
+    code: "psc1",
+    name: {
+      fr: "PSC1 (prévention et secours civiques niveau 1)",
+      en: "PSC1 (French civil first aid, level 1)",
+      ar: "PSC1 (الإسعافات الأولية المدنية، المستوى الأول)",
+    },
+    descriptionFr:
+      "Certificat de prévention et secours civiques de niveau 1. Pas de date de fin réglementaire ; une remise à niveau reste recommandée.",
+    verificationRequired: true,
+  },
+  {
+    kind: "certification",
+    code: "sst",
+    name: {
+      fr: "SST (sauveteur secouriste du travail)",
+      en: "SST (workplace first aider)",
+      ar: "SST (مسعف في مكان العمل)",
+    },
+    descriptionFr:
+      "Certificat de sauveteur secouriste du travail, à renouveler tous les 24 mois.",
+    verificationRequired: true,
+    validityMonths: 24,
+  },
+  {
+    kind: "certification",
+    code: "hygiene-alimentaire",
+    name: {
+      fr: "Hygiène alimentaire (HACCP)",
+      en: "Food hygiene (HACCP)",
+      ar: "سلامة الغذاء (HACCP)",
+    },
+    descriptionFr:
+      "Formation à l’hygiène alimentaire, demandée pour préparer et distribuer des repas.",
+    verificationRequired: true,
+  },
+  {
+    kind: "software",
+    code: "mano",
+    name: {
+      fr: "Mano (suivi social)",
+      en: "Mano (social follow-up)",
+      ar: "Mano (المتابعة الاجتماعية)",
+    },
+    descriptionFr:
+      "Sait utiliser Mano, l’outil de suivi social partagé par plusieurs maraudes.",
+    verificationRequired: false,
+  },
+  {
+    kind: "software",
+    code: "kobotoolbox",
+    name: {
+      fr: "KoBoToolbox (collecte de données)",
+      en: "KoBoToolbox (data collection)",
+      ar: "KoBoToolbox (جمع البيانات)",
+    },
+    descriptionFr:
+      "Sait construire et remplir un formulaire de collecte sur KoBoToolbox.",
+    verificationRequired: false,
+  },
+  {
+    kind: "software",
+    code: "signal",
+    name: {
+      fr: "Signal (messagerie chiffrée)",
+      en: "Signal (encrypted messaging)",
+      ar: "Signal (مراسلة مشفّرة)",
+    },
+    descriptionFr:
+      "Sait travailler avec Signal, utilisé pour la coordination de terrain.",
+    verificationRequired: false,
+  },
+  {
+    kind: "skill",
+    code: "interpreting",
+    name: {
+      fr: "Interprétariat",
+      en: "Interpreting",
+      ar: "الترجمة الشفوية",
+    },
+    descriptionFr:
+      "Traduit une conversation en direct. Distinct des langues parlées, qui se déclarent dans le profil.",
+    verificationRequired: false,
+  },
+  {
+    kind: "skill",
+    code: "intercultural-mediation",
+    name: {
+      fr: "Médiation interculturelle",
+      en: "Intercultural mediation",
+      ar: "الوساطة الثقافية",
+    },
+    descriptionFr:
+      "Accompagne une rencontre entre une personne et une institution, au-delà de la traduction.",
+    verificationRequired: false,
+  },
+  {
+    kind: "skill",
+    code: "active-listening",
+    name: {
+      fr: "Écoute active",
+      en: "Active listening",
+      ar: "الإنصات الفعّال",
+    },
+    descriptionFr: "Mène un entretien d’accueil et sait orienter ensuite.",
+    verificationRequired: false,
+  },
+  {
+    kind: "skill",
+    code: "administrative-support",
+    name: {
+      fr: "Accompagnement administratif",
+      en: "Administrative support",
+      ar: "المواكبة الإدارية",
+    },
+    descriptionFr:
+      "Aide à constituer et suivre un dossier auprès d’une administration.",
+    verificationRequired: false,
+  },
+];
+
+/**
+ * Global courses: the induction every association ends up giving, written once.
+ * A platform course carries the three workspace languages, because it is read in
+ * all of them, and no `url` — InfoKit does not deliver these itself, so there is
+ * nothing honest to link yet.
+ */
+const GLOBAL_COURSES: {
+  slug: string;
+  title: Tri;
+  description: string;
+  verificationRequired: boolean;
+  validityMonths?: number;
+}[] = [
+  {
+    slug: "accueil-orientation-personnes-exilees",
+    title: {
+      fr: "Accueil et orientation des personnes exilées",
+      en: "Welcoming and orienting displaced people",
+      ar: "استقبال وتوجيه الأشخاص المهاجرين",
+    },
+    description:
+      "Les bases communes à toutes les associations du réseau : premier accueil, ce qui se dit et ce qui ne se dit pas, vers qui orienter.",
+    verificationRequired: false,
+  },
+  {
+    slug: "donnees-personnelles-et-confidentialite",
+    title: {
+      fr: "Données personnelles et confidentialité",
+      en: "Personal data and confidentiality",
+      ar: "المعطيات الشخصية والسرية",
+    },
+    description:
+      "Ce qui peut être noté sur une personne, qui y accède, et pendant combien de temps.",
+    verificationRequired: false,
+  },
+];
+
+/**
+ * Upserts keyed on the scope-unique pair, not on `code` alone: the same code may
+ * exist twice, once globally and once inside an association, so the lookup has
+ * to say `organization_id is null` out loud. Drizzle cannot name an expression
+ * index as a conflict target, hence select-then-write rather than
+ * `onConflictDoUpdate`.
+ */
+async function seedGlobalSkills() {
+  for (const skill of GLOBAL_SKILLS) {
+    const values = {
+      kind: skill.kind,
+      code: skill.code,
+      nameFr: skill.name.fr,
+      nameEn: skill.name.en,
+      nameAr: skill.name.ar,
+      descriptionFr: skill.descriptionFr ?? null,
+      /** A global row has no organisation to be kept in (the table checks it). */
+      visibility: "all_organizations_and_translators" as const,
+      verificationRequired: skill.verificationRequired,
+      validityMonths: skill.validityMonths ?? null,
+      active: true,
+    };
+    const [existing] = await db
+      .select({ id: s.skills.id })
+      .from(s.skills)
+      .where(
+        and(
+          isNull(s.skills.organizationId),
+          eq(s.skills.kind, skill.kind),
+          eq(s.skills.code, skill.code),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      await db.update(s.skills).set(values).where(eq(s.skills.id, existing.id));
+      continue;
+    }
+    const [inserted] = await db
+      .insert(s.skills)
+      .values({ organizationId: null, ...values })
+      .returning({ id: s.skills.id });
+    must(inserted, `global skill ${skill.code}`);
+  }
+  console.log(`global skills: ${String(GLOBAL_SKILLS.length)}`);
+}
+
+async function seedGlobalCourses() {
+  for (const course of GLOBAL_COURSES) {
+    const values = {
+      slug: course.slug,
+      title: course.title.fr,
+      titleEn: course.title.en,
+      titleAr: course.title.ar,
+      description: course.description,
+      visibility: "all_organizations_and_translators" as const,
+      provider: "InfoKit",
+      sourceLanguageCode: "fr",
+      verificationRequired: course.verificationRequired,
+      validityMonths: course.validityMonths ?? null,
+      active: true,
+    };
+    const [existing] = await db
+      .select({ id: s.trainingCourses.id })
+      .from(s.trainingCourses)
+      .where(
+        and(
+          isNull(s.trainingCourses.organizationId),
+          eq(s.trainingCourses.slug, course.slug),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      await db
+        .update(s.trainingCourses)
+        .set(values)
+        .where(eq(s.trainingCourses.id, existing.id));
+      continue;
+    }
+    const [inserted] = await db
+      .insert(s.trainingCourses)
+      .values({ organizationId: null, ...values })
+      .returning({ id: s.trainingCourses.id });
+    must(inserted, `global course ${course.slug}`);
+  }
+  console.log(`global courses: ${String(GLOBAL_COURSES.length)}`);
+}
+
 /* --------------------------- roles & permissions ---------------------- */
 
 const PERMISSIONS: { code: string; description: string }[] = [
@@ -958,6 +1426,36 @@ const PERMISSIONS: { code: string; description: string }[] = [
     code: "content.translation.verify",
     description:
       "Confirm that a machine-generated translation has been checked by a person who reads the language",
+  },
+  {
+    code: "translator.directory.manage",
+    description:
+      "Invite external translators, maintain their directory entries, and decide how widely they are offered",
+  },
+  {
+    code: "translator.workspace.read",
+    description:
+      "Read the translation assignments addressed to this translator, and nothing else",
+  },
+  {
+    code: "translator.profile.manage",
+    description:
+      "Maintain one's own translator profile, working languages, and course claims",
+  },
+  {
+    code: "platform.staff.manage",
+    description:
+      "Invite platform staff and grant or revoke platform-level roles",
+  },
+  {
+    code: "courses.manage",
+    description:
+      "Maintain the organisation's training/course catalogue and how widely each course is shared",
+  },
+  {
+    code: "courses.qualification.verify",
+    description:
+      "Accept or refuse a declared course completion for a member or an external translator",
   },
   {
     code: "organization.profile.manage",
@@ -1058,12 +1556,32 @@ const PERMISSIONS: { code: string; description: string }[] = [
  * deliberately atomic: broader roles receive every capability explicitly,
  * and one organisation member may hold more than one role.
  */
-const ROLES: { code: string; description: string; permissions: string[] }[] = [
+const ROLES: {
+  code: string;
+  description: string;
+  permissions: string[];
+  /**
+   * Set on the roles whose reach makes the SMS step-up non-negotiable: the
+   * platform's own staff, and the steward of an organisation's members and
+   * roles. Everything narrower — publishing, verifying, translating — leaves
+   * the choice to the person, so an invited translator is never asked for a
+   * phone number to do their own work.
+   */
+  requiresSecondFactor?: true;
+}[] = [
   {
     code: "platform_superadmin",
     description:
-      "Performs audited platform support and organisation-context switching",
-    permissions: ["support.superadmin", "audit.read"],
+      "Performs audited platform support, staffing, and organisation-context switching",
+    /**
+     * The technical account: support access, the audit trail, and the authority
+     * to staff the platform. It deliberately grants no content capability —
+     * writing and publishing platform content is `platform_content_manager`,
+     * invited separately, so day-to-day content work is not done from the
+     * account that can enter any organisation's context.
+     */
+    permissions: ["support.superadmin", "platform.staff.manage", "audit.read"],
+    requiresSecondFactor: true,
   },
   {
     code: "platform_operator",
@@ -1079,15 +1597,25 @@ const ROLES: { code: string; description: string; permissions: string[] }[] = [
       "organization.verify",
       "organization.profile.manage",
       "taxonomy.manage",
+      "translator.directory.manage",
+      "courses.manage",
       "audit.read",
     ],
+    requiresSecondFactor: true,
   },
   {
-    code: "platform_editor",
+    code: "platform_content_manager",
     description:
       "Maintains platform public content and proxy-publishes with recorded approval",
+    /**
+     * The content half of the platform, invited by the superadmin
+     * (`core.invitations`, kind `platform_admin`). It holds no support access,
+     * no organisation verification, and no staffing power: it writes, reviews,
+     * translates, and publishes.
+     */
     permissions: [
       "content.article.write",
+      "content.article.review",
       "content.article.publish",
       "content.activity.manage",
       "content.activity.verify",
@@ -1096,6 +1624,7 @@ const ROLES: { code: string; description: string; permissions: string[] }[] = [
       "content.translation.review",
       "content.translation.verify",
     ],
+    requiresSecondFactor: true,
   },
   {
     code: "organization_author",
@@ -1132,8 +1661,12 @@ const ROLES: { code: string; description: string; permissions: string[] }[] = [
       "members.read",
       "members.manage",
       "roles.manage",
+      "translator.directory.manage",
+      "courses.manage",
+      "courses.qualification.verify",
       "audit.read",
     ],
+    requiresSecondFactor: true,
   },
   {
     code: "organization_editor",
@@ -1151,6 +1684,24 @@ const ROLES: { code: string; description: string; permissions: string[] }[] = [
     permissions: ["content.translation.submit"],
   },
   {
+    code: "translator",
+    /**
+     * The external translator's own role, granted globally in
+     * `core.user_platform_roles` because they hold no membership anywhere. It
+     * is the smallest role in the catalogue on purpose: the content they see is
+     * whatever was sent to them — assignments linked to their
+     * `core.translators` entry — plus their own profile. No organisation
+     * content, no member data, no other translator's work.
+     */
+    description:
+      "Works the translations sent to them and maintains their own translator profile",
+    permissions: [
+      "translator.workspace.read",
+      "content.translation.submit",
+      "translator.profile.manage",
+    ],
+  },
+  {
     code: "coordinator",
     description:
       "Coordinates organisation teams, planning, and shared coordination events",
@@ -1159,6 +1710,7 @@ const ROLES: { code: string; description: string; permissions: string[] }[] = [
       "teams.manage",
       "planning.manage",
       "coordination.event.manage",
+      "courses.qualification.verify",
     ],
   },
   {
@@ -1193,6 +1745,15 @@ const ROLES: { code: string; description: string; permissions: string[] }[] = [
 const LEGACY_PERMISSION_RENAMES = [
   ["content.article.create", "content.article.write"],
   ["content.service.manage", "content.activity.manage"],
+] as const;
+
+/**
+ * Platform role templates renamed after accounts were already granted them.
+ * Renaming the row keeps every `user_platform_roles` assignment intact, which
+ * dropping and recreating the role would not.
+ */
+const LEGACY_ROLE_RENAMES = [
+  ["platform_editor", "platform_content_manager"],
 ] as const;
 
 async function seedRoles() {
@@ -1242,6 +1803,28 @@ async function seedRoles() {
       await tx.delete(s.permissions).where(eq(s.permissions.code, legacyCode));
     }
 
+    for (const [legacyCode, replacementCode] of LEGACY_ROLE_RENAMES) {
+      const platformCodes = await tx
+        .select({ code: s.roles.code })
+        .from(s.roles)
+        .where(
+          and(
+            inArray(s.roles.code, [legacyCode, replacementCode]),
+            isNull(s.roles.organizationId),
+          ),
+        );
+      const renameable =
+        platformCodes.some((row) => row.code === legacyCode) &&
+        !platformCodes.some((row) => row.code === replacementCode);
+      if (!renameable) continue;
+      await tx
+        .update(s.roles)
+        .set({ code: replacementCode })
+        .where(
+          and(eq(s.roles.code, legacyCode), isNull(s.roles.organizationId)),
+        );
+    }
+
     const existing = await tx
       .select({
         id: s.roles.id,
@@ -1255,17 +1838,25 @@ async function seedRoles() {
         .map((r) => [r.code, r.id]),
     );
     for (const role of ROLES) {
+      const template = {
+        code: role.code,
+        description: role.description,
+        requiresSecondFactor: role.requiresSecondFactor ?? false,
+      };
       let roleId = platformRoles.get(role.code);
       if (roleId === undefined) {
         const [row] = await tx
           .insert(s.roles)
-          .values({ code: role.code, description: role.description })
+          .values(template)
           .returning({ id: s.roles.id });
         roleId = must(row, `role ${role.code}`).id;
       } else {
         await tx
           .update(s.roles)
-          .set({ description: role.description })
+          .set({
+            description: template.description,
+            requiresSecondFactor: template.requiresSecondFactor,
+          })
           .where(eq(s.roles.id, roleId));
       }
 
@@ -1288,16 +1879,17 @@ async function seedRoles() {
 }
 
 /**
- * The platform roles the first staff account receives. Support access on its
- * own grants no editing, so an account holding only `platform_superadmin`
- * would see the whole workspace read-only; the operator and editor roles are
- * what make the platform side of the dashboard usable on a fresh deployment.
+ * The platform roles the first staff account receives: the technical pair.
+ * Support access on its own grants no editing, so `platform_operator` is what
+ * makes the platform side of the dashboard usable — verifying organisations,
+ * taxonomies, the translator directory, the audit trail.
+ *
+ * `platform_content_manager` is deliberately not here. Content is somebody's
+ * job, not the superadmin's: this account invites that person
+ * (`core.invitations`, kind `platform_admin`) and the grant lands in
+ * `core.user_platform_roles` on acceptance.
  */
-const BOOTSTRAP_ROLES = [
-  "platform_superadmin",
-  "platform_operator",
-  "platform_editor",
-] as const;
+const BOOTSTRAP_ROLES = ["platform_superadmin", "platform_operator"] as const;
 
 /**
  * Grants the platform roles to the account selected by deployment
@@ -1385,6 +1977,8 @@ async function main() {
   await seedGlobalTags();
   await seedSpecialities();
   await seedConcepts(categoryIds);
+  await seedGlobalSkills();
+  await seedGlobalCourses();
   await seedRoles();
   await seedBootstrapSuperadmin();
   console.log("Done.");

@@ -48,7 +48,7 @@ import {
 export const userSettings = authSchema.table(
   "user_settings",
   {
-    userId: varchar("user_id", { length: 255 })
+    userId: uuid("user_id")
       .notNull()
       .primaryKey()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -89,9 +89,9 @@ export const userSettings = authSchema.table(
       .notNull()
       .default("magic_link"),
     /**
-     * Whether this account is asked for a second factor. On by default, and
-     * accounts holding platform administration cannot turn it off — the
-     * server re-checks that on every write and on every gated read
+     * Whether this account is asked for a second factor. On by default, and an
+     * account holding a role marked `requires_second_factor` cannot turn it off
+     * — the server re-checks the roles on every write and on every gated read
      * (`secondFactorRequired`), so flipping this column is not a bypass.
      */
     twoFactorEnabled: boolean("two_factor_enabled").notNull().default(true),
@@ -169,7 +169,7 @@ export const notificationPreferences = notifications.table(
   "preferences",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    userId: varchar("user_id", { length: 255 })
+    userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     organizationId: uuid("organization_id").references(() => organizations.id, {

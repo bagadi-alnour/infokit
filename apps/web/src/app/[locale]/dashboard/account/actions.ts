@@ -16,9 +16,11 @@ import { localeCookieName } from "~/i18n/constants";
 import { getActionLocale } from "~/i18n/request-locale";
 import { localizedPath } from "~/i18n/routing";
 import { recordAudit } from "~/server/audit";
-import { isPlatformAdmin } from "~/server/auth/authorization";
 import { requireEditor } from "~/server/auth/require";
-import { notificationKindPolicies } from "~/server/account/settings";
+import {
+  notificationKindPolicies,
+  secondFactorMandatory,
+} from "~/server/account/settings";
 import { db } from "~/server/db";
 import {
   notificationPreferences,
@@ -160,9 +162,9 @@ export async function updateAccountPreferences(formData: FormData) {
 
 /**
  * Sign-in preferences and second-factor enrolment. Turning the second factor
- * off is a security decision, so it is refused for platform administrators
- * and always audited with the outcome that was actually stored — never with
- * what the form asked for (RISKS.md R10).
+ * off is a security decision, so it is refused to anyone holding a role that
+ * mandates the step-up, and always audited with the outcome that was actually
+ * stored — never with what the form asked for (RISKS.md R10).
  */
 export async function updateAccountSignIn(formData: FormData) {
   const locale = await getActionLocale(formData.get("locale"));
@@ -176,7 +178,7 @@ export async function updateAccountSignIn(formData: FormData) {
   if (!parsed.success) backTo("security", locale, { error: "invalid" });
 
   const { preferredSignInMethod, twoFactorMethod } = parsed.data;
-  const locked = await isPlatformAdmin(user.id);
+  const locked = await secondFactorMandatory(user.id);
   if (locked && !parsed.data.twoFactorEnabled) {
     backTo("security", locale, { error: "twoFactorRequired" });
   }

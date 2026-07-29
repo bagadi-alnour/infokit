@@ -20,12 +20,15 @@ export function SubmitButton({
   label,
   pendingLabel,
   tone = "primary",
+  pending: pendingOverride,
 }: {
   label: string;
   pendingLabel: string;
   tone?: keyof typeof TONES;
+  pending?: boolean;
 }) {
-  const { pending } = useFormStatus();
+  const formStatus = useFormStatus();
+  const pending = pendingOverride ?? formStatus.pending;
   return (
     <ActionButton
       type="submit"

@@ -20,7 +20,10 @@ import {
   WorkspacePage,
 } from "~/components/admin/workspace";
 import { requireRouteLocale } from "~/i18n/route-locale";
-import { getRoleTestState } from "~/server/auth/authorization";
+import {
+  authorizationFor,
+  organizationChoices,
+} from "~/server/auth/authorization";
 import { requireEditor } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
@@ -28,7 +31,6 @@ import {
   activityTags,
   editorialEntryTags,
   editorialRelatedServices,
-  organizations,
   serviceCategories,
   serviceCategoryTranslations,
   services,
@@ -81,24 +83,26 @@ export default async function CataloguePage({
   const requestedOrg = (await searchParams).org;
   const user = await requireEditor(locale);
 
-  const organizationRows = await db
-    .select({ id: organizations.id, name: organizations.displayName })
-    .from(organizations)
-    .orderBy(asc(organizations.displayName));
-
-  const scopeOrgId =
-    (typeof requestedOrg === "string" ? requestedOrg : undefined) ??
-    organizationRows[0]?.id ??
-    null;
+  // Which association's rows this reader may see beside the platform's own, and
+  // which one `?org=` selected among them.
+  const { choices: organizationRows, selectedId: scopeOrgId } =
+    await organizationChoices(
+      user.id,
+      typeof requestedOrg === "string" ? requestedOrg : undefined,
+    );
   const scopeOrgName =
     organizationRows.find((org) => org.id === scopeOrgId)?.name ??
     t["catalogue.scope.organization"];
 
-  const roleTest = await getRoleTestState(user.id, scopeOrgId ?? undefined);
-  const canManageGlobal = roleTest.effectivePermissions.has("taxonomy.manage");
+  const authorization = await authorizationFor(
+    user.id,
+    scopeOrgId ?? undefined,
+  );
+  const canManageGlobal =
+    authorization.effectivePermissions.has("taxonomy.manage");
   const canManageOrg =
     !!scopeOrgId &&
-    roleTest.effectivePermissions.has("content.activity.manage");
+    authorization.effectivePermissions.has("content.activity.manage");
 
   const orgScopeFilter = (column: AnyPgColumn) =>
     scopeOrgId ? or(isNull(column), eq(column, scopeOrgId)) : isNull(column);

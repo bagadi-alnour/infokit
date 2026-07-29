@@ -24,6 +24,7 @@ export interface CatalogMap {
   common: typeof import("./messages/en/common.json");
   "dashboard-account": typeof import("./messages/en/dashboard-account.json");
   "dashboard-articles": typeof import("./messages/en/dashboard-articles.json");
+  "dashboard-audit": typeof import("./messages/en/dashboard-audit.json");
   "dashboard-catalogue": typeof import("./messages/en/dashboard-catalogue.json");
   "dashboard-console": typeof import("./messages/en/dashboard-console.json");
   "dashboard-events": typeof import("./messages/en/dashboard-events.json");
@@ -31,6 +32,7 @@ export interface CatalogMap {
   "dashboard-overview": typeof import("./messages/en/dashboard-overview.json");
   "dashboard-places": typeof import("./messages/en/dashboard-places.json");
   "dashboard-simulator": typeof import("./messages/en/dashboard-simulator.json");
+  "dashboard-skills": typeof import("./messages/en/dashboard-skills.json");
   home: typeof import("./messages/en/home.json");
   member: typeof import("./messages/en/member.json");
   login: typeof import("./messages/en/login.json");
@@ -61,6 +63,8 @@ const catalogLoaders = {
       (await import("./messages/fr/dashboard-account.json")).default,
     "dashboard-articles": async () =>
       (await import("./messages/fr/dashboard-articles.json")).default,
+    "dashboard-audit": async () =>
+      (await import("./messages/fr/dashboard-audit.json")).default,
     "dashboard-catalogue": async () =>
       (await import("./messages/fr/dashboard-catalogue.json")).default,
     "dashboard-console": async () =>
@@ -75,6 +79,8 @@ const catalogLoaders = {
       (await import("./messages/fr/dashboard-places.json")).default,
     "dashboard-simulator": async () =>
       (await import("./messages/fr/dashboard-simulator.json")).default,
+    "dashboard-skills": async () =>
+      (await import("./messages/fr/dashboard-skills.json")).default,
     home: async () => (await import("./messages/fr/home.json")).default,
     member: async () => (await import("./messages/fr/member.json")).default,
     login: async () => (await import("./messages/fr/login.json")).default,
@@ -97,6 +103,8 @@ const catalogLoaders = {
       (await import("./messages/en/dashboard-account.json")).default,
     "dashboard-articles": async () =>
       (await import("./messages/en/dashboard-articles.json")).default,
+    "dashboard-audit": async () =>
+      (await import("./messages/en/dashboard-audit.json")).default,
     "dashboard-catalogue": async () =>
       (await import("./messages/en/dashboard-catalogue.json")).default,
     "dashboard-console": async () =>
@@ -111,6 +119,8 @@ const catalogLoaders = {
       (await import("./messages/en/dashboard-places.json")).default,
     "dashboard-simulator": async () =>
       (await import("./messages/en/dashboard-simulator.json")).default,
+    "dashboard-skills": async () =>
+      (await import("./messages/en/dashboard-skills.json")).default,
     home: async () => (await import("./messages/en/home.json")).default,
     member: async () => (await import("./messages/en/member.json")).default,
     login: async () => (await import("./messages/en/login.json")).default,
@@ -133,6 +143,8 @@ const catalogLoaders = {
       (await import("./messages/ar/dashboard-account.json")).default,
     "dashboard-articles": async () =>
       (await import("./messages/ar/dashboard-articles.json")).default,
+    "dashboard-audit": async () =>
+      (await import("./messages/ar/dashboard-audit.json")).default,
     "dashboard-catalogue": async () =>
       (await import("./messages/ar/dashboard-catalogue.json")).default,
     "dashboard-console": async () =>
@@ -147,6 +159,8 @@ const catalogLoaders = {
       (await import("./messages/ar/dashboard-places.json")).default,
     "dashboard-simulator": async () =>
       (await import("./messages/ar/dashboard-simulator.json")).default,
+    "dashboard-skills": async () =>
+      (await import("./messages/ar/dashboard-skills.json")).default,
     home: async () => (await import("./messages/ar/home.json")).default,
     member: async () => (await import("./messages/ar/member.json")).default,
     login: async () => (await import("./messages/ar/login.json")).default,

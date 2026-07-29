@@ -14,12 +14,12 @@ import { languages } from "./catalog";
 import { organizations } from "./organizations";
 import {
   archival,
+  assetTextTrackKind,
   assetVariantKind,
   assetVisibility,
   content,
   malwareScanState,
   mediaKind,
-  textTrackKind,
   timestamps,
   translationState,
   verification,
@@ -32,9 +32,7 @@ import {
  */
 export const assets = content.table("assets", {
   id: uuid("id").primaryKey().defaultRandom(),
-  uploaderId: varchar("uploader_id", { length: 255 }).references(
-    () => users.id,
-  ),
+  uploaderId: uuid("uploader_id").references(() => users.id),
   organizationId: uuid("organization_id").references(() => organizations.id),
   languageCode: varchar("language_code", { length: 35 }).references(
     () => languages.code,
@@ -103,7 +101,7 @@ export const assetTextTracks = content.table(
     languageCode: varchar("language_code", { length: 35 })
       .notNull()
       .references(() => languages.code),
-    kind: textTrackKind("kind").notNull(),
+    kind: assetTextTrackKind("kind").notNull(),
     body: text("body"),
     storageKey: text("storage_key"),
     state: translationState("state").notNull().default("draft"),

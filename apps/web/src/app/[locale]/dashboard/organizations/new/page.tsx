@@ -11,7 +11,7 @@ import {
 import { PendingButton } from "~/components/pending-button";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
-import { getRoleTestState } from "~/server/auth/authorization";
+import { hasActualPlatformPermission } from "~/server/auth/authorization";
 import { requireEditor } from "~/server/auth/require";
 import { createOrganization } from "../actions";
 
@@ -25,8 +25,8 @@ export default async function NewOrganizationPage({
   // Only the platform creates directory records. Someone without the
   // permission is told so here rather than by a failed submit.
   const user = await requireEditor(locale);
-  const authorization = await getRoleTestState(user.id);
-  const canCreate = authorization.effectivePermissions.has(
+  const canCreate = await hasActualPlatformPermission(
+    user.id,
     "organization.verify",
   );
   if (!canCreate) {

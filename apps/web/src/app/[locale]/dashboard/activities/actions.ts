@@ -28,9 +28,8 @@ import { editorialLanguageCodes } from "~/lib/editorial-languages";
 import { EDITOR_CONTACT_OPTION_ID } from "~/lib/editor-contact";
 import { PLATFORM_OWNER_OPTION_ID } from "~/lib/platform-owner";
 import { recordAudit } from "~/server/audit";
-import { verifyAssetUpload } from "~/server/assets/s3";
+import { scanUploadedAsset } from "~/server/assets/scan";
 import {
-  getRoleTestState,
   hasActualPlatformPermission,
   platformPermissionsForUser,
   superadminPermission,
@@ -60,8 +59,8 @@ import {
 import { db } from "~/server/db";
 import { sendMemberInvitation } from "~/server/invitations";
 import {
-  parseSkills,
-  replaceMemberProfileFacets,
+  insertMember,
+  replaceMemberCapabilities,
   validLanguageCodes,
 } from "~/server/members";
 import { scheduleRulesOverlap } from "~/lib/schedule-overlap";
@@ -74,7 +73,13 @@ import {
   weekdayNumberSchema,
 } from "~/lib/schedule-rules";
 import { uniqueSlug } from "~/lib/slug";
-import { optionalText, optionalUuid } from "~/lib/form-fields";
+import {
+  optionalText,
+  optionalUuid,
+  personName,
+  phoneNumber,
+} from "~/lib/form-fields";
+import { parseTransitLinks } from "~/lib/transit-links";
 import {
   activities,
   activityAssets,
@@ -85,6 +90,7 @@ import {
   activityProviders,
   activityServices,
   activityTags,
+  activityTransitLinks,
   activityTranslations,
   assets,
   assetTranslations,
@@ -177,6 +183,16 @@ const createActivitySchema = z.object({
 function refresh(locale: Locale) {
   revalidatePath(localizedPath("/dashboard", locale));
   revalidatePath(localizedPath("/dashboard/activities", locale));
+}
+
+/** The organisation an audit row belongs to, for actions that only hold an id. */
+async function activityOrganization(activityId: string) {
+  const [activity] = await db
+    .select({ organizationId: activities.organizationId })
+    .from(activities)
+    .where(eq(activities.id, activityId))
+    .limit(1);
+  return activity?.organizationId ?? null;
 }
 
 export const createActivity = protectedPermissionAction(
@@ -387,27 +403,16 @@ export const createActivity = protectedPermissionAction(
         "A platform-held activity cannot publish your address as its contact",
       );
     }
-    const [authorization, platformPermissions] = await Promise.all([
-      getRoleTestState(user.id, ownerOrganizationId ?? undefined),
-      platformPermissionsForUser(user.id),
-    ]);
-    const actingOrganizationId =
-      authorization.assumedOrganizationId ??
-      (platformPermissions.has("content.activity.manage")
-        ? null
-        : ownerOrganizationId);
+    const platformPermissions = await platformPermissionsForUser(user.id);
+    const editsForPlatform = platformPermissions.has("content.activity.manage");
+    const actingOrganizationId = editsForPlatform ? null : ownerOrganizationId;
     const createdByScope = actingOrganizationId ? "organization" : "platform";
     /**
      * Holding an activity for the platform is a platform editor's decision. An
-     * organisation's own editor is acting for that organisation, and a
-     * superadmin testing an organisation role is too, so for both of them the
+     * organisation's own editor is acting for that organisation, so for them the
      * custodian is that organisation and the sentinel is not theirs to send.
      */
-    if (
-      ownedByPlatform &&
-      (authorization.assumedOrganizationId !== null ||
-        !platformPermissions.has("content.activity.manage"))
-    ) {
+    if (ownedByPlatform && !editsForPlatform) {
       throw new Error("Choose the organisation this activity belongs to");
     }
     /**
@@ -590,9 +595,11 @@ export const createActivity = protectedPermissionAction(
     if (parsed.coverAssetId) {
       const [uploadedCover] = await db
         .select({
+          id: assets.id,
           storageKey: assets.storageKey,
           mimeType: assets.mimeType,
           byteSize: assets.byteSize,
+          scanState: assets.scanState,
         })
         .from(assets)
         .where(
@@ -606,7 +613,7 @@ export const createActivity = protectedPermissionAction(
         )
         .limit(1);
       if (!uploadedCover) throw new Error("The activity image is unavailable");
-      await verifyAssetUpload(uploadedCover);
+      await scanUploadedAsset(uploadedCover);
     }
 
     // Null exactly when the scope is global; the check above guarantees it.
@@ -1192,15 +1199,12 @@ export const publishActivityLanguage = protectedPermissionAction(
            * records who did. Drop this once organisation acceptance exists;
            * `proposed` is the honest state for a claim nobody agreed to.
            */
-          const [authorization, platformPermissions] = await Promise.all([
-            getRoleTestState(user.id, owner.organizationId),
-            platformPermissionsForUser(user.id),
-          ]);
-          const actingOrganizationId =
-            authorization.assumedOrganizationId ??
-            (platformPermissions.has("content.activity.manage")
-              ? null
-              : owner.organizationId);
+          const platformPermissions = await platformPermissionsForUser(user.id);
+          const actingOrganizationId = platformPermissions.has(
+            "content.activity.manage",
+          )
+            ? null
+            : owner.organizationId;
           const promotable = publishableProviders
             .filter(
               (provider) =>
@@ -1444,8 +1448,6 @@ export const deleteActivity = protectedPermissionAction(
 const updateActivityContentSchema = z.object({
   activityId: z.string().uuid(),
   sourceLanguage: editorialLanguageSchema,
-  categoryId: z.string().uuid(),
-  audienceCategoryId: z.string().uuid(),
 });
 
 /**
@@ -1454,6 +1456,10 @@ const updateActivityContentSchema = z.object({
  * translation source version (so publication pinning stays coherent) and the
  * working translation rows are upserted. Locale publication is a separate,
  * out-of-scope action, so this never flips the `published` flag.
+ *
+ * Classification remains a separate server operation because choosing a tag
+ * has no business sealing a new source version of the text. The activity editor
+ * invokes it from the same page-level Save action after this content operation.
  */
 export const updateActivityContent = protectedPermissionAction(
   "content.activity.manage",
@@ -1461,12 +1467,7 @@ export const updateActivityContent = protectedPermissionAction(
     const parsed = updateActivityContentSchema.parse({
       activityId: formData.get("activityId"),
       sourceLanguage: formData.get("sourceLanguage"),
-      categoryId: formData.get("categoryId"),
-      audienceCategoryId: formData.get("audienceCategoryId"),
     });
-    const tagIds = [
-      ...new Set(z.array(z.string().uuid()).parse(formData.getAll("tagId"))),
-    ].slice(0, 3);
     // Provenance is decided on the server (see ~/server/translation/provenance):
     // the form carries the text and, for freshly generated languages, a signed
     // proposal token — never the `method` or `state` that gets stored.
@@ -1684,6 +1685,111 @@ export const updateActivityContent = protectedPermissionAction(
           );
       }
 
+      await tx
+        .update(activities)
+        .set({ updatedAt: new Date() })
+        .where(eq(activities.id, activity.id));
+    });
+
+    await recordAudit({
+      action: "activity.content_saved",
+      subjectType: "activity",
+      subjectId: parsed.activityId,
+    });
+    refresh(locale);
+  },
+);
+
+/**
+ * Category, audience and public tags: three panels in the editor, so three
+ * actions rather than one that guesses which field the form meant to change.
+ * None of them touches a word of the record's text.
+ */
+
+const activityCategorySchema = z.object({
+  activityId: z.string().uuid(),
+  categoryId: z.string().uuid(),
+});
+
+export const updateActivityCategory = protectedPermissionAction(
+  "content.activity.manage",
+  async (formData, locale) => {
+    const parsed = activityCategorySchema.parse({
+      activityId: formData.get("activityId"),
+      categoryId: formData.get("categoryId"),
+    });
+    const [row] = await db
+      .update(activities)
+      .set({ categoryId: parsed.categoryId, updatedAt: new Date() })
+      .where(eq(activities.id, parsed.activityId))
+      .returning({
+        id: activities.id,
+        organizationId: activities.organizationId,
+      });
+    if (!row) throw new Error("Unknown activity");
+    await recordAudit({
+      action: "activity.category_saved",
+      subjectType: "activity",
+      subjectId: row.id,
+      organizationId: row.organizationId,
+    });
+    refresh(locale);
+  },
+);
+
+const activityAudienceSchema = z.object({
+  activityId: z.string().uuid(),
+  audienceCategoryId: z.string().uuid(),
+});
+
+export const updateActivityAudience = protectedPermissionAction(
+  "content.activity.manage",
+  async (formData, locale) => {
+    const parsed = activityAudienceSchema.parse({
+      activityId: formData.get("activityId"),
+      audienceCategoryId: formData.get("audienceCategoryId"),
+    });
+    const [row] = await db
+      .update(activities)
+      .set({
+        audienceCategoryId: parsed.audienceCategoryId,
+        updatedAt: new Date(),
+      })
+      .where(eq(activities.id, parsed.activityId))
+      .returning({
+        id: activities.id,
+        organizationId: activities.organizationId,
+      });
+    if (!row) throw new Error("Unknown activity");
+    await recordAudit({
+      action: "activity.audience_saved",
+      subjectType: "activity",
+      subjectId: row.id,
+      organizationId: row.organizationId,
+    });
+    refresh(locale);
+  },
+);
+
+export const updateActivityTags = protectedPermissionAction(
+  "content.activity.manage",
+  async (formData, locale) => {
+    const activityId = z.string().uuid().parse(formData.get("activityId"));
+    const tagIds = [
+      ...new Set(z.array(z.string().uuid()).parse(formData.getAll("tagId"))),
+    ].slice(0, 3);
+
+    await db.transaction(async (tx) => {
+      const [activity] = await tx
+        .select({
+          id: activities.id,
+          organizationId: activities.organizationId,
+        })
+        .from(activities)
+        .where(eq(activities.id, activityId))
+        .limit(1);
+      if (!activity) throw new Error("Unknown activity");
+
       // Replace the public tag set, keeping only globals or this org's tags.
       const validTagIds =
         tagIds.length > 0
@@ -1719,6 +1825,104 @@ export const updateActivityContent = protectedPermissionAction(
           })),
         );
       }
+      await tx
+        .update(activities)
+        .set({ updatedAt: new Date() })
+        .where(eq(activities.id, activity.id));
+    });
+
+    await recordAudit({
+      action: "activity.tags_saved",
+      subjectType: "activity",
+      subjectId: activityId,
+      organizationId: await activityOrganization(activityId),
+      // How many, never which: the set itself is on the record already.
+      metadata: { count: tagIds.length },
+    });
+    refresh(locale);
+  },
+);
+
+/**
+ * The compact activity editor presents category, audience, tags and included
+ * services as one record-details group. Save them atomically so its single
+ * button cannot leave half of the group updated when one choice is invalid.
+ */
+const activityDetailsSchema = z.object({
+  activityId: z.string().uuid(),
+  categoryId: z.string().uuid(),
+  audienceCategoryId: z.string().uuid(),
+  tagIds: z.array(z.string().uuid()).max(3),
+  serviceIds: z.array(z.string().uuid()),
+});
+
+export const updateActivityDetails = protectedPermissionAction(
+  "content.activity.manage",
+  async (formData, locale) => {
+    const parsed = activityDetailsSchema.parse({
+      activityId: formData.get("activityId"),
+      categoryId: formData.get("categoryId"),
+      audienceCategoryId: formData.get("audienceCategoryId"),
+      tagIds: [...new Set(formData.getAll("tagId"))],
+      serviceIds: [...new Set(formData.getAll("serviceId"))],
+    });
+
+    const organizationId = await db.transaction(async (tx) => {
+      const [activity] = await tx
+        .select({ organizationId: activities.organizationId })
+        .from(activities)
+        .where(eq(activities.id, parsed.activityId))
+        .limit(1);
+      if (!activity) throw new Error("Unknown activity");
+
+      const validTagIds =
+        parsed.tagIds.length > 0
+          ? (
+              await tx
+                .select({ id: tags.id })
+                .from(tags)
+                .where(
+                  and(
+                    inArray(tags.id, parsed.tagIds),
+                    eq(tags.active, true),
+                    eq(tags.visibility, "public"),
+                    activity.organizationId
+                      ? or(
+                          isNull(tags.organizationId),
+                          eq(tags.organizationId, activity.organizationId),
+                        )
+                      : isNull(tags.organizationId),
+                  ),
+                )
+            ).map((tag) => tag.id)
+          : [];
+      const orderedTagIds = parsed.tagIds.filter((id) =>
+        validTagIds.includes(id),
+      );
+
+      if (parsed.serviceIds.length > 0) {
+        const allowedServices = await tx
+          .select({ id: services.id })
+          .from(services)
+          .where(
+            and(
+              inArray(services.id, parsed.serviceIds),
+              eq(services.active, true),
+              isNull(services.archivedAt),
+              activity.organizationId
+                ? or(
+                    isNull(services.organizationId),
+                    eq(services.organizationId, activity.organizationId),
+                  )
+                : isNull(services.organizationId),
+            ),
+          );
+        if (allowedServices.length !== parsed.serviceIds.length) {
+          throw new Error(
+            "One or more services are unavailable in this organisation",
+          );
+        }
+      }
 
       await tx
         .update(activities)
@@ -1727,13 +1931,51 @@ export const updateActivityContent = protectedPermissionAction(
           audienceCategoryId: parsed.audienceCategoryId,
           updatedAt: new Date(),
         })
-        .where(eq(activities.id, activity.id));
+        .where(eq(activities.id, parsed.activityId));
+
+      await tx
+        .delete(activityTags)
+        .where(eq(activityTags.activityId, parsed.activityId));
+      if (orderedTagIds.length > 0) {
+        await tx.insert(activityTags).values(
+          orderedTagIds.map((tagId, displayOrder) => ({
+            activityId: parsed.activityId,
+            tagId,
+            displayOrder,
+          })),
+        );
+      }
+
+      await tx
+        .update(activityServices)
+        .set({ active: false, updatedAt: new Date() })
+        .where(eq(activityServices.activityId, parsed.activityId));
+      for (const [displayOrder, serviceId] of parsed.serviceIds.entries()) {
+        await tx
+          .insert(activityServices)
+          .values({
+            activityId: parsed.activityId,
+            serviceId,
+            displayOrder,
+          })
+          .onConflictDoUpdate({
+            target: [activityServices.activityId, activityServices.serviceId],
+            set: { active: true, displayOrder, updatedAt: new Date() },
+          });
+      }
+
+      return activity.organizationId;
     });
 
     await recordAudit({
-      action: "activity.content_saved",
+      action: "activity.details_saved",
       subjectType: "activity",
       subjectId: parsed.activityId,
+      organizationId,
+      metadata: {
+        tags: parsed.tagIds.length,
+        services: parsed.serviceIds.length,
+      },
     });
     refresh(locale);
   },
@@ -2172,6 +2414,13 @@ export const assignServiceToActivity = protectedPermissionAction(
         target: [activityServices.activityId, activityServices.serviceId],
         set: { active: true },
       });
+    await recordAudit({
+      action: "activity.service_assigned",
+      subjectType: "activity",
+      subjectId: parsed.activityId,
+      organizationId: scope.activityOrganizationId,
+      metadata: { serviceId: parsed.serviceId },
+    });
     refresh(locale);
   },
 );
@@ -2278,14 +2527,33 @@ export const addActivitySchedule =
           return false;
         }
 
-        await tx.insert(scheduleRules).values(candidate);
-        return true;
+        const [rule] = await tx
+          .insert(scheduleRules)
+          .values(candidate)
+          .returning({ id: scheduleRules.id });
+        return rule ?? null;
       });
 
       if (!inserted) {
         return { result: "error", error: "overlap", values: parsed };
       }
 
+      // The counterpart of `activity.schedule_rule_deleted`: an opening hour that
+      // appeared and one that disappeared read the same way in the trail.
+      await recordAudit({
+        action: "activity.schedule_rule_added",
+        subjectType: "activity",
+        subjectId: parsed.activityId,
+        organizationId: await activityOrganization(parsed.activityId),
+        metadata: {
+          scheduleRuleId: inserted.id,
+          scheduleType: parsed.scheduleType,
+          weekday: candidate.weekday,
+          startTime: candidate.startTime,
+          endTime: candidate.endTime,
+          occurrenceDate: parsed.occurrenceDate ?? null,
+        },
+      });
       refresh(locale);
       return { result: "success", values: parsed };
     },
@@ -2427,13 +2695,61 @@ export const addExceptionalClosure = protectedPermissionAction(
   },
 );
 
+/**
+ * How to get to the activity without a car, replacing whatever was recorded
+ * before.
+ *
+ * Wholesale, like the event's rows and for the same reason: the editor owns the
+ * list, and a row edited from "bus 5" into "train, Calais-Ville" is a different
+ * journey rather than a correction to that one — nothing on it, no publication
+ * and no translation, is worth keeping an id alive for. Positions come from the
+ * list itself, so the order the editor put the rows in is the order a visitor
+ * reads them.
+ *
+ * The trail counts the rows and nothing else: a bus line is not a fact about a
+ * person, but it is also not worth copying into the log.
+ */
+export const updateActivityTransit = protectedPermissionAction(
+  "content.activity.manage",
+  async (formData, locale) => {
+    const activityId = z.string().uuid().parse(formData.get("recordId"));
+    const links = parseTransitLinks(formData);
+    const [activity] = await db
+      .select({ organizationId: activities.organizationId })
+      .from(activities)
+      .where(eq(activities.id, activityId));
+    if (!activity) throw new Error("Unknown activity");
+
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(activityTransitLinks)
+        .where(eq(activityTransitLinks.activityId, activityId));
+      if (links.length === 0) return;
+      await tx.insert(activityTransitLinks).values(
+        links.map((link, displayOrder) => ({
+          activityId,
+          ...link,
+          displayOrder,
+        })),
+      );
+    });
+    await recordAudit({
+      action: "activity.transit_replaced",
+      subjectType: "activity",
+      subjectId: activityId,
+      organizationId: activity.organizationId,
+      metadata: { links: links.length },
+    });
+    refresh(locale);
+  },
+);
+
 const assignMemberSchema = z
   .object({
     activityId: z.string().uuid(),
     email: z.string().trim().toLowerCase().email(),
-    displayName: optionalText,
-    title: optionalText,
-    skills: optionalText,
+    /** Catalogue ids; `replaceSkillRecords` keeps only the reachable ones. */
+    skillIds: z.array(z.string().uuid()).max(40),
     languages: z.array(z.string().min(2).max(35)).max(30),
     expertise: z.string().trim().min(2).max(160),
     visibility: z.enum(["workspace", "public"]),
@@ -2453,6 +2769,21 @@ const assignMemberSchema = z
   });
 
 /**
+ * Who a person is, asked only when the address matches nobody on the books:
+ * `core.organization_members` requires all five of these, so a new member cannot
+ * be conjured out of an email address the way a placeholder display name used to
+ * allow. An address that does match keeps the identity the roster holds — an
+ * activity assignment says what somebody brings to Tuesday, not what their name
+ * is.
+ */
+const newMemberSchema = z.object({
+  firstName: personName,
+  lastName: personName,
+  phone: phoneNumber,
+  title: z.string().trim().min(2).max(160),
+});
+
+/**
  * Assign by email whether or not an account exists. The private membership is
  * ready for identity linking later; public attribution uses separate approved
  * fields and never exposes the member email or account record.
@@ -2466,16 +2797,13 @@ export const assignMemberToActivity = protectedPermissionAction(
     const parsed = assignMemberSchema.parse({
       activityId: formData.get("activityId"),
       email: formData.get("email"),
-      displayName: formData.get("displayName") ?? "",
-      title: formData.get("title") ?? "",
-      skills: formData.get("skills") ?? "",
+      skillIds: formData.getAll("skillIds"),
       languages: formData.getAll("languages"),
       expertise: formData.get("expertise"),
       visibility: formData.get("visibility"),
       publicDisplayName: formData.get("publicDisplayName") ?? "",
       publicExpertise: formData.get("publicExpertise") ?? "",
     });
-    const skills = parseSkills(parsed.skills);
     const languageCodes = await validLanguageCodes(parsed.languages);
     const [activity] = await db
       .select({
@@ -2498,20 +2826,19 @@ export const assignMemberToActivity = protectedPermissionAction(
     const activityTeamId = activity.teamId;
 
     const [account] = await db
-      .select({ id: users.id, name: users.name })
+      .select({ id: users.id })
       .from(users)
       .where(sql`lower(${users.email}) = ${parsed.email}`)
       .limit(1);
 
-    const { member, created } = await db.transaction(async (tx) => {
+    const { memberId, created } = await db.transaction(async (tx) => {
       const identityMatch = account
         ? or(
             eq(organizationMembers.contactEmail, parsed.email),
             eq(organizationMembers.userId, account.id),
           )
         : eq(organizationMembers.contactEmail, parsed.email);
-      let created = false;
-      let [existing] = await tx
+      const [existing] = await tx
         .select({ id: organizationMembers.id })
         .from(organizationMembers)
         .where(
@@ -2522,39 +2849,34 @@ export const assignMemberToActivity = protectedPermissionAction(
         )
         .limit(1);
 
-      if (!existing) {
-        created = true;
-        [existing] = await tx
-          .insert(organizationMembers)
-          .values({
-            organizationId: activityOrganizationId,
-            userId: account?.id ?? null,
-            displayName:
-              parsed.displayName ??
-              account?.name ??
-              parsed.email.split("@")[0] ??
-              parsed.email,
+      /**
+       * Parsed here rather than with the rest of the form because it is only
+       * required of somebody new: nothing has been written yet, so a missing
+       * name fails the whole assignment instead of half-creating a member.
+       */
+      const memberId =
+        existing?.id ??
+        (await insertMember(tx, {
+          organizationId: activityOrganizationId,
+          userId: account?.id ?? null,
+          identity: {
+            ...newMemberSchema.parse({
+              firstName: formData.get("firstName"),
+              lastName: formData.get("lastName"),
+              phone: formData.get("phone"),
+              title: formData.get("title"),
+            }),
             contactEmail: parsed.email,
-            status: account ? "active" : "invited",
-          })
-          .returning({ id: organizationMembers.id });
-      } else if (account) {
+          },
+        }));
+      if (existing && account) {
         await tx
           .update(organizationMembers)
           .set({ userId: account.id, status: "active" })
-          .where(eq(organizationMembers.id, existing.id));
+          .where(eq(organizationMembers.id, memberId));
       }
-      if (!existing) throw new Error("Member insert returned no row");
-
-      if (parsed.displayName && !created) {
-        await tx
-          .update(organizationMembers)
-          .set({ displayName: parsed.displayName })
-          .where(eq(organizationMembers.id, existing.id));
-      }
-      await replaceMemberProfileFacets(tx, existing.id, {
-        title: parsed.title,
-        skills,
+      await replaceMemberCapabilities(tx, memberId, {
+        skillIds: parsed.skillIds,
         languageCodes,
       });
 
@@ -2563,7 +2885,7 @@ export const assignMemberToActivity = protectedPermissionAction(
         .values({
           teamId: activityTeamId,
           organizationId: activityOrganizationId,
-          memberId: existing.id,
+          memberId,
         })
         .onConflictDoUpdate({
           target: [cityTeamMembers.teamId, cityTeamMembers.memberId],
@@ -2574,7 +2896,7 @@ export const assignMemberToActivity = protectedPermissionAction(
         .values({
           activityId: parsed.activityId,
           organizationId: activityOrganizationId,
-          memberId: existing.id,
+          memberId,
           expertise: parsed.expertise,
           visibility: parsed.visibility,
           publicDisplayName:
@@ -2597,14 +2919,14 @@ export const assignMemberToActivity = protectedPermissionAction(
             active: true,
           },
         });
-      return { member: existing, created };
+      return { memberId, created: !existing };
     });
 
     if (!account && created) {
       await sendMemberInvitation({
         organizationId: activityOrganizationId,
         email: parsed.email,
-        memberId: member.id,
+        memberId,
         invitedById: user.id,
         locale,
         organizationName: activity.organizationName,
@@ -2619,7 +2941,7 @@ export const assignMemberToActivity = protectedPermissionAction(
       subjectId: parsed.activityId,
       organizationId: activityOrganizationId,
       metadata: {
-        memberId: member.id,
+        memberId,
         visibility: parsed.visibility,
         accountLinked: Boolean(account),
         invited: !account && created,

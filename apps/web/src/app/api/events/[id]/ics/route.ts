@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { eventToIcs, icsFileName } from "~/lib/ics";
+import { recordRestrictedRead } from "~/server/audit/reads";
 import { readerUserId } from "~/server/auth/request-reader";
 import {
   coordinationViewer,
@@ -52,8 +53,25 @@ export async function GET(
     if (!userId) return notFound();
     const viewer = await coordinationViewer(userId);
     found = await findCoordinationEvent({ eventId, viewer, locale });
+    /**
+     * The refusal is recorded, the download is not. An account that identified
+     * itself and then asked for an event its memberships do not open is worth a
+     * row; the file it would have received carries no personal data, and calendar
+     * software re-fetches what it already has, so recording the successful
+     * downloads would be a stream of rows about the same one click.
+     */
+    if (!found) {
+      await recordRestrictedRead({
+        action: "event.calendar_read_refused",
+        subjectType: "coordination_event",
+        subjectId: eventId,
+        actorUserId: userId,
+        outcome: "denied",
+        errorCode: "event_not_readable",
+      });
+      return notFound();
+    }
   }
-  if (!found) return notFound();
   const event = found;
 
   const cities = await listCityViews(locale);

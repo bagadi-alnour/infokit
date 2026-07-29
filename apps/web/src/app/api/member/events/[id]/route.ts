@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { recordRestrictedRead } from "~/server/audit/reads";
 import { deviceViewer } from "~/server/auth/device-session";
 import { loadMemberEventPayload } from "~/server/content/member-payload";
 import {
@@ -28,7 +29,20 @@ export async function GET(
     locale: requestedPublicLocale(request),
     eventId: parsed.data,
   });
-  return payload
-    ? memberJson(payload)
-    : memberJson({ error: "not_found" }, 404);
+  if (!payload) {
+    // A device session asking by id for an event its memberships do not open.
+    // The answer stays 404 — the tier hides existence — and the attempt is
+    // written down, because a phone walking a list of ids looks like nothing at
+    // all from one request.
+    await recordRestrictedRead({
+      action: "event.detail_read_refused",
+      subjectType: "coordination_event",
+      subjectId: parsed.data,
+      actorUserId: viewer.userId,
+      outcome: "denied",
+      errorCode: "event_not_readable",
+    });
+    return memberJson({ error: "not_found" }, 404);
+  }
+  return memberJson(payload);
 }

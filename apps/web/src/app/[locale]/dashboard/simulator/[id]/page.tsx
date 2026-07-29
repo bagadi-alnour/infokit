@@ -24,6 +24,7 @@ import { Button } from "~/components/ui/button";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { requirePermission } from "~/server/auth/require";
+import { loadStewardCandidates } from "~/server/content/steward-candidates";
 import { db } from "~/server/db";
 import {
   edges,
@@ -74,11 +75,21 @@ export default async function SimulatorEditorPage({
       stewardName: flows.stewardName,
       stewardPhone: flows.stewardPhone,
       stewardEmail: flows.stewardEmail,
+      createdById: flows.createdById,
     })
     .from(flows)
     .where(eq(flows.id, id))
     .limit(1);
   if (!flow) notFound();
+
+  /**
+   * A flow is the platform's own, so there is no roster to offer: whoever built
+   * it is the person to ask, and naming them is one click rather than typing an
+   * address the platform already holds.
+   */
+  const stewardCandidates = await loadStewardCandidates({
+    authorId: flow.createdById,
+  });
 
   const versionRows = await db
     .select({
@@ -386,6 +397,7 @@ export default async function SimulatorEditorPage({
                 locale={locale}
                 recordId={flow.id}
                 values={flow}
+                members={stewardCandidates}
                 labels={shared}
                 columns={false}
               />

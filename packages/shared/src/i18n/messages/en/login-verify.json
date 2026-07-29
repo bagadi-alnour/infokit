@@ -14,5 +14,20 @@
   "auth.verify.cooldown": "Please wait one minute before requesting another code.",
   "auth.verify.rateLimited": "Too many codes were requested. Try again in one hour.",
   "auth.verify.sendError": "The SMS could not be sent. Try again shortly.",
-  "auth.verify.signOut": "Use a different email address"
+  "auth.verify.unverified": "This number is not confirmed yet. Enter the code it received to finish enrolling it.",
+  "auth.verify.changeNumber": "Not the right number?",
+  "auth.verify.changeNumberHint": "Enrol another one: the next code goes to that new number instead.",
+  "auth.verify.changeSubmit": "Use this number instead",
+  "auth.verify.signOut": "Use a different email address",
+  "auth.enrol.eyebrow": "Account security",
+  "auth.enrol.title": "Enrol your mobile number",
+  "auth.enrol.description": "Your role opens up accounts, coordination data, and published content. Confirm a number now: every sign-in will then ask for a code sent by SMS.",
+  "auth.enrol.why": "Why this number is required for you",
+  "auth.enrol.whyHint": "A password or an emailed link can be stolen without anyone noticing. For roles that reach other people’s accounts and work, the platform requires a second proof: a code sent to the phone only you are holding. The number is used for signing in and security alerts only, and never appears on the public site.",
+  "auth.enrol.phoneLabel": "Mobile number",
+  "auth.enrol.phoneHint": "International format, country code included. For example: +33 6 12 34 56 78.",
+  "auth.enrol.phonePlaceholder": "+33 6 12 34 56 78",
+  "auth.enrol.submit": "Save and send a code",
+  "auth.enrol.submitting": "Sending code…",
+  "auth.enrol.invalidPhone": "That number cannot be read. Write it in international format, for example +33 6 12 34 56 78."
 }

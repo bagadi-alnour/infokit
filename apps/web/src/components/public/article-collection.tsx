@@ -6,15 +6,17 @@ import { ArrowRight, CalendarDays, Languages } from "lucide-react";
 
 import {
   Callout,
+  familyStyles,
   FreshnessNote,
   MetaRow,
-  SurfaceCard,
 } from "~/components/public/primitives";
+import { cn } from "~/lib/utils";
 
 /**
- * Article cards in a fixed reading order: date → title → summary → owner →
- * freshness → warnings. A card never hides a warning below a fold, because the
- * warning is the reason the reader should slow down (docs/DESIGN-SYSTEM.md §2).
+ * An editorial index rather than a card grid: every article is one rectangular
+ * row, with media given a stable place when it exists. The reading order stays
+ * date → title → summary → warnings → owner/freshness, so a warning never hides
+ * below secondary metadata (docs/DESIGN-SYSTEM.md §2).
  */
 export function PublicArticleCollection({
   articles,
@@ -25,38 +27,56 @@ export function PublicArticleCollection({
 }) {
   if (articles.length === 0) {
     return (
-      <SurfaceCard className="p-8 text-center">
+      <div className="border-line bg-surface border px-6 py-12 text-center">
         <p className="text-copy-muted text-base">{labels.empty}</p>
-      </SurfaceCard>
+      </div>
     );
   }
 
   return (
-    <ul className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+    <ul className="flex flex-col gap-5">
       {articles.map((article) => (
-        <SurfaceCard
-          as="li"
+        <li
           key={article.id}
-          className="focus-within:border-brand hover:border-brand group relative flex flex-col overflow-hidden transition-colors"
+          className={cn(
+            "border-line bg-surface group relative grid overflow-hidden border transition-colors",
+            article.coverImage &&
+              "md:grid-cols-[minmax(15rem,2fr)_minmax(0,3fr)]",
+            familyStyles.article.hoverBorder,
+          )}
         >
           {article.coverImage ? (
-            // eslint-disable-next-line @next/next/no-img-element -- remote editorial media, no known intrinsic size
-            <img
-              src={article.coverImage.url}
-              alt={article.coverImage.decorative ? "" : article.coverImage.alt}
-              aria-hidden={article.coverImage.decorative || undefined}
-              className="bg-subtle aspect-[16/9] w-full object-cover"
-              loading="lazy"
-            />
+            <div className="bg-subtle border-line relative min-h-48 overflow-hidden border-b md:min-h-full md:border-b-0 md:border-e">
+              {/* eslint-disable-next-line @next/next/no-img-element -- remote editorial media, no known intrinsic size */}
+              <img
+                src={article.coverImage.url}
+                alt={
+                  article.coverImage.decorative ? "" : article.coverImage.alt
+                }
+                aria-hidden={article.coverImage.decorative || undefined}
+                className="absolute inset-0 size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.015]"
+                loading="lazy"
+              />
+            </div>
           ) : null}
 
-          <div className="flex flex-1 flex-col gap-3 p-5 md:p-6">
-            <p className="text-copy-muted inline-flex items-center gap-1.5 text-sm font-semibold">
-              <CalendarDays className="size-4" aria-hidden />
-              {article.articleDateLabel}
-            </p>
+          <div className="flex min-w-0 flex-col gap-4 p-5 sm:p-6 lg:p-8">
+            <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+              <p className="text-copy-muted inline-flex items-center gap-2 text-sm font-semibold">
+                <CalendarDays
+                  className="text-article size-4 shrink-0"
+                  aria-hidden
+                />
+                {article.articleDateLabel}
+              </p>
+              <FreshnessNote
+                label={labels.lastReviewed}
+                value={article.lastReviewedLabel}
+                tone={article.unreliable ? "warn" : "ok"}
+              />
+            </div>
 
-            <h2 className="font-display text-ink text-xl font-bold leading-snug">
+            <h2 className="font-display text-ink max-w-[26ch] text-2xl font-bold leading-tight sm:text-[1.75rem]">
               <a
                 href={article.href}
                 className="rounded-control focus-visible:outline-brand after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -64,12 +84,9 @@ export function PublicArticleCollection({
                 {article.title}
               </a>
             </h2>
-            {/* Nothing is filled on an article card — it is a piece of reading,
-                so the family is a short rule under the title and no more
-                (docs/DESIGN-SYSTEM.md §5). */}
-            <span className="bg-article h-0.5 w-10 rounded-full" aria-hidden />
+            <span className="bg-article h-0.5 w-12" aria-hidden />
 
-            <p className="text-copy-muted text-[0.95rem] leading-relaxed">
+            <p className="text-copy-muted max-w-[65ch] text-base leading-relaxed">
               {article.summary}
             </p>
 
@@ -88,18 +105,12 @@ export function PublicArticleCollection({
               </p>
             ) : null}
 
-            <dl className="border-line mt-auto flex flex-col gap-2 border-t pt-4">
-              <MetaRow label={labels.publishedBy}>
-                {article.ownerNames.join(", ")}
-              </MetaRow>
-            </dl>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <FreshnessNote
-                label={labels.lastReviewed}
-                value={article.lastReviewedLabel}
-                tone={article.unreliable ? "warn" : "ok"}
-              />
+            <div className="border-line mt-auto flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-t pt-4">
+              <dl>
+                <MetaRow label={labels.publishedBy}>
+                  {article.ownerNames.join(", ")}
+                </MetaRow>
+              </dl>
               <span className="text-article inline-flex items-center gap-1.5 text-sm font-semibold">
                 {labels.read}
                 <ArrowRight
@@ -109,7 +120,7 @@ export function PublicArticleCollection({
               </span>
             </div>
           </div>
-        </SurfaceCard>
+        </li>
       ))}
     </ul>
   );

@@ -19,16 +19,28 @@ export interface StewardContactValues {
 }
 
 /**
- * Somebody the record's own organisation already knows, offered as the contact
- * before the free-text fields. A membership record carries no phone number, so
- * choosing one of these fills a name and an address and no more.
+ * Somebody the platform can already name, offered as the contact before the
+ * free-text fields. A membership carries all three — a name, an address and a
+ * number — so choosing one of those fills the whole contact; the person who
+ * entered the record carries only the two its account holds. The fields stay
+ * editable either way, for the contact who is neither.
  */
 export interface StewardCandidate {
   id: string;
   name: string;
-  email: string | null;
-  /** Their role in the organisation, when one was recorded. */
-  title: string | null;
+  /** The address on file — a roster entry's, or the author's own account. */
+  email: string;
+  /** The number the roster holds; empty for a candidate with no roster entry. */
+  phone: string;
+  /** The function they hold in the organisation; empty for an author. */
+  title: string;
+  /**
+   * Where the candidate came from, which is also what the row has to say about
+   * them: a colleague on the roster, or whoever entered this record. A record
+   * the platform holds itself has no roster, and the author is the one person
+   * always worth offering — otherwise the panel names nobody at all.
+   */
+  source: "member" | "author";
 }
 
 /** A record that has no steward yet — what a create form starts from. */

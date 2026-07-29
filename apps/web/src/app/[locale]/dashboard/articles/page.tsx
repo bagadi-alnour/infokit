@@ -19,7 +19,6 @@ import {
   ArticleEditorForm,
   ArticleFreshnessForm,
   ArticleSources,
-  ArticleTranslationInbox,
   ArticleWorkflowBar,
   type ArticleLanguageStatus,
   type ArticleSource,
@@ -60,8 +59,13 @@ import { buildWorkspaceLabels } from "~/lib/workspace-labels";
 import { hasAiTranslationProvider } from "~/server/ai/provider";
 import { createAssetReadUrl } from "~/server/assets/s3";
 import { auth } from "~/server/auth";
-import { hasActualPlatformPermission } from "~/server/auth/authorization";
-import { hasPermission } from "~/server/auth/require";
+import {
+  articleWorkspacePermissions,
+  hasActualPlatformPermission,
+  ownedWithin,
+  permissionScopeAny,
+} from "~/server/auth/authorization";
+import { denyPageAccess, hasPermission } from "~/server/auth/require";
 import { platformVerifyPermission } from "~/server/content/language-review";
 import { loadStewardCandidates } from "~/server/content/steward-candidates";
 import { db } from "~/server/db";
@@ -165,6 +169,14 @@ export default async function ArticlesPage({
     viewerId &&
     (await hasActualPlatformPermission(viewerId, "support.superadmin")),
   );
+  // What this reader administers. Custody is what owns an article, so the scope
+  // is applied to the custodianship rather than to the entry — an entry the
+  // platform holds has no custodian organisation, and belongs to no association's
+  // list.
+  const scope =
+    (viewerId
+      ? await permissionScopeAny(viewerId, articleWorkspacePermissions)
+      : null) ?? (await denyPageAccess(articleWorkspacePermissions[0], locale));
 
   // ---- Article list (each entry with its latest revision) ---------------
   const entryRows = await db
@@ -197,7 +209,12 @@ export default async function ArticlesPage({
       organizations,
       eq(organizations.id, editorialCustodianships.organizationId),
     )
-    .where(eq(editorialEntries.kind, "article"))
+    .where(
+      and(
+        eq(editorialEntries.kind, "article"),
+        ownedWithin(editorialCustodianships.organizationId, scope),
+      ),
+    )
     .orderBy(desc(editorialEntries.updatedAt));
 
   const entryIds = entryRows.map((row) => row.id);
@@ -375,10 +392,15 @@ export default async function ArticlesPage({
   const selected = search.article
     ? articles.find((article) => article.id === search.article)
     : undefined;
-  /** Who the custodian organisation already knows, for the contact card. */
-  const stewardCandidates = await loadStewardCandidates(
-    selected?.organizationId,
-  );
+  /**
+   * Who the platform can already name for the contact card: the custodian
+   * organisation's roster, and whoever wrote the entry — the only candidate
+   * there is on one the platform holds itself.
+   */
+  const stewardCandidates = await loadStewardCandidates({
+    organizationId: selected?.organizationId,
+    authorId: selected?.authorId,
+  });
   const publishedArticleCount = articles.filter(
     (article) => article.displayState === "published",
   ).length;
@@ -689,6 +711,7 @@ export default async function ArticlesPage({
         .select({
           assetId: editorialEntryAssets.assetId,
           storageKey: assets.storageKey,
+          mimeType: assets.mimeType,
           altText: assetTranslations.altText,
         })
         .from(editorialEntryAssets)
@@ -800,7 +823,9 @@ export default async function ArticlesPage({
       cover: coverRows[0]
         ? {
             assetId: coverRows[0].assetId,
-            previewUrl: await createAssetReadUrl(coverRows[0].storageKey),
+            previewUrl: await createAssetReadUrl(coverRows[0].storageKey, {
+              contentType: coverRows[0].mimeType,
+            }),
             altText: coverRows[0].altText ?? t["image.attached"],
           }
         : null,
@@ -862,11 +887,13 @@ export default async function ArticlesPage({
       {t["create.cta"]}
     </Button>
   );
+  const articleFormId = selected ? `article-content-${selected.id}` : "";
 
   return (
     <WorkspacePage>
       {!selected ? (
         <PageHeader
+          family="article"
           title={t.title}
           sub={t.sub}
           action={articles.length === 0 ? createArticle : null}
@@ -931,6 +958,8 @@ export default async function ArticlesPage({
                 <ArticleWorkflowBar
                   locale={locale}
                   entryId={selected.id}
+                  sourceLanguage={detail.sourceLanguage}
+                  languages={detail.languages}
                   workflowState={selected.displayState}
                   archived={selected.archivedAt !== null}
                   canArchive={
@@ -980,9 +1009,9 @@ export default async function ArticlesPage({
             </CardContent>
           </Card>
 
-          {/* The text spans the full width: the source pane and the language
-           * accordion each need the room, and the photo lays out below both.
-           * Everything under it is short-field work that reads in two columns. */}
+          {/* Match the activity editor: authored text and record details stay
+           * on the left; translations, media and read-only context stay on the
+           * right. The single Save action sits below the whole workspace. */}
           <Card className="min-w-0">
             <CardHeader>
               <CardTitle className="text-base">{t["detail.content"]}</CardTitle>
@@ -990,6 +1019,7 @@ export default async function ArticlesPage({
             <CardContent>
               <ArticleEditorForm
                 key={`${selected.id}-${String(detail.revisionNumber)}-${detail.contentKey}`}
+                formId={articleFormId}
                 locale={locale}
                 entryId={selected.id}
                 organizationId={selected.organizationId ?? undefined}
@@ -1006,182 +1036,175 @@ export default async function ArticlesPage({
                 returnPath={localizedPath("/dashboard/articles", locale, {
                   article: selected.id,
                 })}
-                media={
-                  <Card>
-                    <CardHeader className="border-b">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <FileImage className="size-4 shrink-0" aria-hidden />
-                        {t["image.heading"]}
-                      </CardTitle>
-                      <CardDescription>{t["image.hint"]}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ArticleMediaManager
-                        key={`${selected.id}-${detail.cover?.assetId ?? "none"}`}
-                        locale={locale}
-                        entryId={selected.id}
-                        sourceLanguage={detail.sourceLanguage}
-                        cover={detail.cover}
-                        labels={t}
-                      />
-                    </CardContent>
-                  </Card>
+                details={
+                  <div className="@xl:col-span-2 @xl:grid-cols-2 grid items-start gap-4">
+                    <div className="grid min-w-0 content-start gap-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">
+                            {t["detail.sources"]}
+                          </CardTitle>
+                          <CardDescription>{t["source.hint"]}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <ArticleSources
+                            key={selected.id}
+                            locale={locale}
+                            entryId={selected.id}
+                            sources={detail.sourceList}
+                            labels={t}
+                          />
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">
+                            {shared["steward.title"]}
+                          </CardTitle>
+                          <CardDescription>
+                            {shared["steward.hint"]}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <StewardContactForm
+                            key={selected.id}
+                            action={updateEditorialSteward}
+                            locale={locale}
+                            recordId={selected.id}
+                            values={selected}
+                            members={stewardCandidates}
+                            labels={shared}
+                            embedded
+                            formId={articleFormId}
+                          />
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">
+                          {t["detail.freshness"]}
+                        </CardTitle>
+                        <CardDescription>
+                          {t["freshness.question"]}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ArticleFreshnessForm
+                          key={selected.id}
+                          locale={locale}
+                          entryId={selected.id}
+                          canBecomeOutdated={detail.canBecomeOutdated}
+                          unreliableFrom={detail.unreliableFrom}
+                          sourceSummary={detail.sourceSummary}
+                          labels={t}
+                          embedded
+                          formId={articleFormId}
+                        />
+                      </CardContent>
+                    </Card>
+                  </div>
                 }
-                downloads={
-                  <ArticleDownloadsManager
-                    key={`${selected.id}-${String(detail.downloads.length)}`}
-                    locale={locale}
-                    entryId={selected.id}
-                    sourceLanguage={detail.sourceLanguage}
-                    downloads={detail.downloads}
-                    labels={t}
-                  />
+                media={
+                  <div className="grid gap-5">
+                    <Card>
+                      <CardHeader className="border-b">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                              <FileImage
+                                className="size-4 shrink-0"
+                                aria-hidden
+                              />
+                              {t["image.heading"]}
+                            </CardTitle>
+                            <CardDescription className="mt-1">
+                              {t["image.hint"]}
+                            </CardDescription>
+                          </div>
+                          <ArticleDownloadsManager
+                            key={`${selected.id}-${String(detail.downloads.length)}`}
+                            locale={locale}
+                            entryId={selected.id}
+                            sourceLanguage={detail.sourceLanguage}
+                            downloads={detail.downloads}
+                            labels={t}
+                          />
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <ArticleMediaManager
+                          key={`${selected.id}-${detail.cover?.assetId ?? "none"}`}
+                          locale={locale}
+                          entryId={selected.id}
+                          sourceLanguage={detail.sourceLanguage}
+                          cover={detail.cover}
+                          labels={t}
+                        />
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">
+                          {t["detail.history"]}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="pe-2">
+                        {detail.history.length === 0 ? (
+                          <p className="text-copy-muted text-sm">
+                            {t["history.empty"]}
+                          </p>
+                        ) : (
+                          <ScrollArea
+                            className="h-56 pe-3"
+                            aria-label={t["detail.history"]}
+                          >
+                            <ol className="border-line grid gap-0 border-s ps-4">
+                              {detail.history.map((item) => (
+                                <li
+                                  key={item.key}
+                                  className="relative pb-4 last:pb-0"
+                                >
+                                  <span className="bg-brand absolute -start-[1.3rem] top-1 size-2 rounded-full" />
+                                  <p className="text-sm font-medium">
+                                    {item.label}
+                                  </p>
+                                  <time
+                                    dateTime={item.at.toISOString()}
+                                    className="text-copy-muted mt-1 block text-xs tabular-nums"
+                                  >
+                                    {localeDateTime(item.at, locale)}
+                                  </time>
+                                  {item.by ? (
+                                    <p className="text-copy-muted mt-0.5 text-xs">
+                                      {t["history.by"].replace(
+                                        "{name}",
+                                        item.by,
+                                      )}
+                                    </p>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ol>
+                          </ScrollArea>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
                 }
                 labels={t}
+                saveLabels={{
+                  save: shared["console.save"],
+                  saved: shared["console.saved"],
+                  saveError: shared["form.saveFailed"],
+                }}
                 editorLabels={editorLabels}
               />
             </CardContent>
           </Card>
-
-          {/* Preview, freshness and the revision history stay in a rail on the
-           * inline-end side; sources and the contact take the wide column. The
-           * split is keyed to the space this page actually has rather than the
-           * window, because the console's sidebar eats a few hundred pixels of
-           * it and a viewport rule would keep the rail stacked underneath on an
-           * ordinary laptop. */}
-          <div className="@container">
-            <div className="@4xl:grid-cols-[minmax(0,1fr)_24rem] grid items-start gap-5">
-              <div className="@4xl:col-start-2 @4xl:row-start-1 grid gap-5">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">
-                      {t["detail.preview"]}
-                    </CardTitle>
-                    <CardDescription>
-                      {t["translation.heading"]}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ArticleTranslationInbox
-                      key={selected.id}
-                      locale={locale}
-                      entryId={selected.id}
-                      sourceLanguage={detail.sourceLanguage}
-                      languages={detail.languages}
-                      labels={t}
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">
-                      {t["detail.freshness"]}
-                    </CardTitle>
-                    <CardDescription>{t["freshness.question"]}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ArticleFreshnessForm
-                      key={selected.id}
-                      locale={locale}
-                      entryId={selected.id}
-                      canBecomeOutdated={detail.canBecomeOutdated}
-                      unreliableFrom={detail.unreliableFrom}
-                      sourceSummary={detail.sourceSummary}
-                      labels={t}
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">
-                      {t["detail.history"]}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="pe-2">
-                    {detail.history.length === 0 ? (
-                      <p className="text-copy-muted text-sm">
-                        {t["history.empty"]}
-                      </p>
-                    ) : (
-                      <ScrollArea
-                        className="h-56 pe-3"
-                        aria-label={t["detail.history"]}
-                      >
-                        <ol className="border-line grid gap-0 border-s ps-4">
-                          {detail.history.map((item) => (
-                            <li
-                              key={item.key}
-                              className="relative pb-4 last:pb-0"
-                            >
-                              <span className="bg-brand absolute -start-[1.3rem] top-1 size-2 rounded-full" />
-                              <p className="text-sm font-medium">
-                                {item.label}
-                              </p>
-                              <time
-                                dateTime={item.at.toISOString()}
-                                className="text-copy-muted mt-1 block text-xs tabular-nums"
-                              >
-                                {localeDateTime(item.at, locale)}
-                              </time>
-                              {item.by ? (
-                                <p className="text-copy-muted mt-0.5 text-xs">
-                                  {t["history.by"].replace("{name}", item.by)}
-                                </p>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ol>
-                      </ScrollArea>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="@4xl:col-start-1 @4xl:row-start-1 grid min-w-0 gap-5">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">
-                      {t["detail.sources"]}
-                    </CardTitle>
-                    <CardDescription>{t["source.hint"]}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ArticleSources
-                      key={selected.id}
-                      locale={locale}
-                      entryId={selected.id}
-                      sources={detail.sourceList}
-                      labels={t}
-                    />
-                  </CardContent>
-                </Card>
-
-                {/* Who to ask about this entry — workspace only, and saved on its
-                 * own so it never re-submits a revision. */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">
-                      {shared["steward.title"]}
-                    </CardTitle>
-                    <CardDescription>{shared["steward.hint"]}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <StewardContactForm
-                      key={selected.id}
-                      action={updateEditorialSteward}
-                      locale={locale}
-                      recordId={selected.id}
-                      values={selected}
-                      members={stewardCandidates}
-                      labels={shared}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </div>
         </div>
       ) : null}
     </WorkspacePage>

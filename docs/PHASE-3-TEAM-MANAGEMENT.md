@@ -28,11 +28,24 @@ Administration, coordinator, member-agenda, and notification interfaces are avai
 - Resend, revoke, or expire pending invitations.
 - Activate, deactivate, and offboard members.
 - Allow users to maintain their own permitted profile fields.
-- Let members declare spoken languages/proficiency, skills, driving-permit categories/status, and completed training/courses with self-declared, pending, verified, rejected, and expired states.
+- Let members declare spoken languages, skills, driving-permit categories, and completed training/courses with self-declared, pending, verified, rejected, and expired states. Every declaration is a **selection from the shared catalogue**, never typed text, so a mission's conditions can be matched without anyone reading a profile.
 - Before save, explain why each field is requested, who can see it, whether it is required for a role/mission, and how long the organisation keeps it.
 - Do not collect a licence number or scan by default; evidence requires a documented need and restricted access.
 - Keep accessibility/accommodation information restricted to authorised roles.
 - Separate operational onboarding from HR/employment administration.
+
+### Skills, courses, and mission conditions (shipped early)
+
+P3-15 ships ahead of the rest of this phase, as `/dashboard/skills`, because the conditions a mission carries are already known: a maraude needs someone who may drive, a permanence needs a particular course and the tool the team works in. What is built:
+
+- One catalogue of skills, software, driving-permit categories, and certifications, plus the training/course catalogue beside it. **The platform authors most of the reusable vocabulary** — a permit category or first aid means the same thing everywhere — and an association adds only what is genuinely its own.
+- Creating a row is what scopes it, and the create dialog says so: if people outside the association have to hold the condition, the row belongs beyond one organisation. A platform steward can promote an organisation's row to global rather than have it retyped.
+- The languages tab reads the whole language catalogue, not only the languages the site publishes in: somebody may work in Italian while no page is readable in it.
+- **Requirement sets exist ahead of missions.** An association writes down what a kind of mission asks for — each condition required or preferred, optionally must-be-verified and must-be-current, with a minimum count for "two drivers" — and Phase 3's mission work points at that set instead of inventing conditions per event.
+- Conditions are matched across every identity a person holds, so they apply as written to **external translators/médiateurs and to members of other associations** who come along, without either organisation copying the other's data.
+- A verification queue lists the declarations waiting on a decision, for the skills and courses the organisation owns.
+
+An external translator has no account, so their profile is part of the assignment session: sending them content **is** the invitation. While the signed, expiring `/translate` session from that send is live, they can fill their own profile — spoken languages with the into/from direction, and skills and courses picked from what associations opened to translators — and nothing else. It resolves the person from the assignment's directory entry; a one-off send to a typed address has no entry yet, and the page says so rather than creating one.
 
 ### Teams and permissions
 
@@ -149,24 +162,24 @@ An editor from Phase 2 does not automatically receive team-management access. A 
 
 ## Required Screens
 
-| ID    | Screen                                                   |
-| ----- | -------------------------------------------------------- |
-| P3-01 | Team-management overview                                 |
-| P3-02 | Members and invitation states                            |
-| P3-03 | Member operational profile                               |
-| P3-04 | Team list and team detail                                |
-| P3-05 | Availability calendar/form                               |
-| P3-06 | Weekly coverage planner                                  |
-| P3-07 | Shift/event editor                                       |
-| P3-08 | Mission detail and assignment                            |
-| P3-09 | Member schedule/mobile agenda                            |
-| P3-10 | Notifications and preferences                            |
-| P3-11 | Roles, permissions, and permission review                |
-| P3-12 | Team audit history                                       |
-| P3-13 | Restricted document centre and signature-status queue    |
-| P3-14 | Template-based document preparation, review, and signing |
-| P3-15 | Training/course catalogue and member qualifications      |
-| P3-16 | Agenda import preview, results, and undo                 |
+| ID    | Screen                                                                                                                                                                              |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P3-01 | Team-management overview                                                                                                                                                            |
+| P3-02 | Members and invitation states                                                                                                                                                       |
+| P3-03 | Member operational profile                                                                                                                                                          |
+| P3-04 | Team list and team detail                                                                                                                                                           |
+| P3-05 | Availability calendar/form                                                                                                                                                          |
+| P3-06 | Weekly coverage planner                                                                                                                                                             |
+| P3-07 | Shift/event editor                                                                                                                                                                  |
+| P3-08 | Mission detail and assignment                                                                                                                                                       |
+| P3-09 | Member schedule/mobile agenda                                                                                                                                                       |
+| P3-10 | Notifications and preferences                                                                                                                                                       |
+| P3-11 | Roles, permissions, and permission review                                                                                                                                           |
+| P3-12 | Team audit history                                                                                                                                                                  |
+| P3-13 | Restricted document centre and signature-status queue                                                                                                                               |
+| P3-14 | Template-based document preparation, review, and signing                                                                                                                            |
+| P3-15 | Skills and courses: catalogue, declarations, requirement sets, verification queue — shipped as `/dashboard/skills`, with the translator's own profile inside the assignment session |
+| P3-16 | Agenda import preview, results, and undo                                                                                                                                            |
 
 ## Privacy and Safety
 

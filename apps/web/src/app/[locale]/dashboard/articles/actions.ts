@@ -11,7 +11,7 @@ import { articleScopes } from "~/lib/article-scope";
 import type { EditorialLanguage } from "~/lib/editorial-languages";
 import { optionalText } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
-import { verifyAssetUpload } from "~/server/assets/s3";
+import { scanUploadedAsset } from "~/server/assets/scan";
 import {
   hasActualPlatformPermission,
   superadminPermission,
@@ -487,9 +487,11 @@ export const createArticle = protectedPermissionAction(
     if (parsed.coverAssetId) {
       const [uploadedCover] = await db
         .select({
+          id: assets.id,
           storageKey: assets.storageKey,
           mimeType: assets.mimeType,
           byteSize: assets.byteSize,
+          scanState: assets.scanState,
         })
         .from(assets)
         .where(
@@ -503,7 +505,7 @@ export const createArticle = protectedPermissionAction(
         )
         .limit(1);
       if (!uploadedCover) throw new Error("The cover image is unavailable");
-      await verifyAssetUpload(uploadedCover);
+      await scanUploadedAsset(uploadedCover);
     }
 
     const entry = await db.transaction(async (tx) => {

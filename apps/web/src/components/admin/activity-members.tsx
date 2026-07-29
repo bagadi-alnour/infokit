@@ -1,10 +1,13 @@
 "use client";
 
 import {
+  Check,
+  Clock3,
   Eye,
   LockKeyhole,
   Mail,
   MailPlus,
+  Phone,
   Star,
   UserRoundPlus,
   UserRoundX,
@@ -17,9 +20,13 @@ import {
   unassignMemberFromActivity,
 } from "~/app/[locale]/dashboard/activities/actions";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
-import { SearchableSelect } from "~/components/admin/searchable-select";
+import {
+  SearchableMultiSelect,
+  SearchableSelect,
+  type SearchableOption,
+} from "~/components/admin/searchable-select";
+import { Chip } from "~/components/admin/workspace";
 import { PendingButton } from "~/components/pending-button";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   Combobox,
@@ -48,13 +55,17 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { memberFullName, memberInitials } from "~/lib/member-name";
 
 export interface AssignedMember {
   memberId: string;
-  displayName: string;
+  firstName: string;
+  lastName: string;
   email: string | null;
+  /** The roster's number for them — always present, the column is NOT NULL. */
+  phone: string;
   status: string;
-  title: string | null;
+  title: string;
   expertise: string;
   visibility: string;
   isLead: boolean;
@@ -65,27 +76,19 @@ export interface AssignedMember {
 export interface MemberOption {
   id: string;
   email: string;
-  displayName: string;
+  firstName: string;
+  lastName: string;
   status: string;
-  title: string | null;
+  title: string;
+  phone: string;
   languages: string[];
-  skills: string[];
+  /** Catalogue ids, so prefilling an existing member re-selects the same rows. */
+  skillIds: string[];
 }
 
 export interface LanguageOption {
   code: string;
   label: string;
-}
-
-function initialsOf(name: string): string {
-  return (
-    name
-      .split(/\s+/)
-      .map((part) => part.slice(0, 1))
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "?"
-  );
 }
 
 function MemberAvatar({
@@ -103,12 +106,12 @@ function MemberAvatar({
       <span
         className={`ring-card flex size-11 items-center justify-center rounded-full text-sm font-bold ring-2 ${
           pending
-            ? "border-line text-copy-muted bg-subtle border border-dashed"
-            : "bg-brand-soft text-brand"
+            ? "border-warn/50 bg-warn-soft text-warn border border-dashed"
+            : "bg-brand-soft text-brand-deep"
         }`}
         aria-hidden
       >
-        {initialsOf(member.displayName)}
+        {memberInitials(member)}
       </span>
       {member.isLead ? (
         <span
@@ -137,6 +140,7 @@ export function ActivityMembers({
   assigned,
   options,
   languageOptions,
+  skillOptions,
   labels,
 }: {
   activityId: string;
@@ -144,6 +148,8 @@ export function ActivityMembers({
   assigned: AssignedMember[];
   options: MemberOption[];
   languageOptions: LanguageOption[];
+  /** The catalogue rows this organisation may point at — global plus its own. */
+  skillOptions: SearchableOption[];
   labels: Record<string, string>;
 }) {
   const [open, setOpen] = useState(false);
@@ -151,9 +157,7 @@ export function ActivityMembers({
     "workspace",
   );
   const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [title, setTitle] = useState("");
-  const [skills, setSkills] = useState("");
+  const [skillIds, setSkillIds] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [selectedMember, setSelectedMember] = useState<MemberOption | null>(
     null,
@@ -165,20 +169,26 @@ export function ActivityMembers({
     () => new Map(languageOptions.map((option) => [option.code, option.label])),
     [languageOptions],
   );
-  const knownEmails = useMemo(
-    () => new Set(options.map((option) => option.email.toLowerCase())),
+  const knownMembers = useMemo(
+    () =>
+      new Map(
+        options.map((option) => [option.email.toLowerCase(), option] as const),
+      ),
     [options],
   );
   const fieldId = (name: string) => `members-${activityId}-${name}`;
   const trimmedEmail = email.trim().toLowerCase();
-  const isOutsideCityTeam =
-    trimmedEmail.includes("@") && !knownEmails.has(trimmedEmail);
+  const matchedMember = knownMembers.get(trimmedEmail) ?? null;
+  /**
+   * An address nobody in the association carries yet. Assigning it creates the
+   * member row, so the five fields `core.organization_members` requires are asked
+   * for here; a matched address keeps the identity the roster already holds.
+   */
+  const isNewPerson = trimmedEmail.includes("@") && matchedMember === null;
 
   const resetForm = () => {
     setEmail("");
-    setDisplayName("");
-    setTitle("");
-    setSkills("");
+    setSkillIds([]);
     setSelectedLanguages([]);
     setSelectedMember(null);
     setVisibility("workspace");
@@ -186,9 +196,7 @@ export function ActivityMembers({
 
   const prefillFrom = (member: MemberOption) => {
     setEmail(member.email);
-    setDisplayName(member.displayName);
-    setTitle(member.title ?? "");
-    setSkills(member.skills.join(", "));
+    setSkillIds(member.skillIds);
     setSelectedLanguages(member.languages);
   };
 
@@ -233,8 +241,8 @@ export function ActivityMembers({
                     className={`focus-visible:ring-brand/50 rounded-full outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 ${
                       index > 0 ? "-ms-2" : ""
                     }`}
-                    aria-label={member.displayName}
-                    title={`${member.displayName}${member.title ? ` · ${member.title}` : ""}`}
+                    aria-label={memberFullName(member)}
+                    title={`${memberFullName(member)} · ${member.title}`}
                   />
                 }
               >
@@ -247,7 +255,7 @@ export function ActivityMembers({
               <DropdownMenuContent align="start" className="w-72">
                 <div className="px-2 py-1.5">
                   <p className="flex items-center gap-1.5 text-sm font-semibold">
-                    {member.displayName}
+                    {memberFullName(member)}
                     {member.isLead ? (
                       <Star
                         className="text-warn size-3.5 fill-current"
@@ -255,46 +263,60 @@ export function ActivityMembers({
                       />
                     ) : null}
                   </p>
-                  {member.title ? (
-                    <p className="text-copy-muted text-xs">{member.title}</p>
-                  ) : null}
-                  {member.email ? (
-                    <p className="text-copy-muted mt-0.5 flex items-center gap-1 text-xs">
-                      <Mail className="size-3" aria-hidden />
-                      {member.email}
-                    </p>
-                  ) : null}
+                  <p className="text-copy-muted text-xs">{member.title}</p>
+                  <p className="text-copy-muted mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+                    {member.email ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Mail className="text-brand size-3" aria-hidden />
+                        {member.email}
+                      </span>
+                    ) : null}
+                    <span className="inline-flex items-center gap-1">
+                      <Phone className="text-brand size-3" aria-hidden />
+                      <span dir="ltr">{member.phone}</span>
+                    </span>
+                  </p>
                   <p className="text-copy-muted mt-1 text-xs">
                     {member.expertise}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1">
-                    <Badge variant="secondary">
-                      {member.status === "invited"
-                        ? labels.pending
-                        : labels.active}
-                    </Badge>
-                    <Badge variant="outline">
+                    {member.status === "invited" ? (
+                      <Chip tone="warn">
+                        <Clock3 className="size-3" aria-hidden />
+                        {labels.pending}
+                      </Chip>
+                    ) : (
+                      <Chip tone="ok">
+                        <Check className="size-3" aria-hidden />
+                        {labels.active}
+                      </Chip>
+                    )}
+                    <Chip
+                      tone={
+                        member.visibility === "public" ? "accent" : "neutral"
+                      }
+                    >
                       {member.visibility === "public" ? (
-                        <Eye aria-hidden />
+                        <Eye className="size-3" aria-hidden />
                       ) : (
-                        <LockKeyhole aria-hidden />
+                        <LockKeyhole className="size-3" aria-hidden />
                       )}
                       {member.visibility === "public"
                         ? labels.public
                         : labels.workspace}
-                    </Badge>
+                    </Chip>
                   </div>
                   {member.languages.length > 0 || member.skills.length > 0 ? (
-                    <p className="text-copy-muted mt-2 text-xs">
-                      {[
-                        member.languages
-                          .map((code) => languageLabels.get(code) ?? code)
-                          .join(" · "),
-                        member.skills.join(" · "),
-                      ]
-                        .filter(Boolean)
-                        .join(" — ")}
-                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {member.languages.map((code) => (
+                        <Chip key={code} tone="accent">
+                          {languageLabels.get(code) ?? code}
+                        </Chip>
+                      ))}
+                      {member.skills.map((skill) => (
+                        <Chip key={skill}>{skill}</Chip>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
                 <DropdownMenuSeparator />
@@ -354,7 +376,7 @@ export function ActivityMembers({
                   if (member) prefillFrom(member);
                 }}
                 filter={(member, query) =>
-                  `${member.displayName} ${member.email}`
+                  `${memberFullName(member)} ${member.email} ${member.title}`
                     .toLocaleLowerCase()
                     .includes(query.toLocaleLowerCase())
                 }
@@ -378,15 +400,15 @@ export function ActivityMembers({
                   <ComboboxList>
                     {(member: MemberOption) => (
                       <ComboboxItem key={member.email} value={member}>
-                        <span className="bg-brand-soft text-brand flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
-                          {initialsOf(member.displayName)}
+                        <span className="bg-brand-soft text-brand-deep flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                          {memberInitials(member)}
                         </span>
                         <span className="min-w-0">
                           <span className="block truncate">
-                            {member.displayName}
+                            {memberFullName(member)}
                           </span>
                           <span className="text-copy-muted block truncate text-xs">
-                            {member.email}
+                            {member.title} · {member.email}
                           </span>
                         </span>
                       </ComboboxItem>
@@ -394,8 +416,8 @@ export function ActivityMembers({
                   </ComboboxList>
                 </ComboboxContent>
               </Combobox>
-              {isOutsideCityTeam ? (
-                <p className="bg-brand-soft text-brand flex items-start gap-2 rounded-lg p-2.5 text-xs">
+              {isNewPerson ? (
+                <p className="bg-brand-soft text-brand-deep flex items-start gap-2 rounded-lg p-2.5 text-xs">
                   <MailPlus className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                   {labels.inviteNote}
                 </p>
@@ -403,36 +425,73 @@ export function ActivityMembers({
                 <FieldDescription>{labels.emailHint}</FieldDescription>
               )}
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor={fieldId("display-name")}>
-                  {labels.displayName}
-                </FieldLabel>
-                <Input
-                  id={fieldId("display-name")}
-                  name="displayName"
-                  autoComplete="off"
-                  value={displayName}
-                  onChange={(event) => {
-                    setDisplayName(event.target.value);
-                  }}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor={fieldId("title")}>
-                  {labels.title}
-                </FieldLabel>
-                <Input
-                  id={fieldId("title")}
-                  name="title"
-                  autoComplete="off"
-                  value={title}
-                  onChange={(event) => {
-                    setTitle(event.target.value);
-                  }}
-                />
-              </Field>
-            </div>
+            {isNewPerson ? (
+              <div className="border-line grid gap-4 rounded-lg border border-dashed p-4 sm:grid-cols-2">
+                <Field>
+                  <FieldLabel htmlFor={fieldId("first-name")}>
+                    {labels.firstName}
+                  </FieldLabel>
+                  <Input
+                    id={fieldId("first-name")}
+                    name="firstName"
+                    autoComplete="off"
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={fieldId("last-name")}>
+                    {labels.lastName}
+                  </FieldLabel>
+                  <Input
+                    id={fieldId("last-name")}
+                    name="lastName"
+                    autoComplete="off"
+                    required
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={fieldId("title")}>
+                    {labels.title}
+                  </FieldLabel>
+                  <Input
+                    id={fieldId("title")}
+                    name="title"
+                    autoComplete="off"
+                    required
+                  />
+                  <FieldDescription>{labels.titleHint}</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor={fieldId("phone")}>
+                    {labels.phone}
+                  </FieldLabel>
+                  <Input
+                    id={fieldId("phone")}
+                    name="phone"
+                    type="tel"
+                    dir="ltr"
+                    autoComplete="off"
+                    required
+                  />
+                  <FieldDescription>{labels.phoneHint}</FieldDescription>
+                </Field>
+              </div>
+            ) : matchedMember ? (
+              /**
+               * Read, not editable: who somebody is belongs to the roster, so an
+               * assignment shows it to confirm the right person and sends nobody
+               * to the wrong dialog to correct a name.
+               */
+              <p className="text-copy-muted flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                <span className="text-foreground font-medium">
+                  {memberFullName(matchedMember)}
+                </span>
+                <span>{matchedMember.title}</span>
+                <span className="text-brand" dir="ltr">
+                  {matchedMember.phone}
+                </span>
+              </p>
+            ) : null}
             <Field>
               <FieldLabel>{labels.languagesSpoken}</FieldLabel>
               <div className="flex flex-wrap gap-1.5">
@@ -452,8 +511,8 @@ export function ActivityMembers({
                       }}
                       className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                         active
-                          ? "border-brand bg-brand-soft text-brand"
-                          : "border-line text-copy-muted hover:border-line-strong hover:text-foreground"
+                          ? "border-brand bg-brand-soft text-brand-deep"
+                          : "border-line text-copy-muted hover:border-brand/50 hover:text-brand-deep"
                       }`}
                     >
                       {option.label}
@@ -466,16 +525,16 @@ export function ActivityMembers({
               ))}
             </Field>
             <Field>
-              <FieldLabel htmlFor={fieldId("skills")}>
-                {labels.skills}
-              </FieldLabel>
-              <Input
-                id={fieldId("skills")}
-                name="skills"
-                value={skills}
-                onChange={(event) => {
-                  setSkills(event.target.value);
-                }}
+              <FieldLabel>{labels.skills}</FieldLabel>
+              <SearchableMultiSelect
+                name="skillIds"
+                options={skillOptions}
+                value={skillIds}
+                onValueChange={setSkillIds}
+                label={labels.skills}
+                placeholder={labels.skillsPlaceholder}
+                emptyLabel={labels.skillsEmpty}
+                maxSelections={40}
               />
               <FieldDescription>{labels.skillsHint}</FieldDescription>
             </Field>

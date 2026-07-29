@@ -21,6 +21,10 @@ import { Button, Field, TextInput } from "~/components/admin/workspace";
 import { PendingButton } from "~/components/pending-button";
 import { Checkbox } from "~/components/ui/checkbox";
 import type { EventLanguage } from "~/lib/event-languages";
+import {
+  compressImageForUpload,
+  isImageTooLargeError,
+} from "~/lib/image-compression";
 import type {
   WorkspaceEventCover,
   WorkspaceEventFlyer,
@@ -98,19 +102,23 @@ export function EventMediaManager({
     if (!file) return;
     setBusy(true);
     try {
+      // Re-encoded before anything is signed: the upload URL is bound to the
+      // exact type and length declared here, so the size sent to the action has
+      // to be the size that is about to be PUT.
+      const image = await compressImageForUpload(file);
       const request = new FormData();
       request.set("locale", locale);
       request.set("eventId", eventId);
-      request.set("mimeType", file.type);
-      request.set("byteSize", String(file.size));
+      request.set("mimeType", image.type);
+      request.set("byteSize", String(image.size));
       request.set("languageCode", sourceLanguage);
       request.set("altText", coverAlt || file.name);
       request.set("rightsConfirmed", coverRights ? "true" : "false");
       const upload = await createEventImageUpload(request);
       const response = await fetch(upload.uploadUrl, {
         method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
+        body: image,
+        headers: { "Content-Type": image.type },
       });
       if (!response.ok) throw new Error("Upload failed");
       const attach = new FormData();
@@ -118,12 +126,17 @@ export function EventMediaManager({
       attach.set("eventId", eventId);
       attach.set("assetId", upload.assetId);
       await setEventCoverImage(attach);
-      showFile(file);
+      showFile(image);
       toast.success(labels.coverSaved);
       setCoverAlt("");
       setCoverRights(false);
     } catch (error) {
-      showActionError(error, labels.uploadError);
+      // The size rule is already written under the field; as a toast it says
+      // exactly which rule the chosen file broke.
+      showActionError(
+        error,
+        isImageTooLargeError(error) ? labels.constraints : labels.uploadError,
+      );
     } finally {
       setBusy(false);
       if (coverInputRef.current) coverInputRef.current.value = "";

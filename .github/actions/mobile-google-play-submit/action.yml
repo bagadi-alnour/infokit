@@ -1,0 +1,128 @@
+name: Build and submit Android
+description: Build the InfoKit mobile app with EAS and submit the Android bundle to Google Play.
+
+inputs:
+  build-profile:
+    description: EAS build profile.
+    required: true
+  submit-profile:
+    description: EAS submit profile (internal or production).
+    required: true
+  expo-token:
+    description: Expo access token used by EAS.
+    required: true
+  google-play-service-account-json:
+    description: Raw Google Play service-account JSON.
+    required: false
+  google-play-service-account-json-base64:
+    description: Base64-encoded Google Play service-account JSON.
+    required: false
+  build-message:
+    description: Message attached to the EAS build.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.14.0
+        cache: pnpm
+
+    - name: Validate release inputs
+      shell: bash
+      env:
+        EXPO_TOKEN: ${{ inputs.expo-token }}
+        SERVICE_ACCOUNT_JSON: ${{ inputs.google-play-service-account-json }}
+        SERVICE_ACCOUNT_JSON_BASE64: ${{ inputs.google-play-service-account-json-base64 }}
+        SUBMIT_PROFILE: ${{ inputs.submit-profile }}
+      run: |
+        set -euo pipefail
+        missing=0
+
+        if [ -z "${EXPO_TOKEN:-}" ]; then
+          echo "::error::Missing EXPO_TOKEN secret."
+          missing=1
+        fi
+
+        if [ -z "${SERVICE_ACCOUNT_JSON:-}" ] && [ -z "${SERVICE_ACCOUNT_JSON_BASE64:-}" ]; then
+          echo "::error::Missing GOOGLE_PLAY_SERVICE_ACCOUNT_JSON or GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64 secret."
+          missing=1
+        fi
+
+        case "$SUBMIT_PROFILE" in
+          internal|production) ;;
+          *)
+            echo "::error::Submit profile must be internal or production, got '$SUBMIT_PROFILE'."
+            missing=1
+            ;;
+        esac
+
+        exit "$missing"
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Setup Expo and EAS
+      uses: expo/expo-github-action@v8
+      with:
+        eas-version: 18.12.3
+        token: ${{ inputs.expo-token }}
+
+    - name: Write Google Play service account
+      shell: bash
+      env:
+        SERVICE_ACCOUNT_JSON: ${{ inputs.google-play-service-account-json }}
+        SERVICE_ACCOUNT_JSON_BASE64: ${{ inputs.google-play-service-account-json-base64 }}
+      run: |
+        node --input-type=module <<'NODE'
+        import { mkdirSync, writeFileSync } from "node:fs";
+        import { dirname, join } from "node:path";
+
+        const target = join(process.cwd(), "apps", "mobile", "credentials", "google-play-service-account.json");
+        const encoded = process.env.SERVICE_ACCOUNT_JSON_BASE64?.trim();
+        const contents = encoded
+          ? Buffer.from(encoded, "base64").toString("utf8")
+          : process.env.SERVICE_ACCOUNT_JSON;
+
+        if (!contents) throw new Error("Missing Google Play service-account JSON.");
+
+        // Parse before writing: a truncated or double-encoded secret fails here
+        // with a clear message instead of inside eas submit.
+        JSON.parse(contents);
+        mkdirSync(dirname(target), { recursive: true });
+        writeFileSync(target, contents.endsWith("\n") ? contents : `${contents}\n`, { mode: 0o600 });
+        NODE
+
+    - name: Verify the build points at a real API
+      shell: bash
+      working-directory: apps/mobile
+      env:
+        BUILD_PROFILE: ${{ inputs.build-profile }}
+      run: node scripts/verify-release-config.mjs "$BUILD_PROFILE"
+
+    - name: Build and submit Android
+      shell: bash
+      working-directory: apps/mobile
+      env:
+        EXPO_TOKEN: ${{ inputs.expo-token }}
+        BUILD_PROFILE: ${{ inputs.build-profile }}
+        SUBMIT_PROFILE: ${{ inputs.submit-profile }}
+        BUILD_MESSAGE: ${{ inputs.build-message }}
+      run: |
+        # --no-wait: EAS queues the build, builds it and runs the submission on
+        # its own servers. Waiting here would bill GitHub minutes for sitting in
+        # Expo's queue. Watch it on expo.dev; failures arrive by email, not as a
+        # red run here.
+        eas build \
+          --profile "$BUILD_PROFILE" \
+          --platform android \
+          --non-interactive \
+          --no-wait \
+          --auto-submit-with-profile "$SUBMIT_PROFILE" \
+          --message "$BUILD_MESSAGE"

@@ -17,6 +17,7 @@ import {
   FileText,
   Globe2,
   GitBranch,
+  GraduationCap,
   House,
   KeyRound,
   Languages,
@@ -60,6 +61,8 @@ const icons = {
   contact: Phone,
   calendar: CalendarDays,
   team: UsersRound,
+  /** What a mission asks of people: skills, software, courses. */
+  skills: GraduationCap,
   event: CalendarClock,
   article: FileText,
   download: Download,

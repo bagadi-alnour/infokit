@@ -15,10 +15,17 @@
 set -a
 source .env
 
-DB_PASSWORD=$(echo "$DATABASE_URL" | awk -F':' '{print $3}' | awk -F'@' '{print $1}')
-DB_PORT=$(echo "$DATABASE_URL" | awk -F':' '{print $4}' | awk -F'\/' '{print $1}')
-DB_NAME=$(echo "$DATABASE_URL" | awk -F'/' '{print $4}')
+# The container is created with POSTGRES_USER=postgres, so it needs the *migrator*
+# credentials. DATABASE_URL connects as infokit_app, which has no rights to create
+# anything; reading the password from it would build a container nobody can log
+# into as postgres.
+DB_URL="${DATABASE_URL_MIGRATOR:-$DATABASE_URL}"
+
+DB_PASSWORD=$(echo "$DB_URL" | awk -F':' '{print $3}' | awk -F'@' '{print $1}')
+DB_PORT=$(echo "$DB_URL" | awk -F':' '{print $4}' | awk -F'\/' '{print $1}')
+DB_NAME=$(echo "$DB_URL" | awk -F'/' '{print $4}')
 DB_CONTAINER_NAME="$DB_NAME-postgres"
+DB_VOLUME_NAME="$DB_NAME-pgdata"
 
 if ! [ -x "$(command -v docker)" ] && ! [ -x "$(command -v podman)" ]; then
   echo -e "Docker or Podman is not installed. Please install docker or podman and try again.\nDocker install guide: https://docs.docker.com/engine/install/\nPodman install guide: https://podman.io/getting-started/installation"
@@ -79,10 +86,16 @@ if [ "$DB_PASSWORD" = "password" ]; then
   fi
 fi
 
+# The image tag is pinned and the volume is named, both deliberately. Unpinned,
+# a major bump makes Postgres refuse to start against the old data directory; on
+# an anonymous volume, `docker volume prune` collects the database. 18 is the
+# major RDS runs, and PGDATA sits under /var/lib/postgresql/18/docker, so the
+# mount point is the parent the image itself declares as a volume.
 $DOCKER_CMD run -d \
   --name $DB_CONTAINER_NAME \
   -e POSTGRES_USER="postgres" \
   -e POSTGRES_PASSWORD="$DB_PASSWORD" \
   -e POSTGRES_DB="$DB_NAME" \
   -p "$DB_PORT":5432 \
-  docker.io/postgres && echo "Database container '$DB_CONTAINER_NAME' was successfully created"
+  -v "$DB_VOLUME_NAME":/var/lib/postgresql \
+  docker.io/postgres:18 && echo "Database container '$DB_CONTAINER_NAME' was successfully created"

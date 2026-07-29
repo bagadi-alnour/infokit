@@ -1,0 +1,134 @@
+name: Build and submit iOS
+description: Build the InfoKit mobile app with EAS and submit the iOS build to App Store Connect.
+
+inputs:
+  build-profile:
+    description: EAS build profile.
+    required: true
+  submit-profile:
+    description: EAS submit profile (internal or production).
+    required: true
+  expo-token:
+    description: Expo access token used by EAS.
+    required: true
+  asc-api-key-base64:
+    description: Base64-encoded App Store Connect API key (.p8).
+    required: true
+  asc-api-key-path:
+    description: >-
+      Path, relative to apps/mobile, where the ASC API key is written. Must match
+      submit.*.ios.ascApiKeyPath in eas.json.
+    required: false
+    default: credentials/AuthKey_GFSKBQBNMK.p8
+  build-message:
+    description: Message attached to the EAS build.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22.14.0
+        cache: pnpm
+
+    - name: Validate release inputs
+      shell: bash
+      env:
+        EXPO_TOKEN: ${{ inputs.expo-token }}
+        ASC_API_KEY_BASE64: ${{ inputs.asc-api-key-base64 }}
+        SUBMIT_PROFILE: ${{ inputs.submit-profile }}
+        BUILD_PROFILE: ${{ inputs.build-profile }}
+      run: |
+        set -euo pipefail
+        missing=0
+
+        if [ -z "${EXPO_TOKEN:-}" ]; then
+          echo "::error::Missing EXPO_TOKEN secret."
+          missing=1
+        fi
+
+        if [ -z "${ASC_API_KEY_BASE64:-}" ]; then
+          echo "::error::Missing APPLE_ASC_API_KEY_BASE64 secret."
+          missing=1
+        fi
+
+        case "$SUBMIT_PROFILE" in
+          internal|production) ;;
+          *)
+            echo "::error::Submit profile must be internal or production, got '$SUBMIT_PROFILE'."
+            missing=1
+            ;;
+        esac
+
+        # An internal-distribution iOS build is signed ad-hoc for sideloading and
+        # App Store Connect rejects it outright, so fail here rather than after a
+        # 40-minute build.
+        if [ "$BUILD_PROFILE" != "production" ]; then
+          echo "::error::iOS submissions need the production build profile; '$BUILD_PROFILE' is ad-hoc signed and cannot reach TestFlight."
+          missing=1
+        fi
+
+        exit "$missing"
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Setup Expo and EAS
+      uses: expo/expo-github-action@v8
+      with:
+        eas-version: 18.12.3
+        token: ${{ inputs.expo-token }}
+
+    - name: Write App Store Connect API key
+      shell: bash
+      working-directory: apps/mobile
+      env:
+        ASC_API_KEY_BASE64: ${{ inputs.asc-api-key-base64 }}
+        ASC_API_KEY_PATH: ${{ inputs.asc-api-key-path }}
+      run: |
+        set -euo pipefail
+
+        target="$ASC_API_KEY_PATH"
+        mkdir -p "$(dirname "$target")"
+        # GNU base64 tolerates the line wrapping GitHub may introduce in secrets.
+        printf '%s' "$ASC_API_KEY_BASE64" | base64 --decode > "$target"
+        chmod 600 "$target"
+
+        if [ ! -s "$target" ]; then
+          echo "::error::Decoded App Store Connect API key is empty."
+          exit 1
+        fi
+
+    - name: Verify the build points at a real API
+      shell: bash
+      working-directory: apps/mobile
+      env:
+        BUILD_PROFILE: ${{ inputs.build-profile }}
+      run: node scripts/verify-release-config.mjs "$BUILD_PROFILE"
+
+    - name: Build and submit iOS
+      shell: bash
+      working-directory: apps/mobile
+      env:
+        EXPO_TOKEN: ${{ inputs.expo-token }}
+        BUILD_PROFILE: ${{ inputs.build-profile }}
+        SUBMIT_PROFILE: ${{ inputs.submit-profile }}
+        BUILD_MESSAGE: ${{ inputs.build-message }}
+      run: |
+        # --no-wait: EAS queues the build, builds it and runs the submission on
+        # its own servers. Waiting here would bill GitHub minutes for sitting in
+        # Expo's queue. Watch it on expo.dev; failures arrive by email, not as a
+        # red run here.
+        eas build \
+          --profile "$BUILD_PROFILE" \
+          --platform ios \
+          --non-interactive \
+          --no-wait \
+          --auto-submit-with-profile "$SUBMIT_PROFILE" \
+          --message "$BUILD_MESSAGE"

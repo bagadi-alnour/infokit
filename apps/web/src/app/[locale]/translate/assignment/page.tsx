@@ -5,6 +5,7 @@ import { Languages, LockKeyhole } from "lucide-react";
 import { saveExternalTranslation } from "~/app/[locale]/translate/assignment/actions";
 import { PendingButton } from "~/components/pending-button";
 import { SimulatorTranslationAssignment } from "~/components/simulator-translation-assignment";
+import { TranslatorProfileInvitation } from "~/components/translator-profile-invitation";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
@@ -14,6 +15,7 @@ import {
   editorialTextDirection,
   type EditorialLanguage,
 } from "~/lib/editorial-languages";
+import { recordRestrictedRead } from "~/server/audit/reads";
 import { db } from "~/server/db";
 import {
   translationAssignments,
@@ -77,6 +79,8 @@ export default async function TranslationAssignmentPage({
         .select({
           id: translationAssignments.id,
           entityKind: translationAssignments.entityKind,
+          /** Present only when the link went to someone the directory knows. */
+          translatorId: translationAssignments.translatorId,
           targetLanguage: translationAssignments.targetLanguageCode,
           state: translationAssignments.state,
           instructions: translationAssignments.instructions,
@@ -104,6 +108,23 @@ export default async function TranslationAssignmentPage({
     : [];
 
   if (!assignment) {
+    /**
+     * A translator session that no longer opens its assignment: revoked while
+     * they had the page, or expired since. The link's own opening is already an
+     * event, so this is the other end of the same story — recorded only when a
+     * session was actually presented, since a bare visit to this URL identifies
+     * nobody and proves nothing.
+     */
+    if (assignmentId) {
+      await recordRestrictedRead({
+        action: "translation.assignment.read_refused",
+        subjectType: "translation_assignment",
+        subjectId: assignmentId,
+        actorType: "translator",
+        outcome: "denied",
+        errorCode: "assignment_unavailable",
+      });
+    }
     return (
       <main className="mx-auto grid min-h-dvh max-w-2xl place-items-center px-4 py-10">
         <Card className="w-full">
@@ -169,6 +190,10 @@ export default async function TranslationAssignmentPage({
           </p>
         </div>
       </header>
+
+      {assignment.translatorId ? (
+        <TranslatorProfileInvitation locale={locale} labels={labels} />
+      ) : null}
 
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Card>

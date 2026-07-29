@@ -2,6 +2,7 @@ import { Languages, LockKeyhole } from "lucide-react";
 
 import { saveExternalTranslation } from "~/app/[locale]/translate/assignment/actions";
 import { PendingButton } from "~/components/pending-button";
+import { TranslatorProfileInvitation } from "~/components/translator-profile-invitation";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
@@ -39,6 +40,8 @@ export function SimulatorTranslationAssignment({
     state: string;
     instructions: string | null;
     expiresAt: Date;
+    /** Set when the link went to a directory entry, so a profile exists to fill. */
+    translatorId: string | null;
     sourceLanguage: string;
     targetLanguage: string;
     sourceContent: unknown;
@@ -86,6 +89,10 @@ export function SimulatorTranslationAssignment({
           </p>
         </div>
       </header>
+
+      {assignment.translatorId ? (
+        <TranslatorProfileInvitation locale={locale} labels={labels} />
+      ) : null}
 
       {assignment.instructions ? (
         <div className="border-line bg-subtle mb-5 rounded-lg border p-3 text-sm">

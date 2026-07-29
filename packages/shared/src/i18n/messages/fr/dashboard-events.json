@@ -56,6 +56,8 @@
   "events.contactLabelHint": "Qui prévenir — un nom ou un rôle.",
   "events.contactValue": "Coordonnées",
   "events.contactHint": "Téléphone ou adresse e-mail de service, jamais personnelle.",
+  "events.transit": "Comment s’y rendre",
+  "events.transitHint": "Comment on arrive sans voiture. Publié avec l’événement, dans toutes les langues.",
   "events.contact": "Contact",
   "events.host": "Association hôte",
   "events.hostHint": "Vous ne pouvez créer un événement que pour une association dont vous êtes membre.",
@@ -150,7 +152,7 @@
   "events.media.flyerAdded": "Flyer ajouté",
   "events.media.flyerRemoved": "Flyer supprimé",
   "events.media.removeError": "Impossible de supprimer le fichier",
-  "events.media.constraints": "JPG, PNG, WebP ou AVIF jusqu’à 10 Mo ; PDF jusqu’à 25 Mo.",
+  "events.media.constraints": "JPG, PNG, WebP ou AVIF jusqu’à 1 Mo, réduits automatiquement ; PDF jusqu’à 25 Mo.",
   "events.media.pendingScan": "Contrôle de sécurité en cours : le fichier reste invisible pour les lecteurs jusqu’à sa validation.",
   "events.media.download": "Télécharger"
 }

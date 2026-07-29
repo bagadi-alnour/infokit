@@ -13,7 +13,7 @@ import { optionalText } from "~/lib/form-fields";
 import { localizedPath } from "~/i18n/routing";
 import { recordAudit } from "~/server/audit";
 import { requireEditor } from "~/server/auth/require";
-import { getRoleTestState } from "~/server/auth/authorization";
+import { authorizationFor } from "~/server/auth/authorization";
 import {
   catalogueScopeKey,
   isCatalogueNameConflict,
@@ -76,8 +76,12 @@ async function writeCatalogueName<T>(
 }
 
 /**
- * Mirror of `protectedPermissionAction`: a superadmin role test must carry the
- * permission for the chosen scope; real editors pass through to their RBAC.
+ * The gate on every catalogue write, and it refuses by default.
+ *
+ * The scope decides which permission is asked for and, when the write belongs to
+ * one association, the grants are read **for that association** — so the id in
+ * the form both selects the check and receives the row. An actor naming an
+ * association they hold nothing in fails here rather than writing into it.
  * Returns the resolved organisation id for org-scoped writes (null otherwise).
  */
 async function guardScope(
@@ -87,20 +91,20 @@ async function guardScope(
   const scope = scopeSchema.parse(formData.get("scope") ?? "global");
   const permission =
     scope === "global" ? "taxonomy.manage" : "content.activity.manage";
-  const user = await requireEditor(locale);
-  const authorization = await getRoleTestState(user.id);
-  if (
-    authorization.isSuperadmin &&
-    !authorization.effectivePermissions.has(permission)
-  ) {
-    redirect(
-      `${localizedPath("/dashboard/catalogue", locale)}?notice=permission-denied`,
-    );
-  }
   const organizationId =
     scope === "org"
       ? z.string().uuid().parse(formData.get("organizationId"))
       : null;
+  const user = await requireEditor(locale);
+  const authorization = await authorizationFor(
+    user.id,
+    organizationId ?? undefined,
+  );
+  if (!authorization.effectivePermissions.has(permission)) {
+    redirect(
+      `${localizedPath("/dashboard/catalogue", locale)}?notice=permission-denied`,
+    );
+  }
   return { locale, organizationId };
 }
 

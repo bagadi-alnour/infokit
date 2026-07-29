@@ -1,0 +1,116 @@
+name: Mobile release
+
+# Store submissions are deliberate, never a side effect of a merge: either you
+# push a `mobile-v*` tag, or you start the run yourself. Nothing about a push to
+# main reaches TestFlight or Play on its own.
+on:
+  push:
+    tags:
+      - "mobile-v*"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Which stores to build for.
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - ios
+          - android
+      build-profile:
+        description: EAS build profile.
+        type: choice
+        required: true
+        default: production
+        options:
+          - production
+          - preview
+      submit-profile:
+        description: >-
+          Where to submit. `internal` goes to TestFlight and the Play internal
+          track; `production` targets the Play production track.
+        type: choice
+        required: true
+        default: internal
+        options:
+          - internal
+          - production
+
+concurrency:
+  group: mobile-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Tag pushes carry no inputs, so the defaults live here rather than being
+  # repeated in every `||` expression downstream.
+  settings:
+    name: Resolve release settings
+    runs-on: ubuntu-latest
+    outputs:
+      platform: ${{ steps.resolve.outputs.platform }}
+      build-profile: ${{ steps.resolve.outputs.build_profile }}
+      submit-profile: ${{ steps.resolve.outputs.submit_profile }}
+      build-message: ${{ steps.resolve.outputs.build_message }}
+    steps:
+      - name: Resolve
+        id: resolve
+        env:
+          PLATFORM: ${{ inputs.platform || 'all' }}
+          BUILD_PROFILE: ${{ inputs.build-profile || 'production' }}
+          SUBMIT_PROFILE: ${{ inputs.submit-profile || 'internal' }}
+          REF_NAME: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          {
+            echo "platform=$PLATFORM"
+            echo "build_profile=$BUILD_PROFILE"
+            echo "submit_profile=$SUBMIT_PROFILE"
+            echo "build_message=${REF_NAME} (${SHA:0:7}) by ${ACTOR}"
+          } >> "$GITHUB_OUTPUT"
+
+  ios:
+    name: App Store Connect
+    needs: settings
+    if: needs.settings.outputs.platform == 'all' || needs.settings.outputs.platform == 'ios'
+    runs-on: ubuntu-latest
+    # The job only installs, validates and hands the build to EAS, so it should
+    # finish in single-digit minutes. The build itself runs on Expo's servers.
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build and submit
+        uses: ./.github/actions/mobile-app-store-submit
+        with:
+          build-profile: ${{ needs.settings.outputs.build-profile }}
+          submit-profile: ${{ needs.settings.outputs.submit-profile }}
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          asc-api-key-base64: ${{ secrets.APPLE_ASC_API_KEY_BASE64 }}
+          build-message: ${{ needs.settings.outputs.build-message }}
+
+  android:
+    name: Google Play
+    needs: settings
+    if: needs.settings.outputs.platform == 'all' || needs.settings.outputs.platform == 'android'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build and submit
+        uses: ./.github/actions/mobile-google-play-submit
+        with:
+          build-profile: ${{ needs.settings.outputs.build-profile }}
+          submit-profile: ${{ needs.settings.outputs.submit-profile }}
+          expo-token: ${{ secrets.EXPO_TOKEN }}
+          google-play-service-account-json: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          google-play-service-account-json-base64: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64 }}
+          build-message: ${{ needs.settings.outputs.build-message }}

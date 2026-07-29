@@ -73,9 +73,7 @@ export const serviceSearchConcepts = content.table(
     conceptId: uuid("concept_id")
       .notNull()
       .references(() => searchConcepts.id, { onDelete: "cascade" }),
-    verifiedById: varchar("verified_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    verifiedById: uuid("verified_by_id").references(() => users.id),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.serviceId, t.conceptId] })],

@@ -21,6 +21,7 @@ import {
   AddressLink,
   CoverImage,
   OrganisationLink,
+  TransitLinks,
 } from "~/components/content-parts";
 import { PayloadScreen } from "~/components/payload-screen";
 import { memberClient, publicClient } from "~/lib/client";
@@ -136,6 +137,15 @@ export default function EventScreen() {
                   <Text>{labels.notAvailable}</Text>
                 )}
                 <MetaRow label={labels.city}>{event.cityName}</MetaRow>
+                {/* In the place card rather than beside it: the question a
+                    reader asks straight after reading an address they do not
+                    recognise, and only the organisers can answer it. */}
+                {event.transit.length > 0 ? (
+                  <>
+                    <Text variant="eyebrow">{labels.gettingHere}</Text>
+                    <TransitLinks links={event.transit} />
+                  </>
+                ) : null}
               </Card>
 
               {event.description ? (

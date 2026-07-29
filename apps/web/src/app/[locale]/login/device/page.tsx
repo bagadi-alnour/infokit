@@ -36,9 +36,10 @@ export const dynamic = "force-dynamic";
  *
  * The app has no sign-in of its own: it opened this site's ordinary sign-in in
  * the system browser, which means the email link and the SMS step-up already
- * happened here, under the same allowlist as the console. This page hands the
- * finished session over — as a one-time code that lives two minutes, carried by
- * a deep link the reader taps, or typed in by hand when the link does not fire.
+ * happened here, under the same eligibility rules as the console. This page
+ * hands the finished session over — as a one-time code that lives two minutes,
+ * carried by a deep link the reader taps, or typed in by hand when the link does
+ * not fire.
  *
  * The session token itself never travels in a URL: the app trades the code for
  * it over HTTPS, so nothing durable is left in browser history or in a log.

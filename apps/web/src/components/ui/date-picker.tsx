@@ -42,6 +42,7 @@ function serializeDate(value: Date | undefined): string {
 export function DatePicker({
   id,
   name,
+  form,
   locale,
   value: controlledValue,
   defaultValue,
@@ -55,6 +56,8 @@ export function DatePicker({
 }: {
   id?: string;
   name: string;
+  /** Associate the posted value with a form elsewhere on the page. */
+  form?: string;
   locale: "fr" | "en" | "ar";
   value?: string;
   defaultValue?: string | null;
@@ -85,7 +88,12 @@ export function DatePicker({
 
   return (
     <div className="flex items-center gap-2">
-      <input type="hidden" name={name} value={serializeDate(value)} />
+      <input
+        type="hidden"
+        name={name}
+        form={form}
+        value={serializeDate(value)}
+      />
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           render={

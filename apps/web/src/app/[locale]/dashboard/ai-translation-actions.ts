@@ -95,6 +95,27 @@ export async function proposeTranslation(formData: FormData) {
     altText: parsed.sourceAltText,
   });
 
+  /**
+   * Existing activities can save one language independently, so generating a
+   * draft must not leave the only copy in browser state. Creation forms and
+   * versioned entities still receive the signed proposal for their owning form
+   * to persist atomically.
+   */
+  const draftSaved =
+    parsed.entityId && adapter.saveMachineDraft
+      ? await adapter.saveMachineDraft({
+          entityId: parsed.entityId,
+          languageCode: parsed.targetLanguageCode,
+          title: proposal.title,
+          bodyHtml: proposal.html,
+          plainText: proposal.text,
+          signature: proposal.signature,
+        })
+      : false;
+  if (parsed.entityId && adapter.saveMachineDraft && !draftSaved) {
+    throw new Error("The generated translation could not be saved");
+  }
+
   await recordAudit({
     action: "translation.ai_proposed",
     subjectType: parsed.entityKind,
@@ -104,7 +125,8 @@ export async function proposeTranslation(formData: FormData) {
       model: proposal.model,
       sourceLanguage,
       targetLanguage: parsed.targetLanguageCode,
-      saved: Boolean(parsed.entityId),
+      sourceSaved: Boolean(parsed.entityId),
+      draftSaved,
     },
   });
 
@@ -114,5 +136,6 @@ export async function proposeTranslation(formData: FormData) {
     text: proposal.text,
     altText: proposal.altText,
     signature: proposal.signature,
+    saved: draftSaved,
   };
 }

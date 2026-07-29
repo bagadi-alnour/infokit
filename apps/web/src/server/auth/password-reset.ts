@@ -2,10 +2,10 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, count, desc, eq, gt, gte, isNull } from "drizzle-orm";
 
 import { env } from "~/env";
+import { recordAudit } from "~/server/audit";
 import { db } from "~/server/db";
 import { passwordResetTokens, users } from "~/server/db/schema";
 import { hashPassword } from "./password";
-import { auditEvents } from "~/server/db/schema";
 
 const tokenLifetimeMs = 60 * 60 * 1000; // one hour
 const resendDelayMs = 60 * 1000;
@@ -24,8 +24,9 @@ export type IssueResetResult =
 
 /**
  * Issue a single-use reset token for an email address. Returns the raw token
- * (to be emailed) only on success. Callers must preserve anti-enumeration:
- * treat every result the same way in the UI and only send mail on "issued".
+ * (to be emailed) only on success. The recovery form may use "unknown" to
+ * explain that no account is attached to the submitted email; only "issued"
+ * may send mail.
  */
 export async function issuePasswordResetToken(
   email: string,
@@ -62,6 +63,18 @@ export async function issuePasswordResetToken(
     return { status: "cooldown" };
   }
   if ((issued[0]?.value ?? 0) >= hourlyIssueLimit) {
+    // Five reset links in an hour for one account is somebody who cannot read
+    // their mail, or somebody working on an account that is not theirs.
+    await recordAudit({
+      action: "auth.password.reset_rate_limited",
+      subjectType: "auth.user",
+      subjectId: user.id,
+      actorUserId: user.id,
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "hourly_issue_limit",
+      metadata: { limit: hourlyIssueLimit },
+    });
     return { status: "rate_limited" };
   }
 
@@ -70,6 +83,14 @@ export async function issuePasswordResetToken(
     userId: user.id,
     tokenHash: tokenHash(token),
     expiresAt: new Date(now.getTime() + tokenLifetimeMs),
+  });
+  // The link is a way into the account, so its issue is dated here rather than
+  // inferred from the email the caller sends next. The token never appears.
+  await recordAudit({
+    action: "auth.password.reset_requested",
+    subjectType: "auth.user",
+    subjectId: user.id,
+    actorUserId: user.id,
   });
   return { status: "issued", token };
 }
@@ -101,7 +122,20 @@ export async function resetPasswordWithToken({
       ),
     )
     .limit(1);
-  if (!record) return false;
+  // Expired, already used, or never issued: one answer to the caller, and one
+  // row saying somebody presented a reset link that no longer opens anything.
+  // There is no account to attribute it to — that is what makes it worth a row.
+  if (!record) {
+    await recordAudit({
+      action: "auth.password.reset_failed",
+      subjectType: "auth.password_reset_token",
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "token_unusable",
+      actorType: "system",
+    });
+    return false;
+  }
 
   // Constant-time confirmation the stored hash matches the presented token.
   const expected = Buffer.from(record.tokenHash, "hex");
@@ -110,39 +144,65 @@ export async function resetPasswordWithToken({
     expected.length !== received.length ||
     !timingSafeEqual(expected, received)
   ) {
+    await recordAudit({
+      action: "auth.password.reset_failed",
+      subjectType: "auth.user",
+      subjectId: record.userId,
+      actorUserId: record.userId,
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "token_mismatch",
+    });
     return false;
   }
 
   const passwordHash = await hashPassword(newPassword);
-  return db
-    .transaction(async (tx) => {
-      const [consumed] = await tx
-        .update(passwordResetTokens)
-        .set({ usedAt: now })
-        .where(
-          and(
-            eq(passwordResetTokens.id, record.id),
-            isNull(passwordResetTokens.usedAt),
-          ),
-        )
-        .returning({ id: passwordResetTokens.id });
-      if (!consumed) throw new Error("The reset token was already used");
+  return (
+    db
+      .transaction(async (tx) => {
+        const [consumed] = await tx
+          .update(passwordResetTokens)
+          .set({ usedAt: now })
+          .where(
+            and(
+              eq(passwordResetTokens.id, record.id),
+              isNull(passwordResetTokens.usedAt),
+            ),
+          )
+          .returning({ id: passwordResetTokens.id });
+        if (!consumed) throw new Error("The reset token was already used");
 
-      await tx
-        .update(users)
-        .set({ passwordHash, passwordUpdatedAt: now })
-        .where(eq(users.id, record.userId));
+        await tx
+          .update(users)
+          .set({ passwordHash, passwordUpdatedAt: now })
+          .where(eq(users.id, record.userId));
 
-      await tx.insert(auditEvents).values({
-        actorUserId: record.userId,
-        action: "auth.password.reset",
-        subjectType: "auth.user",
-        subjectId: record.userId,
-      });
-
-      return true;
-    })
-    .catch(() => false);
+        return true;
+      })
+      // After the commit, so a trail that cannot be written never costs somebody
+      // the password they just set.
+      .then(async () => {
+        await recordAudit({
+          action: "auth.password.reset",
+          subjectType: "auth.user",
+          subjectId: record.userId,
+          actorUserId: record.userId,
+        });
+        return true;
+      })
+      .catch(async () => {
+        await recordAudit({
+          action: "auth.password.reset_failed",
+          subjectType: "auth.user",
+          subjectId: record.userId,
+          actorUserId: record.userId,
+          outcome: "failure",
+          severity: "warning",
+          errorCode: "token_already_used",
+        });
+        return false;
+      })
+  );
 }
 
 /** True when a reset token is live and unused — used to gate the reset page. */

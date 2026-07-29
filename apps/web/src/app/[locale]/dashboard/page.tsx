@@ -14,7 +14,6 @@ import {
 import Link from "next/link";
 
 import { RunbookCalendar } from "~/components/admin/runbook-calendar";
-import { RunbookCreateRail } from "~/components/admin/runbook-create-rail";
 import { RunbookInformationRail } from "~/components/admin/runbook-information-rail";
 import { PendingButton } from "~/components/pending-button";
 import { Badge } from "~/components/ui/badge";
@@ -26,6 +25,8 @@ import {
   parisToday,
   type AttentionKind,
 } from "~/lib/freshness";
+import { organizationChoices } from "~/server/auth/authorization";
+import { requireEditor } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
   activities,
@@ -35,12 +36,9 @@ import {
   cities,
   cityTeams,
   cityTranslations,
-  organizations,
   placeTranslations,
   scheduleExceptions,
   scheduleRules,
-  serviceCategories,
-  serviceCategoryTranslations,
   services,
   serviceTranslations,
 } from "~/server/db/schema";
@@ -132,6 +130,7 @@ export default async function DashboardPage({
 }) {
   const locale = requireRouteLocale((await params).locale);
   const search = await searchParams;
+  const user = await requireEditor(locale);
   const messages = await loadPageCatalog(locale, "dashboard-overview");
   const today = parisToday();
   const selectedDate =
@@ -143,11 +142,15 @@ export default async function DashboardPage({
   const selectedWeekday = isoWeekday(selectedDate);
   const isToday = selectedDate === today.isoDate;
 
-  const [organizationRows, cityRows, teamRows] = await Promise.all([
-    db
-      .select({ id: organizations.id, name: organizations.displayName })
-      .from(organizations)
-      .orderBy(asc(organizations.displayName)),
+  /**
+   * Which association's day this is. `?org=` is a convenience — the list of
+   * associations this account administers is the guarantee — so the id is
+   * honoured only if it is one of them and dropped otherwise. Read straight from
+   * the query string it would have pointed the runbook at any association's
+   * activities for the day, steward names and all.
+   */
+  const [organizationScope, cityRows, teamRows] = await Promise.all([
+    organizationChoices(user.id, search.org),
     db
       .select({ id: cities.id, code: cities.code, name: cityTranslations.name })
       .from(cities)
@@ -170,9 +173,9 @@ export default async function DashboardPage({
       .from(cityTeams)
       .where(eq(cityTeams.active, true)),
   ]);
-  const selectedOrganization =
-    organizationRows.find((row) => row.id === search.org) ??
-    organizationRows[0];
+  const selectedOrganization = organizationScope.choices.find(
+    (row) => row.id === organizationScope.selectedId,
+  );
   const organizationTeam = teamRows.find(
     (row) => row.organizationId === selectedOrganization?.id,
   );
@@ -186,10 +189,9 @@ export default async function DashboardPage({
   /**
    * The day's work in the selected city. The organisation narrows it, but a
    * platform-owned activity has no organisation and still opens its doors, so it
-   * belongs to whoever is on the runbook — the same rule the reusable services
-   * below follow. Matching on `organizationId` alone dropped those rows
-   * silently: `null = <uuid>` is never true, so they were scheduled, published,
-   * unconfirmed, and invisible.
+   * belongs to whoever is on the runbook. Matching on `organizationId` alone
+   * dropped those rows silently: `null = <uuid>` is never true, so they were
+   * scheduled, published, unconfirmed, and invisible.
    */
   const scopedActivities = selectedCity
     ? await db
@@ -233,9 +235,6 @@ export default async function DashboardPage({
     confirmationRows,
     assignmentRows,
     placeNameRows,
-    categoryRows,
-    reusableServiceRows,
-    reusableServiceNames,
   ] = await Promise.all([
     activityIds.length
       ? db
@@ -311,49 +310,6 @@ export default async function DashboardPage({
           .from(placeTranslations)
           .where(inArray(placeTranslations.placeId, placeIds))
       : [],
-    db
-      .select({
-        id: serviceCategories.id,
-        code: serviceCategories.code,
-        icon: serviceCategories.icon,
-        label: serviceCategoryTranslations.label,
-      })
-      .from(serviceCategories)
-      .leftJoin(
-        serviceCategoryTranslations,
-        and(
-          eq(serviceCategoryTranslations.categoryId, serviceCategories.id),
-          eq(serviceCategoryTranslations.languageCode, locale),
-        ),
-      )
-      .where(eq(serviceCategories.enabled, true))
-      .orderBy(asc(serviceCategories.displayOrder)),
-    db
-      .select({
-        id: services.id,
-        organizationId: services.organizationId,
-        categoryId: services.categoryId,
-      })
-      .from(services)
-      .where(
-        and(
-          eq(services.active, true),
-          isNull(services.archivedAt),
-          selectedOrganization
-            ? or(
-                isNull(services.organizationId),
-                eq(services.organizationId, selectedOrganization.id),
-              )
-            : isNull(services.organizationId),
-        ),
-      ),
-    db
-      .select({
-        serviceId: serviceTranslations.serviceId,
-        languageCode: serviceTranslations.languageCode,
-        name: serviceTranslations.name,
-      })
-      .from(serviceTranslations),
   ]);
 
   const translationsByActivity = new Map<string, TranslationRow[]>();
@@ -522,20 +478,6 @@ export default async function DashboardPage({
   const mainAttention = attention[0];
   const selectedDateLabel = formatDate(selectedDate, locale);
 
-  const reusableNamesById = new Map<string, TranslationRow[]>();
-  for (const row of reusableServiceNames) {
-    const current = reusableNamesById.get(row.serviceId) ?? [];
-    current.push(row);
-    reusableNamesById.set(row.serviceId, current);
-  }
-  const createLabels: Record<string, string> = {};
-  for (const key of Object.keys(messages)) {
-    if (key.startsWith("create.") || key.startsWith("weekday.")) {
-      createLabels[key.replace(/^create\./, "")] =
-        messages[key as keyof typeof messages];
-    }
-  }
-
   return (
     <RunbookInformationRail
       hideLabel={messages["information.hide"]}
@@ -561,33 +503,25 @@ export default async function DashboardPage({
                 )}
               </p>
             </div>
-            <div className="grid shrink-0 justify-items-start gap-2 md:justify-items-end">
-              {isToday && pending.length > 0 ? (
-                <form action={confirmActivitiesToday}>
-                  <input type="hidden" name="locale" value={locale} />
-                  {pending.map((occurrence) => (
-                    <input
-                      key={occurrence.id}
-                      type="hidden"
-                      name="activityId"
-                      value={occurrence.id}
-                    />
-                  ))}
-                  <PendingButton className="h-12 px-5 text-base">
-                    <CircleCheckBig aria-hidden />
-                    {formatMessage(messages["runbook.confirmAll"], {
-                      count: String(pending.length),
-                    })}
-                  </PendingButton>
-                </form>
-              ) : null}
-              <p className="text-copy-muted text-xs">
-                {formatMessage(messages["runbook.scope"], {
-                  city: cityName,
-                  date: selectedDateLabel,
-                })}
-              </p>
-            </div>
+            {isToday && pending.length > 0 ? (
+              <form action={confirmActivitiesToday} className="shrink-0">
+                <input type="hidden" name="locale" value={locale} />
+                {pending.map((occurrence) => (
+                  <input
+                    key={occurrence.id}
+                    type="hidden"
+                    name="activityId"
+                    value={occurrence.id}
+                  />
+                ))}
+                <PendingButton className="h-12 px-5 text-base">
+                  <CircleCheckBig aria-hidden />
+                  {formatMessage(messages["runbook.confirmAll"], {
+                    count: String(pending.length),
+                  })}
+                </PendingButton>
+              </form>
+            ) : null}
           </div>
 
           <div className="divide-line divide-y">
@@ -822,50 +756,6 @@ export default async function DashboardPage({
             }}
             localeCode={locale}
           />
-
-          <div className="border-line mt-5 border-t pt-5">
-            <RunbookCreateRail
-              locale={locale}
-              categories={categoryRows.map((category) => ({
-                id: category.id,
-                name: category.label ?? category.code,
-                icon: category.icon,
-              }))}
-              // This rail works within one organisation and city, so a global
-              // activity — which has neither — is not one of its options.
-              activities={scopedActivities.flatMap((activity) =>
-                activity.organizationId && activity.cityId
-                  ? [
-                      {
-                        id: activity.id,
-                        organizationId: activity.organizationId,
-                        cityId: activity.cityId,
-                        name: activityName(activity.id),
-                      },
-                    ]
-                  : [],
-              )}
-              services={reusableServiceRows.map((service) => ({
-                id: service.id,
-                organizationId: service.organizationId,
-                name: translatedName(
-                  reusableNamesById.get(service.id) ?? [],
-                  locale,
-                  messages["service.untitled"],
-                ),
-                category:
-                  categoryRows.find(
-                    (category) => category.id === service.categoryId,
-                  )?.label ?? undefined,
-                icon:
-                  categoryRows.find(
-                    (category) => category.id === service.categoryId,
-                  )?.icon ?? null,
-              }))}
-              selectedDate={selectedDate}
-              labels={createLabels}
-            />
-          </div>
 
           <section className="border-line mt-5 border-t pt-5">
             <h2 className="flex items-center gap-2 font-semibold">

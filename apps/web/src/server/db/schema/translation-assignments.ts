@@ -22,6 +22,7 @@ import {
   translationAssignmentState,
 } from "./schemas";
 import { translationSourceVersions } from "./translation-sources";
+import { translators } from "./translators";
 
 /**
  * Phase 1.3 translator collaboration (docs/PHASE-1.3-COLLABORATION.md).
@@ -56,11 +57,21 @@ export const translationAssignments = content.table(
     targetLanguageCode: varchar("target_language_code", { length: 35 })
       .notNull()
       .references(() => languages.code),
+    /**
+     * The directory entry this language was sent to (`core.translators`), when
+     * the sender picked someone the network already knows. Null for a one-off
+     * send to an address typed into the form — the flow that existed before the
+     * directory, and still the answer for a translator nobody will use twice.
+     *
+     * The email and name columns stay authoritative either way: they record
+     * what was actually mailed, so a later profile edit cannot rewrite where a
+     * link went. Nothing is deleted here on the directory side — an assignment
+     * is history.
+     */
+    translatorId: uuid("translator_id").references(() => translators.id),
     translatorEmail: varchar("translator_email", { length: 255 }).notNull(),
     translatorName: varchar("translator_name", { length: 200 }),
-    assignedById: varchar("assigned_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    assignedById: uuid("assigned_by_id").references(() => users.id),
     tokenHash: varchar("token_hash", { length: 255 }).notNull().unique(),
     tokenConsumedAt: timestamp("token_consumed_at", { withTimezone: true }),
     state: translationAssignmentState("state").notNull().default("requested"),
@@ -73,20 +84,14 @@ export const translationAssignments = content.table(
     submittedContentHash: varchar("submitted_content_hash", { length: 64 }),
     instructions: text("instructions"),
     reviewNote: text("review_note"),
-    reviewedById: varchar("reviewed_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    reviewedById: uuid("reviewed_by_id").references(() => users.id),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
-    promotedById: varchar("promoted_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    promotedById: uuid("promoted_by_id").references(() => users.id),
     promotedAt: timestamp("promoted_at", { withTimezone: true }),
-    publishedById: varchar("published_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    publishedById: uuid("published_by_id").references(() => users.id),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     expiredAt: timestamp("expired_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
@@ -133,6 +138,11 @@ export const translationAssignments = content.table(
       ),
     index("translation_assignments_org_idx").on(t.organizationId),
     index("translation_assignments_entity_idx").on(t.entityKind, t.entityId),
+    /** A translator's own space lists their work, newest first. */
+    index("translation_assignments_translator_idx").on(
+      t.translatorId,
+      t.createdAt,
+    ),
   ],
 );
 
@@ -146,14 +156,11 @@ export const translationAssignmentEvents = content.table(
   "translation_assignment_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    assignmentId: uuid("assignment_id")
-      .notNull()
-      .references(() => translationAssignments.id, { onDelete: "cascade" }),
+    // Named explicitly: the generated name overruns 63 bytes (./schemas.ts).
+    assignmentId: uuid("assignment_id").notNull(),
     fromState: translationAssignmentState("from_state"),
     toState: translationAssignmentState("to_state").notNull(),
-    actorUserId: varchar("actor_user_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    actorUserId: uuid("actor_user_id").references(() => users.id),
     byTranslator: boolean("by_translator").notNull().default(false),
     note: text("note"),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -166,5 +173,10 @@ export const translationAssignmentEvents = content.table(
       sql`(${t.byTranslator} and ${t.actorUserId} is null) or (not ${t.byTranslator} and ${t.actorUserId} is not null)`,
     ),
     index("translation_assignment_events_assignment_idx").on(t.assignmentId),
+    foreignKey({
+      columns: [t.assignmentId],
+      foreignColumns: [translationAssignments.id],
+      name: "translation_assignment_events_assignment_id_fk",
+    }).onDelete("cascade"),
   ],
 );

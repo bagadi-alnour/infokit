@@ -8,7 +8,7 @@ import { type Locale } from "@infokit/shared/i18n";
 
 import { localizedPath } from "~/i18n/routing";
 import { editorialLanguageCodes } from "~/lib/editorial-languages";
-import { optionalText } from "~/lib/form-fields";
+import { optionalText, personName, phoneNumber } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
 import {
   hasActualPlatformPermission,
@@ -19,6 +19,7 @@ import { assertOrganizationWritable } from "~/server/auth/org-access";
 import { protectedPermissionAction } from "~/server/auth/require";
 import { hashContent } from "~/server/content/editorial";
 import { db } from "~/server/db";
+import { insertMember } from "~/server/members";
 import {
   contacts,
   contactTranslations,
@@ -477,6 +478,17 @@ export const toggleOrganizationLanguage = protectedPermissionAction(
           ),
         );
     }
+    // Which languages an association publishes in decides what its readers can
+    // see, so turning one off is worth a dated row rather than a silent absence.
+    await recordAudit({
+      action: enabled
+        ? "organization.language_enabled"
+        : "organization.language_disabled",
+      subjectType: "organization",
+      subjectId: organizationId,
+      organizationId,
+      metadata: { languageCode },
+    });
     refresh(locale, organizationId);
   },
 );
@@ -588,10 +600,18 @@ export const setOrganizationArchived = protectedPermissionAction(
 
 /* --------------------------- representatives ------------------------- */
 
+/**
+ * The five fields `core.organization_members` requires of everybody, asked of the
+ * operator too: an invited representative is a member from the moment the row is
+ * reserved, and a roster row that reads `contact@` is a row nobody can act on.
+ */
 const inviteRepresentativeSchema = z.object({
   organizationId: orgIdSchema,
   email: z.string().trim().toLowerCase().email(),
-  displayName: optionalText,
+  firstName: personName,
+  lastName: personName,
+  phone: phoneNumber,
+  title: z.string().trim().min(2).max(160),
   roleCode: z.enum(INVITABLE_ROLE_CODES),
 });
 
@@ -640,7 +660,10 @@ export const inviteOrganizationRepresentative = protectedPermissionAction(
     const parsed = inviteRepresentativeSchema.parse({
       organizationId: formData.get("organizationId"),
       email: formData.get("email"),
-      displayName: formData.get("displayName") ?? "",
+      firstName: formData.get("firstName"),
+      lastName: formData.get("lastName"),
+      phone: formData.get("phone"),
+      title: formData.get("title"),
       roleCode: formData.get("roleCode"),
     });
     await assertOrganizationWritable(user.id, parsed.organizationId);
@@ -650,7 +673,7 @@ export const inviteOrganizationRepresentative = protectedPermissionAction(
       requireRoleTemplate(parsed.roleCode),
     ]);
     const [account] = await db
-      .select({ id: users.id, name: users.name })
+      .select({ id: users.id })
       .from(users)
       .where(sql`lower(${users.email}) = ${parsed.email}`)
       .limit(1);
@@ -675,35 +698,37 @@ export const inviteOrganizationRepresentative = protectedPermissionAction(
         )
         .limit(1);
 
+      const identity = {
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        contactEmail: parsed.email,
+        phone: parsed.phone,
+        title: parsed.title,
+      };
       if (!existing) {
-        const [created] = await tx
-          .insert(organizationMembers)
-          .values({
-            organizationId: parsed.organizationId,
-            userId: account?.id ?? null,
-            displayName:
-              parsed.displayName ??
-              account?.name ??
-              parsed.email.split("@")[0] ??
-              parsed.email,
-            contactEmail: parsed.email,
-            status: account ? "active" : "invited",
-          })
-          .returning({ id: organizationMembers.id });
-        if (!created) throw new Error("Member insert returned no row");
-        return created.id;
+        return insertMember(tx, {
+          organizationId: parsed.organizationId,
+          userId: account?.id ?? null,
+          identity,
+        });
       }
 
       /**
        * Re-inviting someone who left, or who has since created an account,
        * revives the same membership row: activity assignments and audit events
-       * already point at it.
+       * already point at it. The identity is rewritten from the form rather than
+       * kept, because an operator inviting somebody again is stating who they are
+       * now — a stale name and an unreachable number are what made the row worth
+       * re-inviting.
        */
       const userId = account?.id ?? existing.userId;
       await tx
         .update(organizationMembers)
         .set({
-          displayName: parsed.displayName ?? undefined,
+          firstName: identity.firstName,
+          lastName: identity.lastName,
+          phone: identity.phone,
+          title: identity.title,
           userId,
           status: userId ? "active" : "invited",
           offboardedAt: null,
@@ -778,6 +803,19 @@ export const resendOrganizationInvitation = protectedPermissionAction(
     if (!invitation) throw new Error("No pending invitation to resend");
     if (invitation.kind === "member") {
       throw new Error("Team invitations are resent from the team console");
+    }
+    /**
+     * A translator invitation belongs to the translator directory and a
+     * platform staff invitation to the platform console; neither reserves a
+     * membership in this organisation, so neither can be resent from here.
+     */
+    if (
+      invitation.kind !== "association_publisher" &&
+      invitation.kind !== "organization_admin"
+    ) {
+      throw new Error(
+        "Only organisation representative invitations are resent here",
+      );
     }
 
     const [roleRows, memberRow, organization] = await Promise.all([

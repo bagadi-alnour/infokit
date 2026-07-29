@@ -85,5 +85,15 @@
   "organization.purpose": "ماموریت",
   "organization.goals": "موخې",
   "organization.values": "ارزښتونه",
-  "organization.backToActivities": "فعالیتونو ته بیرته"
+  "organization.backToActivities": "فعالیتونو ته بیرته",
+  "transit.gettingHere": "دلته د راتلو لار",
+  "transit.walk": "{minutes} دقیقې پلی",
+  "transit.mode.bus": "بس",
+  "transit.mode.tram": "ټرام",
+  "transit.mode.metro": "میټرو",
+  "transit.mode.train": "اورګاډی",
+  "transit.mode.coach": "د اوږدې لارې بس",
+  "transit.mode.ferry": "بېړۍ",
+  "transit.mode.bike": "بايسکل",
+  "transit.mode.other": "لیکه"
 }

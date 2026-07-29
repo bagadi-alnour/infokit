@@ -9,7 +9,6 @@ import {
   uniqueIndex,
   uuid,
   varchar,
-  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 import { users } from "./auth";
@@ -46,29 +45,36 @@ export const translationSourceVersions = content.table(
     entityKind: translationAssignmentEntity("entity_kind").notNull(),
     entityId: uuid("entity_id").notNull(),
     version: integer("version").notNull(),
-    previousVersionId: uuid("previous_version_id").references(
-      (): AnyPgColumn => translationSourceVersions.id,
-      { onDelete: "restrict" },
-    ),
+    // Both named explicitly: the generated names overrun 63 bytes
+    // (./schemas.ts).
+    previousVersionId: uuid("previous_version_id"),
     /** Populated for editorial entries; null for activities and public events. */
     sourceRevisionId: uuid("source_revision_id"),
-    sourceLanguageCode: varchar("source_language_code", { length: 35 })
-      .notNull()
-      .references(() => languages.code),
+    sourceLanguageCode: varchar("source_language_code", {
+      length: 35,
+    }).notNull(),
     sourceContentJson: jsonb("source_content_json").notNull(),
     /** Lowercase hexadecimal SHA-256 of canonical `sourceContentJson`. */
     sourceContentHash: varchar("source_content_hash", {
       length: 64,
     }).notNull(),
     impact: translationImpact("impact").notNull(),
-    createdById: varchar("created_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    createdById: uuid("created_by_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (t) => [
+    foreignKey({
+      columns: [t.previousVersionId],
+      foreignColumns: [t.id],
+      name: "translation_source_versions_previous_version_id_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [t.sourceLanguageCode],
+      foreignColumns: [languages.code],
+      name: "translation_source_versions_source_language_code_fk",
+    }),
     uniqueIndex("translation_source_versions_entity_version_uq").on(
       t.entityKind,
       t.entityId,
@@ -132,9 +138,7 @@ export const translationJobs = content.table(
     state: translationJobState("state").notNull().default("queued"),
     outputContentJson: jsonb("output_content_json"),
     outputContentHash: varchar("output_content_hash", { length: 64 }),
-    requestedById: varchar("requested_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    requestedById: uuid("requested_by_id").references(() => users.id),
     requestedAt: timestamp("requested_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

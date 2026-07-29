@@ -56,6 +56,8 @@
   "events.contactLabelHint": "Who to reach — a name or a role.",
   "events.contactValue": "Contact details",
   "events.contactHint": "A service phone number or email, never a personal one.",
+  "events.transit": "Getting here",
+  "events.transitHint": "How somebody arrives without a car. Published with the event, in every language.",
   "events.contact": "Contact",
   "events.host": "Hosting organisation",
   "events.hostHint": "You can only create an event for an organisation you belong to.",
@@ -150,7 +152,7 @@
   "events.media.flyerAdded": "Flyer added",
   "events.media.flyerRemoved": "Flyer removed",
   "events.media.removeError": "The file could not be removed",
-  "events.media.constraints": "JPG, PNG, WebP or AVIF up to 10 MB; PDF up to 25 MB.",
+  "events.media.constraints": "JPG, PNG, WebP or AVIF up to 1 MB, reduced automatically; PDF up to 25 MB.",
   "events.media.pendingScan": "Safety check in progress: the file stays hidden from readers until it passes.",
   "events.media.download": "Download"
 }

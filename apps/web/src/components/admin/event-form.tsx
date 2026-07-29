@@ -21,6 +21,7 @@ import {
   TimeFormField,
 } from "~/components/admin/form-field";
 import { StewardContactCard } from "~/components/admin/steward-contact";
+import { TransitLinkFields } from "~/components/admin/transit-links";
 import { Card, Select } from "~/components/admin/workspace";
 import {
   EVENT_VISIBILITIES,
@@ -38,6 +39,7 @@ import { eventLanguages, type EventLanguage } from "~/lib/event-languages";
 import { readLabel, type FormMessages, type Labels } from "~/lib/form-messages";
 import { timeOfDayPattern } from "~/lib/schedule-rules";
 import { type StewardContactValues } from "~/lib/steward-contact";
+import { type TransitLink } from "~/lib/transit-links";
 import { cn } from "~/lib/utils";
 
 export type { EventVisibilityValue as EventVisibility } from "~/components/events/visibility";
@@ -71,6 +73,12 @@ export interface EventFormValues {
   text: Record<EventLanguage, EventFormText>;
   /** Who to ask about this event — workspace only, never published. */
   steward: StewardContactValues;
+  /**
+   * How to get there on public transport. Held outside the validated fields
+   * because the rows are their own component's business — they post themselves,
+   * and the server re-reads them from the post either way.
+   */
+  transit: TransitLink[];
 }
 
 /** The field each language's text is authored in, per `FormData` key. */
@@ -554,6 +562,18 @@ export function EventForm({
               maxLength={200}
             />
           </div>
+          {/* Part of "where", not a section of its own: an address a reader
+           * cannot reach is only half an answer, so the way in is asked for
+           * next to the place rather than at the end of the form. */}
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-medium">
+              {copy("events.transit")}
+            </legend>
+            <p className="text-copy-muted mb-1 text-xs">
+              {copy("events.transitHint")}
+            </p>
+            <TransitLinkFields links={values.transit} labels={consoleLabels} />
+          </fieldset>
         </div>
       </Card>
 

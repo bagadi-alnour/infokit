@@ -14,5 +14,20 @@
   "auth.verify.cooldown": "Attendez une minute avant de demander un autre code.",
   "auth.verify.rateLimited": "Trop de codes ont été demandés. Réessayez dans une heure.",
   "auth.verify.sendError": "Le SMS n’a pas pu être envoyé. Réessayez dans un instant.",
-  "auth.verify.signOut": "Utiliser une autre adresse e-mail"
+  "auth.verify.unverified": "Ce numéro n’est pas encore confirmé. Saisissez le code reçu pour terminer l’enregistrement.",
+  "auth.verify.changeNumber": "Ce n’est pas le bon numéro ?",
+  "auth.verify.changeNumberHint": "Enregistrez-en un autre : le prochain code partira vers ce nouveau numéro.",
+  "auth.verify.changeSubmit": "Utiliser ce numéro à la place",
+  "auth.verify.signOut": "Utiliser une autre adresse e-mail",
+  "auth.enrol.eyebrow": "Sécurité du compte",
+  "auth.enrol.title": "Enregistrez votre numéro de mobile",
+  "auth.enrol.description": "Votre rôle ouvre l’accès aux comptes, aux données de coordination et aux contenus publiés. Confirmez un numéro maintenant : chaque connexion demandera ensuite un code envoyé par SMS.",
+  "auth.enrol.why": "Pourquoi ce numéro est obligatoire pour vous",
+  "auth.enrol.whyHint": "Un mot de passe ou un lien reçu par e-mail peut être volé sans que personne le remarque. Pour les rôles qui touchent aux comptes et au travail des autres, la plateforme exige une deuxième preuve : un code envoyé au téléphone que vous êtes seul à avoir en main. Ce numéro ne sert qu’à la connexion et aux alertes de sécurité, et n’apparaît jamais sur le site public.",
+  "auth.enrol.phoneLabel": "Numéro de mobile",
+  "auth.enrol.phoneHint": "Format international, indicatif du pays compris. Exemple : +33 6 12 34 56 78.",
+  "auth.enrol.phonePlaceholder": "+33 6 12 34 56 78",
+  "auth.enrol.submit": "Enregistrer et envoyer un code",
+  "auth.enrol.submitting": "Envoi du code…",
+  "auth.enrol.invalidPhone": "Ce numéro n’est pas lisible. Écrivez-le au format international, par exemple +33 6 12 34 56 78."
 }

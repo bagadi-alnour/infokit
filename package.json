@@ -5,11 +5,17 @@
   "type": "module",
   "scripts": {
     "build": "turbo run build",
-    "check": "pnpm lint && pnpm typecheck",
-    "check:ci": "pnpm format:check && turbo run lint typecheck",
+    "check": "pnpm lint && pnpm typecheck && pnpm db:names",
+    "check:ci": "pnpm format:check && turbo run lint typecheck db:names",
+    "db:drift": "pnpm --filter @infokit/web db:drift",
+    "db:drift:remote": "pnpm --filter @infokit/web db:drift:remote",
     "db:generate": "pnpm --filter @infokit/web db:generate",
     "db:migrate": "pnpm --filter @infokit/web db:migrate",
+    "db:migrate:remote": "pnpm --filter @infokit/web db:migrate:remote",
+    "db:names": "pnpm --filter @infokit/web db:names",
     "db:push": "pnpm --filter @infokit/web db:push",
+    "db:seed": "pnpm --filter @infokit/web db:seed",
+    "db:seed:remote": "pnpm --filter @infokit/web db:seed:remote",
     "db:studio": "pnpm --filter @infokit/web db:studio",
     "android": "pnpm --filter @infokit/mobile android",
     "dev": "node scripts/dev.mjs",
@@ -28,7 +34,7 @@
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged",
-    "pre-push": "pnpm typecheck"
+    "pre-push": "pnpm typecheck && pnpm db:names"
   },
   "lint-staged": {
     "*.{json,md,mdx,css}": [

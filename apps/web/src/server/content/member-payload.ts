@@ -238,7 +238,6 @@ export async function loadMemberAgendaPayload({
   const now = new Date();
   const { todayKey, month } = defaultMonth(cities, now);
   const shown = requestedMonth ?? month;
-  const allDay = messages["events.allDay"];
 
   return {
     locale,
@@ -250,7 +249,7 @@ export async function loadMemberAgendaPayload({
         event,
         city: cityById.get(event.cityId),
         locale,
-        allDay,
+        messages,
         reachLabel: reachLabelFor({ event, messages: member }),
         // Only a public event has a page on the site; the others are read in
         // the app and nowhere else.
@@ -295,7 +294,7 @@ export async function loadMemberEventPayload({
       event,
       city: cities_.get(event.cityId),
       locale,
-      allDay: messages["events.allDay"],
+      messages,
       reachLabel: reachLabelFor({ event, messages: member }),
       href:
         event.visibility === "public"

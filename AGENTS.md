@@ -8,7 +8,7 @@ A multilingual public-information platform for people seeking practical help, an
 
 ## Hard rules
 
-1. **The schema is the single source of truth.** `apps/web/src/server/db/schema/` implements `docs/DATABASE-SCHEMA.md` as additive per-slice subsets. First iteration is **push-mode**: `pnpm db:push` syncs the schema to the local Docker database (port 5433) while tables are empty — no migration files exist by design. Before the first persistent environment, generate a clean baseline with `db:generate`; from then on: never edit an applied migration, corrections are new migrations, and never `db:push` against a persistent environment.
+1. **The schema is the single source of truth.** `apps/web/src/server/db/schema/` implements `docs/DATABASE-SCHEMA.md` as additive per-slice subsets, and the reviewed chain in `apps/web/drizzle/` is how it reaches a database. The loop: `pnpm db:generate --name <slug>` writes a migration, `pnpm db:migrate` applies it, `pnpm db:drift` answers whether schema and database still agree. **Never edit an applied migration** — the journal stores a hash of the file's contents, so an edit makes the record of what ran disagree with what is on disk; corrections are new migrations. Push-mode is over (`docs/SCHEMA-DELIVERY-PLAN.md` §0.3): `pnpm db:push` runs `apps/web/scripts/db-push-guard.ts`, which refuses any target that is not this machine and any database that has migrations applied, leaving push usable only for a throwaway scratch database. Two connection identities exist in every environment, local included — `DATABASE_URL` is the application (`infokit_app`: owns nothing, no UPDATE or DELETE on the eight append-only tables) and `DATABASE_URL_MIGRATOR` is the owner (`postgres`), which is what DDL, seeding and introspection require. See `apps/web/src/server/db/migrator-url.ts` for why local is a two-URL setup too.
 2. **Design is a contract, not inspiration.** `docs/DESIGN.md` (tokens, type scale, components, anti-patterns) and `docs/DESIGN-BRIEF.md` (screens, states) are mandatory. No color decisions in JSX/component CSS — semantic tokens only. When a choice feels like a default AI dashboard move, take the calmer option: public pages are calm under stress, not impressive.
 3. **Every user-facing string goes through the i18n catalog.** Complete catalogues in fr, en, ar from day one; the other eight configured languages read the English base with per-language chrome overlays (`packages/shared/src/i18n/catalogs.ts`). RTL is a designed state, not a retrofit — ar, fa, prs, ps, ckb. Public _content_ translations live in the database with review states — never in code catalogs.
 4. **Never-public invariants:** unverified organisations, member personal data, draft content, simulator answers (session-only, never persisted, never logged). Coordination events are private by default — only the `public` tier a host chooses per event reaches visitors. Any query feeding a public surface goes through the public read model, not authoring tables.
@@ -20,7 +20,7 @@ A multilingual public-information platform for people seeking practical help, an
 ## Commands
 
 - `pnpm check:ci` — format check + lint (cached) + typecheck; the health question.
-- `pnpm db:generate --name <slug>` — new migration from schema changes.
+- `pnpm db:generate --name <slug>` — new migration from schema changes. `pnpm db:migrate` applies it; `pnpm db:drift` confirms the database matches.
 - `pnpm dev:web` — Next.js dev server. `apps/web/start-database.sh` — local Postgres.
 
 ## Current slice

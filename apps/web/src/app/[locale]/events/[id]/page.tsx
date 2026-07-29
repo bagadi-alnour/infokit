@@ -1,13 +1,6 @@
 import type { PublicLocale } from "@infokit/shared/i18n";
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
-import {
-  ArrowLeft,
-  CalendarDays,
-  CalendarPlus,
-  Clock,
-  FileDown,
-  MapPin,
-} from "lucide-react";
+import { ArrowLeft, CalendarPlus, FileDown, MapPin } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -19,6 +12,7 @@ import {
   ActionLink,
   Callout,
   Chip,
+  EventDateBlock,
   MetaRow,
   SurfaceCard,
   inlineLinkClass,
@@ -27,10 +21,12 @@ import {
   PublicPageHeader,
   PublicSiteShell,
 } from "~/components/public/public-site-shell";
+import { TransitLinkList } from "~/components/public/transit-links";
 import { JsonLd } from "~/components/seo/json-ld";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { eventIcsHref, eventMapHref } from "~/lib/event-links";
+import { presentTransitLinks } from "~/lib/transit-presentation";
 import { metaDescription, publicMetadata } from "~/seo/metadata";
 import { breadcrumbJsonLd, eventJsonLd } from "~/seo/structured-data";
 import { findPublicCoordinationEvent } from "~/server/content/coordination-events";
@@ -101,6 +97,13 @@ export default async function PublicEventPage({
     allDay: messages["events.allDay"],
   });
   const where = eventWhereLabel(event);
+  // The same presenter the payload the app reads goes through, so one journey
+  // reads identically on both surfaces.
+  const transit = presentTransitLinks({
+    links: event.transit,
+    messages,
+    locale,
+  });
   const mapHref = eventMapHref(event, city?.name ?? null);
   const icsHref = eventIcsHref(event.id, locale);
   const hostHref =
@@ -157,24 +160,17 @@ export default async function PublicEventPage({
         }
       >
         <div className="flex flex-wrap gap-2">
-          {/* The date doubles as the way to keep it: a calendar entry costs one
-           * tap here, and re-typing an hour is how people arrive on the wrong
-           * day. */}
-          <a
+          {/* The same washed date block the agenda draws (§5): the family hue
+           * follows the event out of the list and onto its own page, on the one
+           * element there too. The date and the time were two neutral chips
+           * here, which made this the one event surface where the agenda's own
+           * hue went missing. */}
+          <EventDateBlock
             href={icsHref}
-            aria-label={`${messages["events.addToCalendar"]} — ${range.dateLabel}`}
-            className="rounded-chip focus-visible:outline-brand focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            <Chip
-              icon={<CalendarDays className="size-4" aria-hidden />}
-              className="hover:border-brand hover:text-brand-deep underline decoration-1 underline-offset-2"
-            >
-              {range.dateLabel}
-            </Chip>
-          </a>
-          <Chip icon={<Clock className="size-4" aria-hidden />}>
-            {range.timeLabel}
-          </Chip>
+            dateLabel={range.dateLabel}
+            timeLabel={range.timeLabel}
+            ariaLabel={`${messages["events.addToCalendar"]} — ${range.dateLabel} ${range.timeLabel}`}
+          />
           {mapHref ? (
             <a
               href={mapHref}
@@ -238,6 +234,16 @@ export default async function PublicEventPage({
             <MetaRow label={messages["events.city"]}>
               {city?.name ?? messages["public.notAvailable"]}
             </MetaRow>
+            {/* After the place and before who is running it: a reader who has
+             * just read an address they do not recognise asks this next, and the
+             * organisers are the only ones who can answer it. The row is absent
+             * rather than empty when nobody has — an unanswered question is
+             * better left unasked than answered "not available". */}
+            {transit.length > 0 ? (
+              <MetaRow label={messages["transit.gettingHere"]}>
+                <TransitLinkList links={transit} />
+              </MetaRow>
+            ) : null}
             <MetaRow label={messages["events.host"]}>
               {/* "Organised by" is a question about the organisation as much as
                * the event: its page holds the rest of the answer. */}

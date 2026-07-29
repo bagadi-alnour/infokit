@@ -10,6 +10,11 @@ import { EVENT_VISIBILITIES } from "~/components/events/visibility";
 import { localizedPath } from "~/i18n/routing";
 import { eventLanguages, type EventLanguage } from "~/lib/event-languages";
 import { parseStewardContact } from "~/lib/steward-contact";
+import {
+  parseTransitLinks,
+  transitLinksPatch,
+  type TransitLink,
+} from "~/lib/transit-links";
 import { zonedWallTimeToInstant } from "~/lib/zoned-time";
 import { optionalText, optionalUuid } from "~/lib/form-fields";
 import { recordAudit } from "~/server/audit";
@@ -25,6 +30,7 @@ import { db } from "~/server/db";
 import {
   cities,
   coordinationEvents,
+  coordinationEventTransitLinks,
   coordinationEventTranslations,
 } from "~/server/db/schema";
 
@@ -184,6 +190,49 @@ async function upsertText(
   }
 }
 
+/**
+ * The event's transport links, in the order the editor put them in. Positions
+ * come from the list itself rather than from the form, so a row dragged or
+ * deleted needs no bookkeeping of its own.
+ */
+async function insertTransit(eventId: string, links: TransitLink[]) {
+  if (links.length === 0) return;
+  await db.insert(coordinationEventTransitLinks).values(
+    links.map((link, index) => ({
+      eventId,
+      ...link,
+      displayOrder: index,
+    })),
+  );
+}
+
+/**
+ * The same list, replacing whatever was there.
+ *
+ * Wholesale, because the editor owns the list: a row edited from "bus 5" into
+ * "train, Calais-Ville" is not that row with a correction, and nothing on it —
+ * no publication, no translation, no audit of its own — is worth keeping an id
+ * alive for. What the form posted is what the event has.
+ *
+ * In one transaction, so a failed insert cannot leave an event that used to say
+ * how to reach it saying nothing.
+ */
+async function replaceTransit(eventId: string, links: TransitLink[]) {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(coordinationEventTransitLinks)
+      .where(eq(coordinationEventTransitLinks.eventId, eventId));
+    if (links.length === 0) return;
+    await tx.insert(coordinationEventTransitLinks).values(
+      links.map((link, displayOrder) => ({
+        eventId,
+        ...link,
+        displayOrder,
+      })),
+    );
+  });
+}
+
 function refresh(locale: Locale, eventId?: string) {
   revalidatePath(localizedPath("/dashboard/events", locale));
   if (eventId) {
@@ -222,6 +271,7 @@ export const createCoordinationEvent = protectedPermissionAction(
       .returning({ id: coordinationEvents.id });
     if (!event) throw new Error("Coordination event insert returned no row");
     await upsertText(event.id, titles, descriptions);
+    await insertTransit(event.id, parseTransitLinks(formData));
     await recordAudit({
       action: "coordination_event.created",
       subjectType: "coordination_event",
@@ -271,6 +321,10 @@ export const updateCoordinationEvent = protectedPermissionAction(
       })
       .where(eq(coordinationEvents.id, eventId));
     await upsertText(eventId, titles, descriptions);
+    // Absent fieldset means "not shown", not "none": a screen that never asked
+    // about transport must not answer for it.
+    const transit = transitLinksPatch(formData);
+    if (transit) await replaceTransit(eventId, transit);
     await recordAudit({
       action: "coordination_event.updated",
       subjectType: "coordination_event",

@@ -26,7 +26,32 @@ The two flows are independent:
    trusted colleagues into the same limited workflow.
 2. **Translator link sharing**: an org admin or publisher assigns one content
    item and target language to an external translator through an opaque,
-   expiring link. The translator receives no dashboard access.
+   expiring link. The translator receives no access to the organisation's
+   dashboard. Translators are now named in a directory (`core.translators`) so
+   the sender can pick one instead of retyping an address, and an invited
+   translator gets their own space — their profile, their languages, their
+   courses — which is not an organisation workspace.
+
+### Who runs the platform side
+
+Both flows are started by platform staff, and the platform's own side is split
+by kind of work rather than by seniority:
+
+- **`platform_superadmin`** is the technical account: `support.superadmin`,
+  `audit.read`, and `platform.staff.manage`. It holds no content permission. One
+  address is seeded from deployment configuration
+  (`BOOTSTRAP_SUPERADMIN_EMAIL`, granted `platform_superadmin` +
+  `platform_operator`); it is the only platform account that is not invited.
+- **`platform_content_manager`** is the content account: articles, activities,
+  the simulator, and the translation lifecycle. It has no support access, no
+  audit read, and cannot staff the platform.
+- **`platform_operator`** stays the directory/verification role that runs Flow 1.
+
+The superadmin invites the others (`core.invitations`, kind `platform_admin`).
+That invitation names no organisation and reserves no membership: acceptance
+inserts the invited roles straight into `core.user_platform_roles`. The split is
+hygiene, not a hard wall — a superadmin can role-test into a content context —
+so the audit trail, not the permission grid, is what answers who edited what.
 
 ## Flow 1 — Invited organisation verifier onboarding
 
@@ -109,6 +134,11 @@ grants access through a separate membership. This matches FR-P1-036.
 - A user with `content.translation.request` assigns one editorial article,
   activity, or public event to an external translator, with one target language
   per assignment.
+- The sender picks the translator from the directory — the translators their own
+  organisation invited, plus those listed for the whole network — filtered by the
+  target language, or types an address by hand as before. The chosen entry is
+  recorded as `translation_assignments.translator_id`, while the email and name
+  stay on the assignment as the record of what was actually sent.
 - Phase 1.3 allows one live assignment per content item and target language.
   Rejection, revocation, recorded expiry, or completed publication frees the
   slot for reassignment.
@@ -133,8 +163,9 @@ grants access through a separate membership. This matches FR-P1-036.
   assignment, plus the target fields for the requested language.
 - Lets the translator save a draft and submit the translation back to the
   sender.
-- Exposes no dashboard route, organisation content, member data, or other
-  translator assignment.
+- Exposes no organisation dashboard, organisation content, member data, or other
+  translator assignment — including for a translator who also has their own
+  space. The link is a session over one payload, never a way into an account.
 
 The assignment holds submitted target fields
 (`submitted_content_json`) until a reviewer accepts them, keeping unreviewed
@@ -144,6 +175,28 @@ promotes the text into the content type's own translation row (for editorial,
 quality, method, content hash, source-version link, and AI-provenance rules
 apply. Acceptance does not activate public publication. An actor with the
 content publication permission performs that action.
+
+### The translator directory and space
+
+- A platform operator, or an organisation admin with
+  `translator.directory.manage`, creates a `core.translators` entry and invites
+  the person (`core.invitations`, kind `translator`). The entry exists first with
+  status `invited`, the same way a team invitation is preceded by its member row.
+- Accepting is the same proof as every other invitation — signing in with the
+  invited address — and links the entry's `user_id`. It grants no organisation
+  membership and no organisation roles: account linking deliberately skips
+  translator invitations. What it does grant is the platform `translator` role,
+  three permissions wide: `translator.workspace.read` for the assignments
+  addressed to that entry and nothing else, `content.translation.submit` to work
+  them, and `translator.profile.manage` for their own profile.
+- `directory_scope` decides who may send that translator work: `organization`
+  keeps them to the organisation that invited them, `all_organizations` lists
+  them for every organisation on the platform. `owner_organization_id` only
+  records who brought them in.
+- Their space holds their own profile (display name, headline, bio, timezone),
+  the language pairs they work in (`core.translator_languages`), and the courses
+  they have added to their skills. It is not an organisation workspace: no
+  organisation content, no member data, no other translator's assignments.
 
 ### Separate state dimensions
 
@@ -204,6 +257,12 @@ Phase 1.3 extends the Phase 0/1 schema additively:
 | Change      | Table / enum                                                         | Purpose                                                                                                         |
 | ----------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | New column  | `core.invitations.invited_by_member_id`                              | Marks publisher-originated colleague invitations and scopes the per-organisation cap                            |
+| New column  | `core.invitations.translator_id`, nullable `organization_id`         | A `translator`-kind invitation names a directory entry instead of an organisation membership                    |
+| New tables  | `core.translators`, `core.translator_languages`                      | The translator's own identity, profile, directory scope, and language pairs                                     |
+| New column  | `content.translation_assignments.translator_id`                      | Optional link from one send to the directory entry it was picked from                                           |
+| New enums   | `translator_status`, `translator_directory_scope`                    | Invited/active/inactive/suspended, and who may send that translator work                                        |
+| New values  | `invitation_kind.translator`, `invitation_kind.platform_admin`       | The two invitation kinds that grant access outside any membership: a translator space, or platform staff roles  |
+| New roles   | `translator`, `platform_content_manager` (was `platform_editor`)     | The translator's own minimal role, and the content half of the platform's technical/content split               |
 | New enum    | `translation_assignment_state`                                       | The translator assignment lifecycle                                                                             |
 | New enum    | `translation_assignment_entity`                                      | Allowed targets: `editorial_entry`, `activity`, `public_event`, `simulator_flow`                                |
 | New enum    | `translation_impact`                                                 | Source-change impact: `initial`, `none`, `review_required`, `regenerate`                                        |
@@ -219,7 +278,11 @@ The flow reuses organisation verifications, memberships, permissions,
 invitations, publishing-responsibility acceptance, editorial revisions,
 publication pointers/snapshots, freshness columns, and the review queue.
 
-No Phase 2+ workspace, membership, operations, or inventory tables are added.
+No Phase 2+ workspace, membership, or inventory tables are added. The one
+exception is the course catalogue pulled forward from
+`DATABASE-SCHEMA.md` §12 (`operations.training_courses`,
+`operations.training_records`), because the people this phase already invites —
+members and translators alike — are the people who take those courses.
 
 ## UX contract
 
@@ -240,8 +303,9 @@ No Phase 2+ workspace, membership, operations, or inventory tables are added.
 - Team management, availability, shifts, missions, or notifications.
 - Inventory, HR, assistance records, or beneficiary registration.
 - Uncapped or cross-organisation invitations.
-- Translator access to the dashboard, other organisation content, or other
-  translator assignments.
+- Translator access to an organisation's dashboard, its content, its member
+  data, or another translator's assignments. A translator's own space is theirs
+  alone.
 - Parallel live translator assignments for the same item and target language.
 - Automatic promotion of a translator submission to public without review.
 - Automatic publication by a translation reviewer who lacks the content

@@ -28,6 +28,19 @@ export const INVITABLE_ROLE_CODES = [
 export type InvitableRoleCode = (typeof INVITABLE_ROLE_CODES)[number];
 
 /**
+ * The platform roles the superadmin may hand out (`platform.staff.manage`).
+ * `platform_superadmin` is absent on purpose: support access and the authority
+ * to staff the platform are not delegated by email.
+ */
+export const INVITABLE_PLATFORM_ROLE_CODES = [
+  "platform_content_manager",
+  "platform_operator",
+] as const;
+
+export type InvitablePlatformRoleCode =
+  (typeof INVITABLE_PLATFORM_ROLE_CODES)[number];
+
+/**
  * Only the administrator invitation carries organisation stewardship, so it is
  * the one the claim rule watches for — accepting it hands the record to the
  * organisation and leaves the platform read-only (docs/PRODUCT.md §11.3). The
@@ -53,9 +66,14 @@ async function upsertInvitation({
   roleIds,
   invitedById,
 }: {
-  organizationId: string;
+  /** Null only for the kinds that lead nowhere near a membership. */
+  organizationId: string | null;
   email: string;
-  kind: "member" | "association_publisher" | "organization_admin";
+  kind:
+    | "member"
+    | "association_publisher"
+    | "organization_admin"
+    | "platform_admin";
   roleIds: string[];
   invitedById: string | null;
 }) {
@@ -71,7 +89,12 @@ async function upsertInvitation({
       .from(invitations)
       .where(
         and(
-          eq(invitations.organizationId, organizationId),
+          organizationId === null
+            ? and(
+                isNull(invitations.organizationId),
+                eq(invitations.kind, kind),
+              )
+            : eq(invitations.organizationId, organizationId),
           sql`lower(${invitations.email}) = ${email.toLowerCase()}`,
           isNull(invitations.acceptedAt),
           isNull(invitations.revokedAt),
@@ -126,6 +149,11 @@ function invitationUrl(email: string, token: string, locale: Locale) {
  * happens on first sign-in with the invited address
  * (`linkPendingMemberships`), because a magic-link login already proves
  * ownership of that address.
+ *
+ * `teamName` is optional because membership of a city team is: somebody can be
+ * added to the association before there is a team to put them on. The email says
+ * so — `sendInvitationEmail` picks the organisation-level wording when no team
+ * is named, rather than inventing one.
  */
 export async function sendMemberInvitation({
   organizationId,
@@ -143,7 +171,7 @@ export async function sendMemberInvitation({
   invitedById: string | null;
   locale: Locale;
   organizationName: string;
-  teamName: string;
+  teamName?: string;
   inviterName: string;
 }) {
   const { token, expiresAt, resent } = await upsertInvitation({
@@ -154,6 +182,15 @@ export async function sendMemberInvitation({
     invitedById,
   });
 
+  // The event is written before the send, and its reference travels with the
+  // message: "who invited this person" and "did it arrive" become one lookup,
+  // and an invitation that never leaves still leaves a record of the attempt.
+  const auditEvent = await recordAudit({
+    action: resent ? "member.invitation_resent" : "member.invited",
+    subjectType: "member",
+    subjectId: memberId,
+    organizationId,
+  });
   await sendInvitationEmail({
     email,
     url: invitationUrl(email, token, locale),
@@ -162,12 +199,8 @@ export async function sendMemberInvitation({
     teamName,
     inviterName,
     expiresAt,
-  });
-  await recordAudit({
-    action: resent ? "member.invitation_resent" : "member.invited",
-    subjectType: "member",
-    subjectId: memberId,
     organizationId,
+    auditEvent,
   });
 }
 
@@ -206,15 +239,7 @@ export async function sendRepresentativeInvitation({
     invitedById,
   });
 
-  await sendInvitationEmail({
-    email,
-    url: invitationUrl(email, token, locale),
-    locale,
-    organizationName,
-    inviterName,
-    expiresAt,
-  });
-  await recordAudit({
+  const auditEvent = await recordAudit({
     action: resent
       ? "organization.representative_invitation_resent"
       : "organization.representative_invited",
@@ -222,5 +247,65 @@ export async function sendRepresentativeInvitation({
     subjectId: memberId,
     organizationId,
     metadata: { kind },
+  });
+  await sendInvitationEmail({
+    email,
+    url: invitationUrl(email, token, locale),
+    locale,
+    organizationName,
+    inviterName,
+    expiresAt,
+    organizationId,
+    auditEvent,
+  });
+}
+
+/**
+ * Invitation for platform staff, sent by an account holding
+ * `platform.staff.manage`. It names no organisation and reserves no membership:
+ * acceptance grants the invited platform roles globally
+ * (`linkPendingMemberships` → `core.user_platform_roles`). The platform is the
+ * organisation here, so the email reads as InfoKit's.
+ */
+export async function sendPlatformStaffInvitation({
+  email,
+  roleIds,
+  invitedById,
+  locale,
+  inviterName,
+}: {
+  email: string;
+  roleIds: string[];
+  invitedById: string | null;
+  locale: Locale;
+  inviterName: string;
+}) {
+  if (roleIds.length === 0) {
+    throw new Error("A platform staff invitation must grant at least one role");
+  }
+  const { token, expiresAt, resent } = await upsertInvitation({
+    organizationId: null,
+    email,
+    kind: "platform_admin",
+    roleIds,
+    invitedById,
+  });
+
+  const auditEvent = await recordAudit({
+    action: resent
+      ? "platform.staff_invitation_resent"
+      : "platform.staff_invited",
+    subjectType: "platform_staff",
+    subjectId: email,
+    metadata: { roleIds: roleIds.join(",") },
+  });
+  await sendInvitationEmail({
+    email,
+    url: invitationUrl(email, token, locale),
+    locale,
+    organizationName: "InfoKit",
+    inviterName,
+    expiresAt,
+    auditEvent,
   });
 }

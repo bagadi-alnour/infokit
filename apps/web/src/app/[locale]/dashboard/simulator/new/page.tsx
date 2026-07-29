@@ -75,7 +75,10 @@ export default async function NewSimulatorPage({
       </Button>
 
       <header className="mt-5 border-b pb-6">
-        <p className="text-brand flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em]">
+        {/* This page draws its own eyebrow, so the eyebrow is where the guide
+            family lands (§5) — the rule under a `PageHeader` title is the same
+            decision on the pages that use one. */}
+        <p className="text-guide flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em]">
           <GitBranch className="size-4" aria-hidden />
           {t["create.eyebrow"]}
         </p>

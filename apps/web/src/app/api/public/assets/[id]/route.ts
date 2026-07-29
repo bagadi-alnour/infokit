@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createAssetReadUrl } from "~/server/assets/s3";
+import { sanitizedImageRendition } from "~/server/assets/scan";
 import { db } from "~/server/db";
 import { assets } from "~/server/db/schema";
 
@@ -17,7 +18,11 @@ export async function GET(
   if (!parsed.success) return new NextResponse(null, { status: 404 });
 
   const [asset] = await db
-    .select({ storageKey: assets.storageKey })
+    .select({
+      id: assets.id,
+      storageKey: assets.storageKey,
+      mimeType: assets.mimeType,
+    })
     .from(assets)
     .where(
       and(
@@ -32,8 +37,18 @@ export async function GET(
     .limit(1);
   if (!asset) return new NextResponse(null, { status: 404 });
 
+  /**
+   * The rendition the safety pass produced, in preference to the uploaded file:
+   * a visitor is then only ever served bytes this server encoded (NFR-012,
+   * docs/DATABASE-SCHEMA.md §9). An asset cleared before renditions existed has
+   * none, and falls back to its original rather than disappearing.
+   */
+  const served = (await sanitizedImageRendition(asset.id)) ?? asset;
+
   try {
-    const signedUrl = await createAssetReadUrl(asset.storageKey);
+    const signedUrl = await createAssetReadUrl(served.storageKey, {
+      contentType: served.mimeType,
+    });
     return NextResponse.redirect(signedUrl, {
       status: 307,
       headers: {

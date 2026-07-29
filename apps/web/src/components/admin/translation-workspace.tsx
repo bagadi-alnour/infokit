@@ -35,6 +35,17 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "~/components/ui/accordion";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
@@ -234,6 +245,7 @@ export function TranslationWorkspace({
   fields,
   names = activityFieldNames,
   workflow,
+  formId,
   media,
   children,
 }: {
@@ -261,10 +273,12 @@ export function TranslationWorkspace({
   names?: (language: EditorialLanguage) => WorkspaceFieldNames;
   /** Per-language publication and review, folded into each language's menu. */
   workflow?: WorkspaceWorkflow;
+  /** Associates editor fields with a form rendered outside this workspace. */
+  formId?: string;
   /**
    * Anything that belongs to the record as a whole rather than to one language —
-   * the photo, the downloads. It sits below both editors, across the full width,
-   * because it is not part of either column's reading order.
+   * the photo and its attachments. It follows the translation panel in the
+   * inline-end column and stays out of the source column's reading order.
    */
   media?: React.ReactNode;
   /** Extra source-pane fields owned by the parent form. */
@@ -287,6 +301,7 @@ export function TranslationWorkspace({
   });
   const [busy, setBusy] = useState<EditorialLanguage | null>(null);
   const [batchRemaining, setBatchRemaining] = useState(0);
+  const [confirmMissingOpen, setConfirmMissingOpen] = useState(false);
   /** Remounts an editor when its content is replaced from outside. */
   const [revision, setRevision] = useState<Record<string, number>>({});
   const rootRef = useRef<HTMLDivElement>(null);
@@ -362,7 +377,11 @@ export function TranslationWorkspace({
           text: proposal.text,
           altText: proposal.altText ?? "",
           signature: proposal.signature,
-          dirty: true,
+          savedState: proposal.saved ? "machine_generated" : null,
+          savedMethod: proposal.saved ? "ai" : null,
+          verifiedByName: null,
+          stale: false,
+          dirty: !proposal.saved,
         });
         setRevision((current) => ({
           ...current,
@@ -605,7 +624,7 @@ export function TranslationWorkspace({
           code: language,
           isSource: language === sourceLanguage,
           hasText: Boolean(value.title.trim()),
-          saved: server?.saved ?? false,
+          saved: server?.saved ? true : value.savedState !== null,
           dirty: value.dirty,
           published: server?.published ?? false,
           scheduled: server?.scheduled ?? false,
@@ -655,6 +674,7 @@ export function TranslationWorkspace({
             <Input
               id={`title-${sourceLanguage}`}
               name={names(sourceLanguage).title}
+              form={formId}
               dir={editorialTextDirection(sourceLanguage)}
               value={source.title}
               onChange={(event) => {
@@ -676,6 +696,7 @@ export function TranslationWorkspace({
               <Textarea
                 id={`summary-${sourceLanguage}`}
                 name={names(sourceLanguage).summary}
+                form={formId}
                 dir={editorialTextDirection(sourceLanguage)}
                 value={source.summary}
                 onChange={(event) => {
@@ -702,290 +723,330 @@ export function TranslationWorkspace({
           {children}
         </div>
 
-        <section
-          aria-label={label("rail.heading")}
-          className="border-line bg-subtle/40 min-w-0 rounded-xl border p-4"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold">{label("rail.heading")}</h3>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={
-                !aiEnabled || busy !== null || batching || !source.title.trim()
-              }
-              title={aiEnabled ? undefined : label("ai.unavailable")}
-              onClick={() => {
-                void generateMissing();
-              }}
-            >
-              {batching ? (
-                <LoaderCircle className="animate-spin" aria-hidden />
-              ) : (
-                <Sparkles aria-hidden />
-              )}
-              {batching
-                ? label("ai.batchRunning").replace(
-                    "{count}",
-                    String(batchRemaining),
-                  )
-                : label("ai.generateMissing")}
-            </Button>
-          </div>
-          <p className="text-copy-muted mt-1 text-xs">{label("rail.hint")}</p>
-          {/* Without a provider, every generate button is a 500 waiting to
-           * happen; say so once, at the top, instead of on each failure. */}
-          {aiEnabled ? null : (
-            <p className="border-warn/40 bg-warn-soft text-warn mt-2 flex gap-2 rounded-lg border p-2.5 text-xs">
-              <TriangleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-              <span>{label("ai.unavailable")}</span>
-            </p>
-          )}
+        {/* The record's own media follows the translation work: it belongs to
+         * the record as a whole and is the next decision in this column. */}
+        <div className="grid min-w-0 content-start gap-5">
+          <section
+            aria-label={label("rail.heading")}
+            className="border-line bg-subtle/40 min-w-0 rounded-xl border p-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">{label("rail.heading")}</h3>
+              <AlertDialog
+                open={confirmMissingOpen}
+                onOpenChange={setConfirmMissingOpen}
+              >
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        !aiEnabled ||
+                        busy !== null ||
+                        batching ||
+                        !source.title.trim()
+                      }
+                      title={aiEnabled ? undefined : label("ai.unavailable")}
+                    />
+                  }
+                >
+                  {batching ? (
+                    <LoaderCircle className="animate-spin" aria-hidden />
+                  ) : (
+                    <Sparkles aria-hidden />
+                  )}
+                  {batching
+                    ? label("ai.batchRunning").replace(
+                        "{count}",
+                        String(batchRemaining),
+                      )
+                    : label("ai.generateMissing")}
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {label("ai.generateMissingConfirmTitle")}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {label("ai.generateMissingConfirmDescription")}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>
+                      {label("ai.generateMissingCancel")}
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      type="button"
+                      onClick={() => {
+                        setConfirmMissingOpen(false);
+                        void generateMissing();
+                      }}
+                    >
+                      <Sparkles aria-hidden />
+                      {label("ai.generateMissingConfirm")}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+            <p className="text-copy-muted mt-1 text-xs">{label("rail.hint")}</p>
+            {/* Without a provider, every generate button is a 500 waiting to
+             * happen; say so once, at the top, instead of on each failure. */}
+            {aiEnabled ? null : (
+              <p className="border-warn/40 bg-warn-soft text-warn mt-2 flex gap-2 rounded-lg border p-2.5 text-xs">
+                <TriangleAlert
+                  className="mt-0.5 size-3.5 shrink-0"
+                  aria-hidden
+                />
+                <span>{label("ai.unavailable")}</span>
+              </p>
+            )}
 
-          {/*
+            {/*
             One row per language, in the order the platform lists them, so a
             language is always in the same place. Only the open panel mounts an
             editor — the text of the other ten travels in hidden inputs below,
             so nothing typed is ever lost to a collapsed row.
           */}
-          <Accordion
-            value={open}
-            onValueChange={(next) => {
-              setOpen(next as EditorialLanguage[]);
-            }}
-            className="mt-3"
-          >
-            {editorialLanguageCodes.map((language) => {
-              const value = values[language];
-              const status = statusOf(language);
-              const isSource = language === sourceLanguage;
-              const server = workflow?.languages[language];
-              const stage = server?.reviewStage ?? "none";
-              const languageName = label(`language.${language}`);
-              const fieldNames = names(language);
-              /**
-               * Somebody other than the editor in front of the screen wrote
-               * this — the machine, or an outside translator who has sent their
-               * work back. Those are the two cases worth confirming, so the
-               * "mark verified" button is offered for them and nothing else:
-               * countersigning one's own typing says nothing to a reader.
-               */
-              const writtenElsewhere =
-                status === "generated" ||
-                status === "ai" ||
-                value.savedMethod === "ai" ||
-                value.savedMethod === "ai_then_human_review" ||
-                (server?.submitted ?? false);
-              return (
-                <AccordionItem key={language} value={language}>
-                  <AccordionTrigger className="gap-2">
-                    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                      <LanguageStatusChip
-                        status={status}
-                        code={language}
-                        busy={busy === language}
-                      />
-                      <span className="min-w-0 truncate">{languageName}</span>
-                      <span className="text-copy-muted truncate text-xs font-normal">
-                        {label(`status.${status}`)}
-                      </span>
-                      {server?.published ? (
-                        <span className="text-ok inline-flex shrink-0 items-center gap-1 text-xs font-normal">
-                          <Globe className="size-3" aria-hidden />
-                          {label("workflow.live")}
+            <Accordion
+              value={open}
+              onValueChange={(next) => {
+                setOpen(next as EditorialLanguage[]);
+              }}
+              className="mt-3"
+            >
+              {editorialLanguageCodes.map((language) => {
+                const value = values[language];
+                const status = statusOf(language);
+                const isSource = language === sourceLanguage;
+                const server = workflow?.languages[language];
+                const stage = server?.reviewStage ?? "none";
+                const languageName = label(`language.${language}`);
+                const fieldNames = names(language);
+                /**
+                 * Somebody other than the editor in front of the screen wrote
+                 * this — the machine, or an outside translator who has sent their
+                 * work back. Those are the two cases worth confirming, so the
+                 * "mark verified" button is offered for them and nothing else:
+                 * countersigning one's own typing says nothing to a reader.
+                 */
+                const writtenElsewhere =
+                  status === "generated" ||
+                  status === "ai" ||
+                  value.savedMethod === "ai" ||
+                  value.savedMethod === "ai_then_human_review" ||
+                  (server?.submitted ?? false);
+                return (
+                  <AccordionItem key={language} value={language}>
+                    <AccordionTrigger className="gap-2">
+                      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                        <LanguageStatusChip
+                          status={status}
+                          code={language}
+                          busy={busy === language}
+                        />
+                        <span className="min-w-0 truncate">{languageName}</span>
+                        <span className="text-copy-muted truncate text-xs font-normal">
+                          {label(`status.${status}`)}
                         </span>
-                      ) : server?.scheduled ? (
-                        <span className="text-brand shrink-0 text-xs font-normal">
-                          {label("workflow.scheduled")}
-                        </span>
-                      ) : null}
-                      {reviewPending(stage) ? (
-                        <span className="text-warn shrink-0 text-xs font-normal">
-                          {label(
-                            stage === "team_requested"
-                              ? "workflow.withTeam"
-                              : "workflow.withPlatform",
-                          )}
-                        </span>
-                      ) : stage === "platform_verified" ? (
-                        <span className="text-ok shrink-0 text-xs font-normal">
-                          {label("workflow.cleared")}
-                        </span>
-                      ) : stage === "changes_requested" ? (
-                        <span className="text-danger shrink-0 text-xs font-normal">
-                          {label("workflow.changesRequested")}
-                        </span>
-                      ) : null}
-                    </span>
-                  </AccordionTrigger>
-                  {/* `h-auto` overrides the panel's measured height: base-ui
-                   * measures once, at open, and an editor grows as it is typed
-                   * into — the fixed height would cut the text off. */}
-                  <AccordionContent className="h-auto">
-                    <div className="grid gap-3">
-                      {/* The language's own actions, top-right of its panel. */}
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-copy-muted min-w-0 text-xs">
-                          {isSource
-                            ? label("source.inPane")
-                            : status === "verified" && value.verifiedByName
-                              ? `${label("verify.by")} ${value.verifiedByName}`
-                              : ""}
-                        </p>
-                        {renderMenu(language)}
-                      </div>
-
-                      {isSource ? null : (
-                        <>
-                          {/* Why this language is or is not trustworthy. */}
-                          {status === "stale" ? (
-                            <p className="border-warn/40 bg-warn-soft text-warn flex gap-2 rounded-lg border p-2.5 text-xs">
-                              <TriangleAlert
-                                className="mt-0.5 size-3.5 shrink-0"
-                                aria-hidden
-                              />
-                              <span>{label("status.staleHint")}</span>
-                            </p>
-                          ) : null}
-                          {status === "generated" || status === "ai" ? (
-                            <p className="border-brand/30 bg-brand-soft/60 text-brand flex gap-2 rounded-lg border p-2.5 text-xs">
-                              <CircleDashed
-                                className="mt-0.5 size-3.5 shrink-0"
-                                aria-hidden
-                              />
-                              <span>{label("status.aiHint")}</span>
-                            </p>
-                          ) : null}
-
-                          <Field>
-                            <FieldLabel htmlFor={`title-${language}`}>
-                              {label("title")}
-                            </FieldLabel>
-                            <Input
-                              id={`title-${language}`}
-                              dir={editorialTextDirection(language)}
-                              value={value.title}
-                              onChange={(event) => {
-                                patch(language, {
-                                  title: event.target.value,
-                                  dirty: true,
-                                });
-                              }}
-                              maxLength={200}
-                            />
-                            <FieldDescription>
-                              {label("optional")}
-                            </FieldDescription>
-                          </Field>
-                          {hasSummary ? (
-                            <Field>
-                              <FieldLabel htmlFor={`summary-${language}`}>
-                                {label("summary")}
-                              </FieldLabel>
-                              <Textarea
-                                id={`summary-${language}`}
-                                dir={editorialTextDirection(language)}
-                                value={value.summary}
-                                onChange={(event) => {
-                                  patch(language, {
-                                    summary: event.target.value,
-                                    dirty: true,
-                                  });
-                                }}
-                                rows={2}
-                                maxLength={2000}
-                              />
-                            </Field>
-                          ) : null}
-                          <Field>
-                            <FieldLabel>{label("description")}</FieldLabel>
-                            {renderEditor(
-                              language,
-                              value,
-                              label("descriptionPlaceholder"),
+                        {server?.published ? (
+                          <span className="text-ok inline-flex shrink-0 items-center gap-1 text-xs font-normal">
+                            <Globe className="size-3" aria-hidden />
+                            {label("workflow.live")}
+                          </span>
+                        ) : server?.scheduled ? (
+                          <span className="text-brand shrink-0 text-xs font-normal">
+                            {label("workflow.scheduled")}
+                          </span>
+                        ) : null}
+                        {reviewPending(stage) ? (
+                          <span className="text-warn shrink-0 text-xs font-normal">
+                            {label(
+                              stage === "team_requested"
+                                ? "workflow.withTeam"
+                                : "workflow.withPlatform",
                             )}
-                          </Field>
-                          {/* Alt text is worth translating once the source
-                           * image has one. */}
-                          {imageAlt?.source.trim() && fieldNames.altText ? (
+                          </span>
+                        ) : stage === "platform_verified" &&
+                          !server?.published &&
+                          !server?.scheduled ? (
+                          <span className="text-ok shrink-0 text-xs font-normal">
+                            {label("workflow.cleared")}
+                          </span>
+                        ) : stage === "changes_requested" ? (
+                          <span className="text-danger shrink-0 text-xs font-normal">
+                            {label("workflow.changesRequested")}
+                          </span>
+                        ) : null}
+                      </span>
+                    </AccordionTrigger>
+                    {/* `h-auto` overrides the panel's measured height: base-ui
+                     * measures once, at open, and an editor grows as it is typed
+                     * into — the fixed height would cut the text off. */}
+                    <AccordionContent className="h-auto">
+                      <div className="grid gap-3">
+                        {/* The language's own actions, top-right of its panel. */}
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-copy-muted min-w-0 text-xs">
+                            {isSource
+                              ? label("source.inPane")
+                              : status === "verified" && value.verifiedByName
+                                ? `${label("verify.by")} ${value.verifiedByName}`
+                                : ""}
+                          </p>
+                          {renderMenu(language)}
+                        </div>
+
+                        {isSource ? null : (
+                          <>
+                            {/* Why this language is or is not trustworthy. */}
+                            {status === "stale" ? (
+                              <p className="border-warn/40 bg-warn-soft text-warn flex gap-2 rounded-lg border p-2.5 text-xs">
+                                <TriangleAlert
+                                  className="mt-0.5 size-3.5 shrink-0"
+                                  aria-hidden
+                                />
+                                <span>{label("status.staleHint")}</span>
+                              </p>
+                            ) : null}
+                            {status === "generated" || status === "ai" ? (
+                              <p className="border-brand/30 bg-brand-soft/60 text-brand flex gap-2 rounded-lg border p-2.5 text-xs">
+                                <CircleDashed
+                                  className="mt-0.5 size-3.5 shrink-0"
+                                  aria-hidden
+                                />
+                                <span>{label("status.aiHint")}</span>
+                              </p>
+                            ) : null}
+
                             <Field>
-                              <FieldLabel htmlFor={`image-alt-${language}`}>
-                                {label("imageAlt")}
+                              <FieldLabel htmlFor={`title-${language}`}>
+                                {label("title")}
                               </FieldLabel>
                               <Input
-                                id={`image-alt-${language}`}
+                                id={`title-${language}`}
                                 dir={editorialTextDirection(language)}
-                                value={value.altText}
+                                value={value.title}
                                 onChange={(event) => {
                                   patch(language, {
-                                    altText: event.target.value,
+                                    title: event.target.value,
                                     dirty: true,
                                   });
                                 }}
-                                maxLength={500}
+                                maxLength={200}
                               />
                               <FieldDescription>
-                                {label("imageAltSource")}: {imageAlt.source}
+                                {label("optional")}
                               </FieldDescription>
                             </Field>
-                          ) : null}
-
-                          {canVerify &&
-                          (writtenElsewhere || status === "verified") ? (
-                            <Button
-                              type="button"
-                              variant={
-                                status === "verified" ? "outline" : "default"
-                              }
-                              size="sm"
-                              className="w-fit"
-                              disabled={
-                                !entityId ||
-                                busy !== null ||
-                                batching ||
-                                value.dirty ||
-                                !value.title.trim() ||
-                                status === "verified"
-                              }
-                              title={
-                                value.dirty
-                                  ? label("verify.saveFirst")
-                                  : undefined
-                              }
-                              onClick={() => {
-                                void verify(language);
-                              }}
-                            >
-                              {status === "verified" ? (
-                                <BadgeCheck aria-hidden />
-                              ) : (
-                                <Check aria-hidden />
+                            {hasSummary ? (
+                              <Field>
+                                <FieldLabel htmlFor={`summary-${language}`}>
+                                  {label("summary")}
+                                </FieldLabel>
+                                <Textarea
+                                  id={`summary-${language}`}
+                                  dir={editorialTextDirection(language)}
+                                  value={value.summary}
+                                  onChange={(event) => {
+                                    patch(language, {
+                                      summary: event.target.value,
+                                      dirty: true,
+                                    });
+                                  }}
+                                  rows={2}
+                                  maxLength={2000}
+                                />
+                              </Field>
+                            ) : null}
+                            <Field>
+                              <FieldLabel>{label("description")}</FieldLabel>
+                              {renderEditor(
+                                language,
+                                value,
+                                label("descriptionPlaceholder"),
                               )}
-                              {status === "verified"
-                                ? label("verify.already")
-                                : label("verify.action")}
-                            </Button>
-                          ) : null}
-                          {value.dirty && status !== "verified" ? (
-                            <p className="text-copy-muted text-xs">
-                              {label("verify.saveFirst")}
-                            </p>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              );
-            })}
-          </Accordion>
-        </section>
-      </div>
+                            </Field>
+                            {/* Alt text is worth translating once the source
+                             * image has one. */}
+                            {imageAlt?.source.trim() && fieldNames.altText ? (
+                              <Field>
+                                <FieldLabel htmlFor={`image-alt-${language}`}>
+                                  {label("imageAlt")}
+                                </FieldLabel>
+                                <Input
+                                  id={`image-alt-${language}`}
+                                  dir={editorialTextDirection(language)}
+                                  value={value.altText}
+                                  onChange={(event) => {
+                                    patch(language, {
+                                      altText: event.target.value,
+                                      dirty: true,
+                                    });
+                                  }}
+                                  maxLength={500}
+                                />
+                                <FieldDescription>
+                                  {label("imageAltSource")}: {imageAlt.source}
+                                </FieldDescription>
+                              </Field>
+                            ) : null}
 
-      {/* The record's own media, across both columns: it belongs to the article
-       * or the activity, not to any one language. */}
-      {media ? <div className="mt-6 min-w-0">{media}</div> : null}
+                            {canVerify &&
+                            (writtenElsewhere || status === "verified") ? (
+                              <Button
+                                type="button"
+                                variant={
+                                  status === "verified" ? "outline" : "default"
+                                }
+                                size="sm"
+                                className="w-fit"
+                                disabled={
+                                  !entityId ||
+                                  busy !== null ||
+                                  batching ||
+                                  value.dirty ||
+                                  !value.title.trim() ||
+                                  status === "verified"
+                                }
+                                title={
+                                  value.dirty
+                                    ? label("verify.saveFirst")
+                                    : undefined
+                                }
+                                onClick={() => {
+                                  void verify(language);
+                                }}
+                              >
+                                {status === "verified" ? (
+                                  <BadgeCheck aria-hidden />
+                                ) : (
+                                  <Check aria-hidden />
+                                )}
+                                {status === "verified"
+                                  ? label("verify.already")
+                                  : label("verify.action")}
+                              </Button>
+                            ) : null}
+                            {value.dirty && status !== "verified" ? (
+                              <p className="text-copy-muted text-xs">
+                                {label("verify.saveFirst")}
+                              </p>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
+          </section>
+          {media ? <div className="min-w-0">{media}</div> : null}
+        </div>
+      </div>
 
       {/*
         Every language's text travels with the form, including the ones whose
@@ -1002,6 +1063,7 @@ export function TranslationWorkspace({
             key={`${language}-html`}
             type="hidden"
             name={fieldNames.bodyHtml}
+            form={formId}
             value={value.html}
           />,
         ];
@@ -1011,6 +1073,7 @@ export function TranslationWorkspace({
               key={`${language}-text`}
               type="hidden"
               name={fieldNames.bodyText}
+              form={formId}
               value={value.text}
             />,
           );
@@ -1023,6 +1086,7 @@ export function TranslationWorkspace({
               key={`${language}-title`}
               type="hidden"
               name={fieldNames.title}
+              form={formId}
               value={value.title}
             />,
           );
@@ -1032,6 +1096,7 @@ export function TranslationWorkspace({
                 key={`${language}-summary`}
                 type="hidden"
                 name={fieldNames.summary}
+                form={formId}
                 value={value.summary}
               />,
             );
@@ -1043,6 +1108,7 @@ export function TranslationWorkspace({
               key={`${language}-alt`}
               type="hidden"
               name={fieldNames.altText}
+              form={formId}
               value={isSource ? imageAlt.source : value.altText}
             />,
           );
@@ -1053,6 +1119,7 @@ export function TranslationWorkspace({
               key={`${language}-proposal`}
               type="hidden"
               name={fieldNames.proposal}
+              form={formId}
               value={value.signature}
             />,
           );

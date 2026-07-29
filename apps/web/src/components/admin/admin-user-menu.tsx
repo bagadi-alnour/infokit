@@ -5,15 +5,7 @@ import {
   supportedLocales,
   type Locale,
 } from "@infokit/shared/i18n";
-import {
-  Check,
-  Languages,
-  LogOut,
-  Monitor,
-  Moon,
-  Sun,
-  UserRound,
-} from "lucide-react";
+import { Languages, LogOut, Monitor, Moon, Sun, UserRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -35,8 +27,14 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { localizedPath, unlocalizedPath } from "~/i18n/routing";
+import { cn } from "~/lib/utils";
 
 const themeIcon = { light: Sun, dark: Moon, system: Monitor } as const;
+const localeFlag: Record<Locale, string> = {
+  fr: "🇫🇷",
+  en: "🇬🇧",
+  ar: "🇸🇦",
+};
 
 /**
  * Identity and personal preferences in one place: who is signed in, the two
@@ -128,8 +126,16 @@ export function AdminUserMenu({
             <DropdownMenuSubTrigger className="min-h-9">
               <Languages aria-hidden />
               {labels.language}
-              <span className="text-copy-muted ms-auto text-xs font-semibold">
-                {locale.toUpperCase()}
+              <span
+                className="ms-auto flex items-center gap-1.5"
+                aria-label={localeMetadata[locale].label}
+              >
+                <span className="text-base leading-none" aria-hidden>
+                  {localeFlag[locale]}
+                </span>
+                <span className="text-copy-muted text-xs font-semibold">
+                  {locale.toUpperCase()}
+                </span>
               </span>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-44">
@@ -137,17 +143,21 @@ export function AdminUserMenu({
                 <DropdownMenuItem
                   key={candidate}
                   lang={candidate}
-                  className="min-h-9"
+                  aria-current={candidate === locale ? "true" : undefined}
+                  className={cn(
+                    "min-h-9",
+                    candidate === locale && "bg-brand-soft text-brand",
+                  )}
                   onClick={() => {
                     router.push(
                       localizedPath(unlocalizedPath(pathname), candidate),
                     );
                   }}
                 >
+                  <span className="text-base leading-none" aria-hidden>
+                    {localeFlag[candidate]}
+                  </span>
                   <span>{localeMetadata[candidate].label}</span>
-                  {candidate === locale ? (
-                    <Check className="ms-auto" aria-hidden />
-                  ) : null}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuSubContent>

@@ -22,6 +22,7 @@ import type {
 
 import { localizedPath } from "~/i18n/routing";
 import { eventIcsHref, eventMapHref } from "~/lib/event-links";
+import { presentTransitLinks } from "~/lib/transit-presentation";
 import type { CoordinationEventRecord } from "~/server/content/coordination-events";
 import {
   findPublicCoordinationEvent,
@@ -86,6 +87,7 @@ export function eventLabels({
     when: messages["events.when"],
     where: messages["events.where"],
     city: messages["events.city"],
+    gettingHere: messages["transit.gettingHere"],
     host: messages["events.host"],
     platform: messages["public.platform"],
     contact: messages["events.contact"],
@@ -147,7 +149,7 @@ export function presentEvent({
   event,
   city,
   locale,
-  allDay,
+  messages,
   reachLabel,
   href,
   coverImage = null,
@@ -155,12 +157,14 @@ export function presentEvent({
   event: CoordinationEventRecord;
   city: CityView | undefined;
   locale: PublicLocale;
-  allDay: string;
+  messages: Messages;
   reachLabel: string;
   href: string;
   coverImage?: PublicEventSummary["coverImage"];
 }): PublicEventSummary {
-  const range = formatEventRange(event, city, locale, { allDay });
+  const range = formatEventRange(event, city, locale, {
+    allDay: messages["events.allDay"],
+  });
   return {
     id: event.id,
     href,
@@ -174,6 +178,7 @@ export function presentEvent({
     allDay: event.allDay,
     whereLabel: eventWhereLabel(event),
     mapHref: eventMapHref(event, city?.name ?? null),
+    transit: presentTransitLinks({ links: event.transit, messages, locale }),
     cityName: city?.name ?? "",
     hostName: event.hostName,
     hostHref:
@@ -221,7 +226,7 @@ export async function loadEventDetailPayload(
       event,
       city: cities.find((candidate) => candidate.id === event.cityId),
       locale,
-      allDay: messages["events.allDay"],
+      messages,
       reachLabel: reachLabelFor({ event, messages: member }),
       href: localizedPath(`/events/${event.id}`, locale),
       coverImage: media.cover,
@@ -253,13 +258,12 @@ export async function loadEventListPayload(
   });
   const cityById = new Map(cities.map((city) => [city.id, city]));
   const { todayKey, month } = defaultMonth(cities, now);
-  const allDay = messages["events.allDay"];
   const present = (event: CoordinationEventRecord) =>
     presentEvent({
       event,
       city: cityById.get(event.cityId),
       locale,
-      allDay,
+      messages,
       reachLabel: reachLabelFor({ event, messages: member }),
       href: localizedPath(`/events/${event.id}`, locale),
       coverImage: media.get(event.id)?.cover ?? null,

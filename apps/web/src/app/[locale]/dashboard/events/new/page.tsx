@@ -87,11 +87,13 @@ export default async function NewEventPage({
       ar: { title: "", description: "" },
     },
     steward: EMPTY_STEWARD_CONTACT,
+    transit: [],
   };
 
   return (
     <WorkspacePage width="content">
       <PageHeader
+        family="event"
         title={t["events.newTitle"]}
         sub={t["events.newSub"]}
         back={{ href: agendaPath, label: t["events.backToAgenda"] }}

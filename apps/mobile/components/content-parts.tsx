@@ -1,5 +1,9 @@
 import Feather from "@expo/vector-icons/Feather";
-import type { PublicContentImage } from "@infokit/shared/public-content";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import type {
+  PublicContentImage,
+  PublicTransitLink,
+} from "@infokit/shared/public-content";
 import { cn, Text, useInfoKitTheme } from "@infokit/ui";
 import { useRouter } from "expo-router";
 import { Image, Pressable, View } from "react-native";
@@ -134,5 +138,82 @@ export function AddressLink({
         <Feather name="external-link" size={16} color={tokens.accentDeep} />
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * A glyph per mode of transport, keyed by the stored mode rather than by the
+ * translated word: a catalogue in Pashto must not change which picture is drawn.
+ * The web reader draws the same eight (apps/web/src/components/public/transit-links.tsx).
+ */
+const transitGlyphs: Record<
+  PublicTransitLink["mode"],
+  keyof typeof MaterialCommunityIcons.glyphMap
+> = {
+  bus: "bus",
+  tram: "tram",
+  metro: "subway-variant",
+  train: "train",
+  coach: "bus-side",
+  ferry: "ferry",
+  bike: "bike",
+  other: "map-marker-path",
+};
+
+/**
+ * How to reach an activity or an event without a car, one line per way in.
+ *
+ * The mode and its line lead, because that is what a reader matches against the
+ * front of a bus; the stop keeps the network's own spelling, so it can be read
+ * out to a driver; the walk is last and quiet. Every word arrived translated and
+ * every number in the reader's own digits — this only draws them.
+ *
+ * Not pressable: a bus line is not a place a maps application can be handed, and
+ * the address above it already is (`AddressLink`).
+ */
+export function TransitLinks({ links }: { links: PublicTransitLink[] }) {
+  if (links.length === 0) return null;
+
+  return (
+    <View className="gap-2">
+      {links.map((link, index) => (
+        <View
+          // Two identical rows are one journey written twice, which an editor
+          // may well keep; the position is what tells them apart.
+          key={`${String(index)}-${link.mode}-${link.line ?? ""}-${link.stopName ?? ""}`}
+          className="flex-row items-start gap-2"
+          accessible
+          accessibilityLabel={link.label}
+        >
+          <View className="pt-0.5">
+            <TransitGlyph mode={link.mode} />
+          </View>
+          <Text className="flex-1">
+            <Text className="font-semibold">
+              {link.line === null
+                ? link.modeLabel
+                : `${link.modeLabel} ${link.line}`}
+            </Text>
+            {link.stopName === null ? null : ` · ${link.stopName}`}
+            {link.walkLabel === null ? null : (
+              <Text className="text-copy-muted"> · {link.walkLabel}</Text>
+            )}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** The mode's picture, in the accent every card icon wears (§5). */
+function TransitGlyph({ mode }: { mode: PublicTransitLink["mode"] }) {
+  const { tokens } = useInfoKitTheme();
+
+  return (
+    <MaterialCommunityIcons
+      name={transitGlyphs[mode]}
+      size={18}
+      color={tokens.accentDeep}
+    />
   );
 }

@@ -289,6 +289,7 @@ export default async function SimulatorPage({
   return (
     <WorkspacePage>
       <PageHeader
+        family="guide"
         title={t.title}
         sub={t.sub}
         action={rows.length === 0 ? createPath : null}

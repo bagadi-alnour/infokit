@@ -27,6 +27,7 @@ export function StewardContactFields({
   labels,
   columns = true,
   onChange,
+  formId,
 }: {
   values: StewardContactValues;
   labels: Record<string, string>;
@@ -38,6 +39,8 @@ export function StewardContactFields({
    * is what a plain server form wants.
    */
   onChange?: (patch: Partial<StewardContactValues>) => void;
+  /** Associate these inputs with a form elsewhere on the page. */
+  formId?: string;
 }) {
   /** Controlled only when somebody else may set these values. */
   const bind = (field: keyof StewardContactValues) =>
@@ -58,6 +61,7 @@ export function StewardContactFields({
       >
         <TextInput
           name="stewardName"
+          form={formId}
           {...bind("stewardName")}
           maxLength={120}
           autoComplete="off"
@@ -70,6 +74,7 @@ export function StewardContactFields({
         >
           <TextInput
             name="stewardPhone"
+            form={formId}
             type="tel"
             inputMode="tel"
             {...bind("stewardPhone")}
@@ -83,6 +88,7 @@ export function StewardContactFields({
         >
           <TextInput
             name="stewardEmail"
+            form={formId}
             type="email"
             {...bind("stewardEmail")}
             maxLength={255}

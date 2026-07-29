@@ -2,11 +2,18 @@ import type {
   NotificationChannel,
   NotificationKind,
 } from "@infokit/validation/account";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, or } from "drizzle-orm";
 
-import { isPlatformAdmin } from "~/server/auth/authorization";
 import { db } from "~/server/db";
-import { notificationPreferences, userSettings } from "~/server/db/schema";
+import {
+  memberRoles,
+  notificationPreferences,
+  organizationMembers,
+  roles,
+  userPlatformRoles,
+  userSecondFactors,
+  userSettings,
+} from "~/server/db/schema";
 
 /**
  * Account settings read model (docs/DATABASE-SCHEMA.md §4, §16).
@@ -97,22 +104,87 @@ export async function getAccountSettings(
 }
 
 /**
- * Whether this account must pass the SMS step-up before any private read
- * (RISKS.md R10). Two reasons override the person's own choice:
- *  - platform administration: support-level reach is never single-factor;
- *  - no enrolled method: nothing to fall back to, so the gate stays closed.
+ * Whether any role this account holds makes the SMS step-up mandatory
+ * (`core.roles.requires_second_factor`, seeded for the platform's own staff
+ * and for an organisation's steward). The person cannot switch it off, and
+ * cannot reach a private read before enrolling a number.
  *
- * Called on the gated path, so it stays a single primary-key lookup plus the
- * permission read that the console already performs.
+ * Both assignment tables count: platform work is granted globally in
+ * `core.user_platform_roles`, organisation work inside a membership.
+ */
+export async function secondFactorMandatory(userId: string): Promise<boolean> {
+  const now = new Date();
+  const [platform] = await db
+    .select({ roleId: userPlatformRoles.roleId })
+    .from(userPlatformRoles)
+    .innerJoin(roles, eq(roles.id, userPlatformRoles.roleId))
+    .where(
+      and(
+        eq(userPlatformRoles.userId, userId),
+        eq(roles.requiresSecondFactor, true),
+        or(
+          isNull(userPlatformRoles.expiresAt),
+          gt(userPlatformRoles.expiresAt, now),
+        ),
+      ),
+    )
+    .limit(1);
+  if (platform) return true;
+
+  const [organization] = await db
+    .select({ roleId: memberRoles.roleId })
+    .from(memberRoles)
+    .innerJoin(roles, eq(roles.id, memberRoles.roleId))
+    .innerJoin(
+      organizationMembers,
+      eq(organizationMembers.id, memberRoles.memberId),
+    )
+    .where(
+      and(
+        eq(organizationMembers.userId, userId),
+        eq(roles.requiresSecondFactor, true),
+        or(isNull(memberRoles.expiresAt), gt(memberRoles.expiresAt, now)),
+      ),
+    )
+    .limit(1);
+  return Boolean(organization);
+}
+
+/**
+ * Whether this account must pass the SMS step-up before any private read
+ * (RISKS.md R10).
+ *
+ * Two things make it required: a role that mandates it, or the person's own
+ * choice once they have a *proven* number to receive codes on. An account with
+ * no number and no mandating role is not held at a gate it cannot pass — its
+ * emailed sign-in link is the factor it has — so the platform asks for a number
+ * exactly where the reach justifies it. Requiring proof, not just an enrolment,
+ * is what keeps a mistyped number from locking anyone out of their own console:
+ * until a code comes back the gate is not armed.
+ *
+ * Called on the gated path, so the common case (a number proven, the step-up
+ * on) answers in two primary-key lookups and never touches the role tables.
  */
 export async function secondFactorRequired(userId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ enabled: userSettings.twoFactorEnabled })
-    .from(userSettings)
-    .where(eq(userSettings.userId, userId))
-    .limit(1);
-  if (row?.enabled !== false) return true;
-  return isPlatformAdmin(userId);
+  const [[settings], [number]] = await Promise.all([
+    db
+      .select({ enabled: userSettings.twoFactorEnabled })
+      .from(userSettings)
+      .where(eq(userSettings.userId, userId))
+      .limit(1),
+    db
+      .select({ userId: userSecondFactors.userId })
+      .from(userSecondFactors)
+      .where(
+        and(
+          eq(userSecondFactors.userId, userId),
+          isNotNull(userSecondFactors.verifiedAt),
+        ),
+      )
+      .limit(1),
+  ]);
+  if (settings?.enabled !== false && number) return true;
+  return secondFactorMandatory(userId);
 }
 
 /** Per-kind channel matrix, and how the person may change it. */

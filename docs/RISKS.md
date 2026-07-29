@@ -76,7 +76,7 @@ The audience includes undocumented people with well-founded reasons to distrust 
 ### R10 — Publishing-integrity attack
 
 In Phase 1 the data is public, so the attack that matters is not theft — it is **false publication** (imagine a fake "distribution cancelled" the morning of a distribution).
-**Mitigations:** 2FA for every editor account; publication audit + immutable revisions enable one-click rollback; out-of-band confirmation (phone/WhatsApp) before publishing third-party-reported cancellations of safety-critical services.
+**Mitigations:** an SMS second factor, mandatory and not disableable for every role that reaches other people's accounts or content — enrolled on first connect, before any private read; publication audit + immutable revisions enable one-click rollback; out-of-band confirmation (phone/WhatsApp) before publishing third-party-reported cancellations of safety-critical services.
 
 ### R12 — AI-assisted drift
 

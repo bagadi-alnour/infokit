@@ -224,6 +224,7 @@ export async function requestTranslation(input: {
       language: request.targetLanguageCode,
       senderName: actor.name ?? actor.email ?? "InfoKit",
       expiresAt,
+      organizationId: assignment.organizationId,
     });
   } catch (error) {
     // A link nobody received must not sit in the queue as an active job.

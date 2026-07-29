@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireRouteLocale } from "~/i18n/route-locale";
+import { recordAudit } from "~/server/audit";
 import { db } from "~/server/db";
 import {
   translationAssignmentEvents,
@@ -114,11 +115,12 @@ export async function saveExternalTranslation(formData: FormData) {
   const assignmentId = await readTranslationAssignmentSession();
   if (!assignmentId) throw new Error("Translation session unavailable");
 
-  await db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
     const [assignment] = await tx
       .select({
         state: translationAssignments.state,
         entityKind: translationAssignments.entityKind,
+        organizationId: translationAssignments.organizationId,
         sourceContent: translationSourceVersions.sourceContentJson,
       })
       .from(translationAssignments)
@@ -205,6 +207,36 @@ export async function saveExternalTranslation(formData: FormData) {
       toState: nextState,
       byTranslator: true,
     });
+    return {
+      organizationId: assignment.organizationId,
+      fromState: assignment.state,
+      toState: nextState,
+      contentHash,
+      entityKind: assignment.entityKind,
+    };
+  });
+
+  /**
+   * The translation itself stays out of the row. What a reviewer needs is that a
+   * submission arrived, for which assignment, and which version of the text it
+   * was — the hash answers "is this the copy that was accepted" without the trail
+   * becoming a second store of everybody's drafts.
+   */
+  await recordAudit({
+    action:
+      saved.toState === "submitted"
+        ? "translation.assignment.submitted"
+        : "translation.assignment.drafted",
+    subjectType: "translation_assignment",
+    subjectId: assignmentId,
+    organizationId: saved.organizationId,
+    actorType: "translator",
+    metadata: {
+      entityKind: saved.entityKind,
+      fromState: saved.fromState,
+      toState: saved.toState,
+      contentHash: saved.contentHash,
+    },
   });
   revalidatePath(`/${locale}/translate/assignment`);
 }

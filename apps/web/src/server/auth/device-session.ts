@@ -2,15 +2,16 @@ import { createHmac, randomBytes, randomInt } from "node:crypto";
 import { and, count, eq, gt, gte, isNull } from "drizzle-orm";
 
 import { env } from "~/env";
+import { recordAudit } from "~/server/audit";
 import { db } from "~/server/db";
-import { auditEvents, deviceGrants, sessions } from "~/server/db/schema";
+import { deviceGrants, sessions } from "~/server/db/schema";
 import { hashSessionToken } from "./session-token";
 
 /**
  * How the phone app holds a session.
  *
- * There is one sign-in on this platform — the web one, with its allowlist, its
- * magic link and its SMS step-up. The app does not reimplement any of it: it
+ * There is one sign-in on this platform — the web one, with its eligibility
+ * check, its magic link and its SMS step-up. The app reimplements none of it: it
  * opens that page in the system browser, and the browser hands the finished
  * session over as a one-time grant (`auth.device_grants`). The app trades the
  * grant for a row in the same revocable `auth.sessions` table the site uses, so
@@ -74,7 +75,19 @@ export async function issueDeviceGrant({
         gte(deviceGrants.createdAt, new Date(now.getTime() - 60 * 60 * 1000)),
       ),
     );
-  if ((issued?.value ?? 0) >= grantsPerHour) return { status: "rate_limited" };
+  if ((issued?.value ?? 0) >= grantsPerHour) {
+    await recordAudit({
+      action: "auth.device_grant.rate_limited",
+      subjectType: "auth.device_grant",
+      subjectId: userId,
+      actorUserId: userId,
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "hourly_grant_limit",
+      metadata: { limit: grantsPerHour },
+    });
+    return { status: "rate_limited" };
+  }
 
   const code = newCode();
   const expiresAt = new Date(now.getTime() + grantLifetimeMs);
@@ -83,6 +96,17 @@ export async function issueDeviceGrant({
     codeHash: codeHash(code),
     secondFactorVerified,
     expiresAt,
+  });
+  // The issue and the exchange are two events on purpose: a grant minted and
+  // never traded is a code that went somewhere, and the code itself is never
+  // written down — only that one was handed out, and whether it carries the
+  // step-up the phone will inherit.
+  await recordAudit({
+    action: "auth.device_grant.issued",
+    subjectType: "auth.device_grant",
+    subjectId: userId,
+    actorUserId: userId,
+    metadata: { secondFactorVerified },
   });
   return { status: "issued", code, expiresAt };
 }
@@ -101,12 +125,22 @@ export async function exchangeDeviceGrant(
   code: string,
 ): Promise<DeviceSession | null> {
   const normalized = normalizeCode(code);
-  if (!normalized) return null;
+  if (!normalized) {
+    await recordAudit({
+      action: "auth.device_session.exchange_failed",
+      subjectType: "auth.device_grant",
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "malformed_code",
+      actorType: "system",
+    });
+    return null;
+  }
   const now = new Date();
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(now.getTime() + deviceSessionLifetimeMs);
 
-  return db.transaction(async (tx) => {
+  const session = await db.transaction(async (tx) => {
     const [grant] = await tx
       .update(deviceGrants)
       .set({ consumedAt: now })
@@ -131,13 +165,30 @@ export async function exchangeDeviceGrant(
       // rather than asking for a second SMS on the same sign-in.
       secondFactorVerifiedAt: grant.secondFactorVerified ? now : null,
     });
-    await tx.insert(auditEvents).values({
-      actorUserId: grant.userId,
-      action: "auth.device_session.created",
-      subjectType: "auth.session",
-    });
-    return { token, expiresAt };
+    return { userId: grant.userId, token, expiresAt };
   });
+
+  // Recorded outside the transaction, and both ways: a code that opened a
+  // session is a sign-in, and a code that did not is somebody presenting one
+  // that was already used, expired, or never issued.
+  if (!session) {
+    await recordAudit({
+      action: "auth.device_session.exchange_failed",
+      subjectType: "auth.device_grant",
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "code_unusable",
+      actorType: "system",
+    });
+    return null;
+  }
+  await recordAudit({
+    action: "auth.device_session.created",
+    subjectType: "auth.session",
+    subjectId: session.userId,
+    actorUserId: session.userId,
+  });
+  return { token: session.token, expiresAt: session.expiresAt };
 }
 
 export interface DeviceViewer {
@@ -181,7 +232,29 @@ export async function deviceViewer(
       ),
     )
     .limit(1);
-  if (!row) return null;
+  /**
+   * A token was presented and it opens nothing — revoked, expired, or never
+   * ours. The member endpoints answer all three with the same silent 401, which
+   * is right for the caller and useless for a review, so the attempt is recorded
+   * here: this is the only place that knows a credential was offered at all. A
+   * request with no `Authorization` header returns above without a row, because
+   * an unauthenticated call to a members-only URL is a crawler.
+   *
+   * The token never appears, not even hashed against the session table it failed
+   * to match — a stolen one is worth nothing here, and the trail is not the
+   * place to store the thing that was being guessed.
+   */
+  if (!row) {
+    await recordAudit({
+      action: "auth.device_session.rejected",
+      subjectType: "auth.session",
+      actorType: "system",
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "session_unknown_or_expired",
+    });
+    return null;
+  }
   return {
     userId: row.userId,
     secondFactorVerified: Boolean(row.secondFactorVerifiedAt),
@@ -195,9 +268,10 @@ export async function revokeDeviceSession(viewer: DeviceViewer): Promise<void> {
   await db
     .delete(sessions)
     .where(eq(sessions.sessionToken, viewer.sessionTokenHash));
-  await db.insert(auditEvents).values({
-    actorUserId: viewer.userId,
+  await recordAudit({
     action: "auth.device_session.signed_out",
     subjectType: "auth.session",
+    subjectId: viewer.userId,
+    actorUserId: viewer.userId,
   });
 }

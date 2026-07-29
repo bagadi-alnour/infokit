@@ -17,6 +17,7 @@ import {
 } from "~/components/admin/workspace";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { EMPTY_STEWARD_CONTACT } from "~/lib/steward-contact";
+import { denyPageAccess, hasPermission } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
   cities,
@@ -39,6 +40,15 @@ export default async function PlacesPage({
     // wording is the same on every content type.
     loadPageCatalog(locale, "dashboard-console"),
   ]);
+  /**
+   * This page is one list and one form, and all three place mutations ask for
+   * this grant (places/actions.ts). Without it there is nothing here to do — and
+   * the form's owner picker names every association, which is directory
+   * knowledge (server/auth/authorization.ts).
+   */
+  if (!(await hasPermission("content.activity.manage"))) {
+    await denyPageAccess("content.activity.manage", locale);
+  }
   const precisionLabel = {
     exact: messages["places.precision.exact"],
     area_only: messages["places.precision.areaOnly"],

@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   primaryKey,
@@ -21,14 +22,18 @@ type AdapterAccountType = "email" | "oauth" | "oidc" | "webauthn";
  * NextAuth (Auth.js) tables, moved into the `auth` PostgreSQL schema.
  * Column shapes match the DrizzleAdapter contract — do not repurpose these
  * for organisation membership; that lives in `core` (docs/DATABASE-SCHEMA.md §4).
+ *
+ * `id` is a real `uuid`, not the adapter's default text column, so that the
+ * eighty-odd columns pointing at it are the same type as every other key in the
+ * database — the alternative is a `varchar(255)` foreign key on every audited
+ * row, and a class of typo that Postgres cannot reject. The adapter accepts it:
+ * `createUser` asks whether the id column `hasDefault` and lets the database
+ * mint the value when it does (docs/SCHEMA-DELIVERY-PLAN.md D1).
  */
 export const users = authSchema.table(
   "users",
   {
-    id: varchar("id", { length: 255 })
-      .notNull()
-      .primaryKey()
-      .$defaultFn(() => crypto.randomUUID()),
+    id: uuid("id").defaultRandom().notNull().primaryKey(),
     name: varchar("name", { length: 255 }),
     /** One canonical sign-in address per global identity. */
     email: varchar("email", { length: 255 }).notNull(),
@@ -53,15 +58,16 @@ export const users = authSchema.table(
   ],
 );
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   accounts: many(accounts),
   secondFactorChallenges: many(secondFactorChallenges),
+  secondFactor: one(userSecondFactors),
 }));
 
 export const accounts = authSchema.table(
   "accounts",
   {
-    userId: varchar("user_id", { length: 255 })
+    userId: uuid("user_id")
       .notNull()
       .references(() => users.id),
     type: varchar("type", { length: 255 })
@@ -95,7 +101,7 @@ export const sessions = authSchema.table(
     sessionToken: varchar("session_token", { length: 255 })
       .notNull()
       .primaryKey(),
-    userId: varchar("user_id", { length: 255 })
+    userId: uuid("user_id")
       .notNull()
       .references(() => users.id),
     expires: timestamp("expires", {
@@ -115,19 +121,70 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
 }));
 
 /**
- * Short-lived, single-use SMS challenges for the editor step-up check.
- * Codes are HMACed before storage; phone numbers remain in server env only.
+ * The mobile number one account receives its SMS step-up codes on.
+ *
+ * The number lives here rather than in deployment configuration because
+ * everybody who reaches the console arrives by invitation: an allowlist keyed
+ * by email would mean editing the environment for every person invited, and
+ * an account whose role makes the second factor mandatory would be unable to
+ * finish its first sign-in. It is not a secret and not a second-factor secret
+ * either — possession of the line is the factor — but it is personal data, so
+ * only its owner is ever shown it, and then masked.
+ *
+ * `verified_at` is what makes the number usable: until a code sent to it has
+ * been confirmed, the row is an unproven claim. Enrolling a different number
+ * clears it, so a mistyped number is corrected by enrolling again rather than
+ * locking the account out.
+ */
+export const userSecondFactors = authSchema.table(
+  "user_second_factors",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** E.164, the one channel that ships today. */
+    phone: varchar("phone", { length: 20 }).notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "user_second_factors_phone_e164_ck",
+      sql`${t.phone} ~ '^[+][1-9][0-9]{7,14}$'`,
+    ),
+  ],
+);
+
+export const userSecondFactorsRelations = relations(
+  userSecondFactors,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [userSecondFactors.userId],
+      references: [users.id],
+    }),
+  }),
+);
+
+/**
+ * Short-lived, single-use SMS challenges for the editor step-up check. Codes
+ * are HMACed before storage, and the number they were sent to is read from
+ * `user_second_factors` (or, for the bootstrap account, from configuration).
  */
 export const secondFactorChallenges = authSchema.table(
   "second_factor_challenges",
   {
     id: uuid("id").defaultRandom().notNull().primaryKey(),
-    userId: varchar("user_id", { length: 255 })
+    userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    sessionToken: varchar("session_token", { length: 255 })
-      .notNull()
-      .references(() => sessions.sessionToken, { onDelete: "cascade" }),
+    // Named explicitly: the generated name overruns 63 bytes (./schemas.ts).
+    sessionToken: varchar("session_token", { length: 255 }).notNull(),
     codeHash: varchar("code_hash", { length: 64 }).notNull(),
     locale: varchar("locale", { length: 5 }).notNull(),
     deliveryState: varchar("delivery_state", { length: 16 })
@@ -149,6 +206,11 @@ export const secondFactorChallenges = authSchema.table(
       t.createdAt,
     ),
     index("second_factor_challenges_session_idx").on(t.sessionToken),
+    foreignKey({
+      columns: [t.sessionToken],
+      foreignColumns: [sessions.sessionToken],
+      name: "second_factor_challenges_session_token_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -180,7 +242,7 @@ export const deviceGrants = authSchema.table(
   "device_grants",
   {
     id: uuid("id").defaultRandom().notNull().primaryKey(),
-    userId: varchar("user_id", { length: 255 })
+    userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     codeHash: varchar("code_hash", { length: 64 }).notNull().unique(),
@@ -225,7 +287,7 @@ export const passwordResetTokens = authSchema.table(
   "password_reset_tokens",
   {
     id: uuid("id").defaultRandom().notNull().primaryKey(),
-    userId: varchar("user_id", { length: 255 })
+    userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
@@ -259,7 +321,7 @@ export const passwordSignInAttempts = authSchema.table(
   {
     id: uuid("id").defaultRandom().notNull().primaryKey(),
     identifierHash: varchar("identifier_hash", { length: 64 }).notNull(),
-    userId: varchar("user_id", { length: 255 }).references(() => users.id, {
+    userId: uuid("user_id").references(() => users.id, {
       onDelete: "cascade",
     }),
     succeeded: boolean("succeeded").notNull(),

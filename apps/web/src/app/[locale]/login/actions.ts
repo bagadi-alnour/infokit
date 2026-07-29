@@ -5,6 +5,7 @@ import {
   passwordResetSchema,
   passwordSignInSchema,
   passwordUpdateSchema,
+  secondFactorEnrolmentSchema,
   smsChallengeRequestSchema,
   smsVerificationSchema,
 } from "@infokit/validation/auth";
@@ -19,7 +20,7 @@ import { env } from "~/env";
 import { auth, signIn, signOut } from "~/server/auth";
 import { sendPasswordResetEmail } from "~/server/auth/aws";
 import { createDatabaseSession } from "~/server/auth/database-session";
-import { editorRecipient } from "~/server/auth/editors";
+import { canSignIn } from "~/server/auth/eligibility";
 import { linkPendingMemberships } from "~/server/auth/link-memberships";
 import { authenticatePassword, hashPassword } from "~/server/auth/password";
 import {
@@ -29,11 +30,14 @@ import {
 import { requireEditor } from "~/server/auth/require";
 import {
   createSecondFactorChallenge,
+  enrolSecondFactorNumber,
   verifySecondFactorCode,
+  type SendChallengeResult,
 } from "~/server/auth/second-factor";
 import { safeReturnTo } from "~/server/auth/return-to";
+import { recordAudit } from "~/server/audit";
 import { db } from "~/server/db";
-import { auditEvents, users } from "~/server/db/schema";
+import { users } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 
 function formLocale(formData: FormData): Locale {
@@ -41,20 +45,29 @@ function formLocale(formData: FormData): Locale {
   return resolveLocale(typeof value === "string" ? value : undefined);
 }
 
-export async function requestMagicLink(formData: FormData) {
-  const locale = formLocale(formData);
+export type PasswordResetRequestState = {
+  error?: "account_not_found" | "invalid" | "unavailable";
+};
+
+export type MagicLinkRequestState = {
+  error?: "account_not_found" | "invalid" | "unavailable";
+};
+
+export type PasswordSignInState = {
+  error?: "account_not_found" | "invalid_credentials" | "invalid";
+};
+
+export async function requestMagicLink(
+  _previousState: MagicLinkRequestState,
+  formData: FormData,
+): Promise<MagicLinkRequestState> {
   const parsed = magicLinkRequestSchema.safeParse({
     email: formData.get("email"),
     locale: formData.get("locale"),
     returnTo: formData.get("returnTo"),
   });
   if (!parsed.success) {
-    redirect(
-      authPath("login", formLocale(formData), {
-        returnTo: safeReturnTo(formData.get("returnTo"), locale),
-        error: "invalid",
-      }),
-    );
+    return { error: "invalid" };
   }
 
   const returnTo = safeReturnTo(parsed.data.returnTo, parsed.data.locale);
@@ -66,6 +79,30 @@ export async function requestMagicLink(formData: FormData) {
     maxAge: 365 * 24 * 60 * 60,
   });
 
+  // Reject an unknown address before Auth.js creates a token or invokes any
+  // delivery provider. A live invitation still counts as a known identity:
+  // accepting one is how the product creates the invited person's account.
+  if (!(await canSignIn(parsed.data.email))) {
+    const [account] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, parsed.data.email))
+      .limit(1);
+    // The address is not retained in the trail even though the form now says
+    // that no account is attached to it: a typo must not become stored data.
+    await recordAudit({
+      action: "auth.magic_link.refused",
+      subjectType: "auth.session",
+      subjectId: account?.id ?? null,
+      actorUserId: account?.id ?? null,
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "not_eligible",
+      actorType: account ? "user" : "system",
+    });
+    return { error: account ? "unavailable" : "account_not_found" };
+  }
+
   try {
     await signIn("ses", {
       email: parsed.data.email,
@@ -76,12 +113,7 @@ export async function requestMagicLink(formData: FormData) {
     redirect(authPath("check", parsed.data.locale));
   } catch (error) {
     if (error instanceof AuthError) {
-      redirect(
-        authPath("login", parsed.data.locale, {
-          returnTo,
-          error: "auth",
-        }),
-      );
+      return { error: "unavailable" };
     }
     throw error;
   }
@@ -91,11 +123,13 @@ export async function requestMagicLink(formData: FormData) {
  * Password reset for the email/password method. A single-use token is emailed
  * as a dedicated reset link (never a magic link, so it grants no session and
  * is not gated by SMS): clicking it lands on /login/reset/<token> to set a new
- * password. Anti-enumeration matches the magic-link request — every address is
- * accepted here and the same confirmation is shown; only known editors are
- * issued a token and mailed, everyone else is dropped silently.
+ * password. Unlike the magic-link request, this form tells the person when no
+ * account exists for the address, as the account recovery UX requires.
  */
-export async function requestPasswordReset(formData: FormData) {
+export async function requestPasswordReset(
+  _previousState: PasswordResetRequestState,
+  formData: FormData,
+): Promise<PasswordResetRequestState> {
   const locale = formLocale(formData);
   const parsed = magicLinkRequestSchema.safeParse({
     email: formData.get("email"),
@@ -103,7 +137,7 @@ export async function requestPasswordReset(formData: FormData) {
     returnTo: localizedPath("/dashboard/account/password", locale),
   });
   if (!parsed.success) {
-    redirect(authPath("login", locale, { error: "invalid" }));
+    return { error: "invalid" };
   }
 
   (await cookies()).set(localeCookieName, parsed.data.locale, {
@@ -114,20 +148,41 @@ export async function requestPasswordReset(formData: FormData) {
     maxAge: 365 * 24 * 60 * 60,
   });
 
-  // Only mail approved editors; the response is identical for every address.
-  if (editorRecipient(parsed.data.email)) {
-    const result = await issuePasswordResetToken(parsed.data.email);
-    if (result.status === "issued") {
-      const url = `${env.SITE_URL}${localizedPath(
-        `/login/reset/${result.token}`,
-        parsed.data.locale,
-      )}`;
-      await sendPasswordResetEmail({
-        email: parsed.data.email,
-        url,
-        locale: parsed.data.locale,
-      });
-    }
+  // Only mail people the platform knows. The address itself is still omitted
+  // from the audit row even though this form now explains an unknown account.
+  if (!(await canSignIn(parsed.data.email))) {
+    const [account] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, parsed.data.email))
+      .limit(1);
+    await recordAudit({
+      action: "auth.password.reset_refused",
+      subjectType: "auth.user",
+      subjectId: account?.id ?? null,
+      actorUserId: account?.id ?? null,
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "not_eligible",
+      actorType: account ? "user" : "system",
+    });
+    return { error: account ? "unavailable" : "account_not_found" };
+  }
+
+  const result = await issuePasswordResetToken(parsed.data.email);
+  if (result.status === "unknown") {
+    return { error: "account_not_found" };
+  }
+  if (result.status === "issued") {
+    const url = `${env.SITE_URL}${localizedPath(
+      `/login/reset/${result.token}`,
+      parsed.data.locale,
+    )}`;
+    await sendPasswordResetEmail({
+      email: parsed.data.email,
+      url,
+      locale: parsed.data.locale,
+    });
   }
   redirect(authPath("check", parsed.data.locale));
 }
@@ -163,7 +218,10 @@ export async function resetPassword(formData: FormData) {
   redirect(authPath("login", parsed.data.locale, { status: "reset" }));
 }
 
-export async function signInWithPassword(formData: FormData) {
+export async function signInWithPassword(
+  _previousState: PasswordSignInState,
+  formData: FormData,
+): Promise<PasswordSignInState> {
   const locale = formLocale(formData);
   const parsed = passwordSignInSchema.safeParse({
     email: formData.get("email"),
@@ -173,29 +231,58 @@ export async function signInWithPassword(formData: FormData) {
   });
   const returnTo = safeReturnTo(formData.get("returnTo"), locale);
   if (!parsed.success) {
-    redirect(authPath("login", locale, { returnTo, error: "password" }));
+    return { error: "invalid" };
   }
 
-  const user = await authenticatePassword(
+  const authentication = await authenticatePassword(
     parsed.data.email,
     parsed.data.password,
   );
-  if (!user || !editorRecipient(user.email)) {
-    redirect(
-      authPath("login", parsed.data.locale, {
-        returnTo,
-        error: "password",
-      }),
-    );
+  const user = authentication.user;
+  const eligible =
+    authentication.status === "authenticated" &&
+    (await canSignIn(authentication.user.email));
+  if (authentication.status !== "authenticated" || !eligible) {
+    /**
+     * The refusal is recorded, and the address is not: even though the page now
+     * explains when no account exists, a typo or somebody's guess must not
+     * become a retained email-address list. The row carries the account only
+     * when one exists, and which gate said no.
+     */
+    await recordAudit({
+      action: "auth.password.signin_failed",
+      subjectType: "auth.session",
+      subjectId: user?.id ?? null,
+      actorUserId: user?.id ?? null,
+      actorType: user ? "user" : "system",
+      outcome: "denied",
+      severity: "warning",
+      errorCode:
+        authentication.status === "account_not_found"
+          ? "account_not_found"
+          : authentication.status === "invalid_credentials"
+            ? "invalid_credentials"
+            : "not_eligible",
+    });
+    return {
+      error:
+        authentication.status === "account_not_found"
+          ? "account_not_found"
+          : "invalid_credentials",
+    };
   }
 
-  await createDatabaseSession(user.id);
-  await linkPendingMemberships({ userId: user.id, email: user.email });
-  await db.insert(auditEvents).values({
-    actorUserId: user.id,
+  const authenticatedUser = authentication.user;
+  await createDatabaseSession(authenticatedUser.id);
+  await linkPendingMemberships({
+    userId: authenticatedUser.id,
+    email: authenticatedUser.email,
+  });
+  await recordAudit({
     action: "auth.password.signed_in",
     subjectType: "auth.session",
-    subjectId: user.id,
+    subjectId: authenticatedUser.id,
+    actorUserId: authenticatedUser.id,
   });
   redirect(authPath("verify", parsed.data.locale, { returnTo }));
 }
@@ -215,21 +302,71 @@ export async function updatePassword(formData: FormData) {
   }
 
   const passwordHash = await hashPassword(parsed.data.password);
-  await db.transaction(async (tx) => {
-    await tx
-      .update(users)
-      .set({ passwordHash, passwordUpdatedAt: new Date() })
-      .where(eq(users.id, user.id));
-    await tx.insert(auditEvents).values({
-      actorUserId: user.id,
-      action: "auth.password.updated",
-      subjectType: "auth.user",
-      subjectId: user.id,
-    });
+  await db
+    .update(users)
+    .set({ passwordHash, passwordUpdatedAt: new Date() })
+    .where(eq(users.id, user.id));
+  await recordAudit({
+    action: "auth.password.updated",
+    subjectType: "auth.user",
+    subjectId: user.id,
+    actorUserId: user.id,
   });
   redirect(
     `${localizedPath("/dashboard/account/password", locale)}?status=updated`,
   );
+}
+
+/** Where a send attempt lands: back on the verify page, saying what happened. */
+function verifyPathFor(
+  locale: Locale,
+  returnTo: string,
+  result: SendChallengeResult,
+) {
+  return authPath("verify", locale, {
+    returnTo,
+    status: result === "sent" ? "sent" : undefined,
+    error:
+      result === "sent"
+        ? undefined
+        : result === "unavailable"
+          ? "send_error"
+          : result,
+  });
+}
+
+/**
+ * Record the number this account will receive codes on and send the first code
+ * to it. Nothing is proven here: the number stays unverified until a code comes
+ * back, so a typo is fixed by enrolling again rather than by asking anyone for
+ * help. Used both by the first-sign-in ask that a mandating role triggers and
+ * by anyone turning the step-up on for themselves.
+ */
+export async function enrolSecondFactorPhone(formData: FormData) {
+  const locale = formLocale(formData);
+  const session = await auth();
+  if (!session?.user.email) redirect(authPath("login", locale));
+
+  const returnTo = safeReturnTo(formData.get("returnTo"), locale);
+  const parsed = secondFactorEnrolmentSchema.safeParse({
+    phone: formData.get("phone"),
+    locale: formData.get("locale"),
+    returnTo: formData.get("returnTo"),
+  });
+  if (!parsed.success) {
+    redirect(authPath("verify", locale, { returnTo, error: "phone" }));
+  }
+
+  await enrolSecondFactorNumber({
+    userId: session.user.id,
+    phone: parsed.data.phone,
+  });
+  const result = await createSecondFactorChallenge({
+    userId: session.user.id,
+    email: session.user.email,
+    locale: parsed.data.locale,
+  });
+  redirect(verifyPathFor(parsed.data.locale, returnTo, result));
 }
 
 export async function sendSecondFactorCode(formData: FormData) {
@@ -254,18 +391,7 @@ export async function sendSecondFactorCode(formData: FormData) {
     email: session.user.email,
     locale: parsed.data.locale,
   });
-  redirect(
-    authPath("verify", parsed.data.locale, {
-      returnTo,
-      status: result === "sent" ? "sent" : undefined,
-      error:
-        result === "sent"
-          ? undefined
-          : result === "unavailable"
-            ? "send_error"
-            : result,
-    }),
-  );
+  redirect(verifyPathFor(parsed.data.locale, returnTo, result));
 }
 
 export async function confirmSecondFactorCode(formData: FormData) {

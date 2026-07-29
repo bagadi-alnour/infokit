@@ -14,10 +14,15 @@ import {
 } from "drizzle-orm";
 
 import { type StewardContactValues } from "~/lib/steward-contact";
+import { type TransitLink } from "~/lib/transit-links";
 import { db } from "~/server/db";
-import { getRoleTestState, isPlatformAdmin } from "~/server/auth/authorization";
+import {
+  hasActualPlatformPermission,
+  isPlatformAdmin,
+} from "~/server/auth/authorization";
 import {
   coordinationEvents,
+  coordinationEventTransitLinks,
   coordinationEventTranslations,
   organizationMembers,
   organizationProfiles,
@@ -90,6 +95,12 @@ export interface CoordinationEventRecord extends CoordinationEventText {
   allDay: boolean;
   sourceLanguageCode: string;
   archivedAt: Date | null;
+  /**
+   * How to get there on public transport, in the order the editor listed. Part
+   * of the record every reader gets: an event nobody can reach is not an
+   * invitation, and the same rows answer the console and the public page.
+   */
+  transit: TransitLink[];
   /** Every authored language, keyed by code — the editor needs all of them. */
   translations: Record<string, CoordinationEventText>;
 }
@@ -146,18 +157,15 @@ export async function coordinationViewer(
 }
 
 /**
- * Whether the console should offer the create/edit controls. Mirrors what
- * `protectedPermissionAction` enforces on the mutations, so the UI never shows
- * a button the server would refuse.
+ * Whether the console should offer the create/edit controls. Asks the same
+ * question `protectedPermissionAction` asks on the mutations — a platform grant,
+ * because that wrapper reads platform grants only — so the UI never shows a
+ * button the server would refuse, and never hides one it would allow.
  */
 export async function canManageCoordinationEvents(
   userId: string,
 ): Promise<boolean> {
-  const authorization = await getRoleTestState(userId);
-  return (
-    !authorization.isSuperadmin ||
-    authorization.effectivePermissions.has(COORDINATION_MANAGE_PERMISSION)
-  );
+  return hasActualPlatformPermission(userId, COORDINATION_MANAGE_PERMISSION);
 }
 
 /**
@@ -295,32 +303,51 @@ async function hydrate<Row extends EventRow>(
   locale: string,
 ): Promise<(Row & CoordinationEventRecord)[]> {
   if (rows.length === 0) return [];
-  const translationRows = await db
-    .select({
-      eventId: coordinationEventTranslations.eventId,
-      languageCode: coordinationEventTranslations.languageCode,
-      title: coordinationEventTranslations.title,
-      description: coordinationEventTranslations.description,
-      cancellationReason: coordinationEventTranslations.cancellationReason,
-    })
-    .from(coordinationEventTranslations)
-    .where(
-      inArray(
-        coordinationEventTranslations.eventId,
-        rows.map((row) => row.id),
+  const eventIds = rows.map((row) => row.id);
+  const [translationRows, transitRows] = await Promise.all([
+    db
+      .select({
+        eventId: coordinationEventTranslations.eventId,
+        languageCode: coordinationEventTranslations.languageCode,
+        title: coordinationEventTranslations.title,
+        description: coordinationEventTranslations.description,
+        cancellationReason: coordinationEventTranslations.cancellationReason,
+      })
+      .from(coordinationEventTranslations)
+      .where(inArray(coordinationEventTranslations.eventId, eventIds)),
+    db
+      .select({
+        eventId: coordinationEventTransitLinks.eventId,
+        mode: coordinationEventTransitLinks.mode,
+        line: coordinationEventTransitLinks.line,
+        stopName: coordinationEventTransitLinks.stopName,
+        walkMinutes: coordinationEventTransitLinks.walkMinutes,
+      })
+      .from(coordinationEventTransitLinks)
+      .where(inArray(coordinationEventTransitLinks.eventId, eventIds))
+      .orderBy(
+        asc(coordinationEventTransitLinks.displayOrder),
+        asc(coordinationEventTransitLinks.createdAt),
       ),
-    );
+  ]);
   const byEvent = new Map<string, typeof translationRows>();
   for (const row of translationRows) {
     const list = byEvent.get(row.eventId) ?? [];
     list.push(row);
     byEvent.set(row.eventId, list);
   }
+  const transitByEvent = new Map<string, TransitLink[]>();
+  for (const { eventId, ...link } of transitRows) {
+    const list = transitByEvent.get(eventId) ?? [];
+    list.push(link);
+    transitByEvent.set(eventId, list);
+  }
   return rows.map((row) => {
     const languages = byEvent.get(row.id) ?? [];
     return {
       ...row,
       ...resolveText(languages, locale, row.sourceLanguageCode),
+      transit: transitByEvent.get(row.id) ?? [],
       translations: Object.fromEntries(
         languages.map((language) => [
           language.languageCode,

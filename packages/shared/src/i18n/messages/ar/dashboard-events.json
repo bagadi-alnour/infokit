@@ -56,6 +56,8 @@
   "events.contactLabelHint": "بمن يُتصل — اسم أو دور.",
   "events.contactValue": "بيانات الاتصال",
   "events.contactHint": "هاتف أو بريد خاص بالخدمة، وليس شخصيًا.",
+  "events.transit": "كيف تصل إلى هنا",
+  "events.transitHint": "كيف يصل المرء بغير سيارة. يُنشر مع الموعد بكل اللغات.",
   "events.contact": "جهة الاتصال",
   "events.host": "الجمعية المستضيفة",
   "events.hostHint": "لا يمكنك إنشاء موعد إلا لجمعية أنت عضو فيها.",
@@ -150,7 +152,7 @@
   "events.media.flyerAdded": "تمت إضافة المنشور",
   "events.media.flyerRemoved": "تم حذف المنشور",
   "events.media.removeError": "تعذّر حذف الملف",
-  "events.media.constraints": "JPG أو PNG أو WebP أو AVIF حتى 10 ميغابايت؛ PDF حتى 25 ميغابايت.",
+  "events.media.constraints": "JPG أو PNG أو WebP أو AVIF حتى 1 ميغابايت، وتُصغَّر تلقائيًا؛ PDF حتى 25 ميغابايت.",
   "events.media.pendingScan": "فحص السلامة جارٍ: يبقى الملف مخفيًا عن القرّاء حتى ينجح الفحص.",
   "events.media.download": "تنزيل"
 }

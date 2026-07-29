@@ -7,6 +7,7 @@ import {
 import { and, count, eq, gte } from "drizzle-orm";
 
 import { env } from "~/env";
+import { recordAudit } from "~/server/audit";
 import { db } from "~/server/db";
 import { passwordSignInAttempts, users } from "~/server/db/schema";
 
@@ -86,7 +87,33 @@ async function passwordMatches(
   );
 }
 
-/** Returns a user only after a constant-work, rate-limited password check. */
+export type PasswordAuthenticationResult =
+  | {
+      status: "authenticated";
+      user: {
+        id: string;
+        email: string;
+        name: string | null;
+        image: string | null;
+      };
+    }
+  | {
+      status: "account_not_found" | "invalid_credentials";
+      user:
+        | {
+            id: string;
+            email: string;
+            name: string | null;
+            image: string | null;
+          }
+        | undefined;
+    };
+
+/**
+ * Returns a specific outcome after a constant-work, rate-limited password
+ * check. The caller may distinguish an unknown account in user-facing copy;
+ * the password derivation still takes the same path for every address.
+ */
 export async function authenticatePassword(email: string, password: string) {
   const emailValue = normalizedEmail(email);
   const emailHash = identifierHash(emailValue);
@@ -123,5 +150,44 @@ export async function authenticatePassword(email: string, password: string) {
     userId: user?.id,
     succeeded,
   });
-  return succeeded && user ? user : null;
+  /**
+   * A lockout is recorded here because this is the only place that can tell one
+   * apart: the public result stays `invalid_credentials` rather than revealing
+   * the lockout threshold. The address is not stored — its keyed hash is already
+   * in the attempt ledger this row sits beside.
+   */
+  if (!allowed) {
+    await recordAudit({
+      action: "auth.password.locked_out",
+      subjectType: "auth.session",
+      subjectId: user?.id ?? null,
+      actorUserId: user?.id ?? null,
+      actorType: user ? "user" : "system",
+      outcome: "denied",
+      severity: "warning",
+      errorCode: "too_many_attempts",
+      metadata: {
+        failures: recentFailures?.value ?? 0,
+        windowMinutes: attemptWindowMs / 60_000,
+      },
+    });
+  }
+  const safeUser = user
+    ? {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        image: user.image,
+      }
+    : undefined;
+  if (succeeded && safeUser) {
+    return {
+      status: "authenticated",
+      user: safeUser,
+    } satisfies PasswordAuthenticationResult;
+  }
+  return {
+    status: user ? "invalid_credentials" : "account_not_found",
+    user: safeUser,
+  } satisfies PasswordAuthenticationResult;
 }

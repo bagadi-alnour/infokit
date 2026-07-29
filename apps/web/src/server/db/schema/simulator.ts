@@ -45,9 +45,7 @@ export const flows = simulator.table("flows", {
    * the person to ask what a branch meant, and the one who may change it. Null
    * for a seeded path, or once that account is gone.
    */
-  createdById: varchar("created_by_id", { length: 255 }).references(
-    () => users.id,
-  ),
+  createdById: uuid("created_by_id").references(() => users.id),
   ...stewardContact,
   ...archival,
   ...timestamps,
@@ -254,9 +252,7 @@ export const versionPublications = simulator.table(
     versionId: uuid("version_id")
       .notNull()
       .references(() => flowVersions.id),
-    publishedById: varchar("published_by_id", { length: 255 }).references(
-      () => users.id,
-    ),
+    publishedById: uuid("published_by_id").references(() => users.id),
     publishedAt: timestamp("published_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

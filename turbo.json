@@ -3,10 +3,11 @@
   "globalEnv": [
     "NODE_ENV",
     "DATABASE_URL",
+    "DATABASE_URL_MIGRATOR",
     "AUTH_SECRET",
     "AUTH_TRUST_HOST",
     "AUTH_EMAIL_FROM",
-    "EDITOR_MFA_RECIPIENTS",
+    "BOOTSTRAP_SUPERADMIN_EMAIL",
     "AWS_PROFILE",
     "AWS_REGION",
     "AWS_SNS_SENDER_ID",
@@ -24,6 +25,7 @@
       "persistent": true
     },
     "lint": {},
-    "typecheck": {}
+    "typecheck": {},
+    "db:names": {}
   }
 }

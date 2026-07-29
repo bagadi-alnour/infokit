@@ -9,7 +9,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
-import { core, textDirection, timestamps } from "./schemas";
+import { core, timestamps, writingDirection } from "./schemas";
 
 /**
  * Language catalogue (docs/DATABASE-SCHEMA.md §6). A language row existing
@@ -21,7 +21,7 @@ export const languages = core.table("languages", {
   nativeName: varchar("native_name", { length: 100 }).notNull(),
   englishName: varchar("english_name", { length: 100 }).notNull(),
   frenchName: varchar("french_name", { length: 100 }).notNull(),
-  direction: textDirection("direction").notNull().default("ltr"),
+  direction: writingDirection("direction").notNull().default("ltr"),
   enabled: boolean("enabled").notNull().default(false),
   fallbackCode: varchar("fallback_code", { length: 35 }).references(
     (): AnyPgColumn => languages.code,

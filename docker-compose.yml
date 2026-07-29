@@ -1,0 +1,44 @@
+# The local development database, in version control so that recreating it is a
+# reviewed change rather than a remembered `docker run`.
+#
+# `apps/web/start-database.sh` stays the documented entry point — it derives the
+# password, port and database name from DATABASE_URL and handles the
+# already-running case. This file is the same container spelled declaratively,
+# for `docker compose up -d` and for reading.
+#
+# Two things here are load-bearing rather than incidental:
+#
+#   - The image tag is pinned. Unpinned, a major bump makes Postgres refuse to
+#     start against the old data directory. 18 is the major RDS runs, so local
+#     and production agree.
+#   - The volume is named. The container this replaced used an anonymous volume,
+#     which `docker volume prune` collects along with the database.
+#
+# PGDATA lives at /var/lib/postgresql/18/docker in this image, so the mount point
+# is the parent directory the image itself declares as a volume.
+
+services:
+  postgres:
+    image: docker.io/postgres:18
+    container_name: infokit-postgres
+    environment:
+      POSTGRES_USER: postgres
+      # Must match the password in apps/web/.env — the script reads it from
+      # DATABASE_URL_MIGRATOR (or DATABASE_URL), this file takes it from the
+      # environment so the credential is not committed.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD, or use apps/web/start-database.sh}
+      POSTGRES_DB: infokit
+    ports:
+      - "5433:5432"
+    volumes:
+      - infokit-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d infokit"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  infokit-pgdata:
+    name: infokit-pgdata

@@ -249,219 +249,266 @@ export function LanguageActionsMenu({
     ((abilities.canTeamValidate && state.reviewStage === "team_requested") ||
       (abilities.canPlatformVerify &&
         state.reviewStage === "platform_requested"));
+  const waitingForReview =
+    state.reviewStage === "team_requested" ||
+    state.reviewStage === "platform_requested";
+  const showReviewAction =
+    !state.isSource &&
+    actionable &&
+    !state.dirty &&
+    !cleared &&
+    !waitingForReview;
+  const showPublishAction =
+    actionable &&
+    abilities.canPublish &&
+    cleared &&
+    !state.dirty &&
+    !live &&
+    Boolean(actions.publish);
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              disabled={pending}
-              aria-label={formatMessage(copy("language.actionsFor"), {
-                language: languageName,
-              })}
-            />
-          }
-        >
-          <MoreHorizontal aria-hidden />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-56">
-          {state.isSource ? null : (
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>{copy("language.writeIt")}</DropdownMenuLabel>
-              {actions.generate ? (
-                <DropdownMenuItem
-                  disabled={disabled || !abilities.aiEnabled}
-                  onClick={actions.generate}
-                >
-                  <Sparkles aria-hidden />
-                  {copy(
-                    state.hasText
-                      ? "language.regenerateAi"
-                      : "language.generateAi",
-                  )}
-                </DropdownMenuItem>
-              ) : null}
-              {/* Handing a language to somebody needs a record for them to open,
-               * so on a form that has never been saved these are absent rather
-               * than offered and refused. */}
-              {actions.requestTranslation && abilities.canInvite && saved ? (
-                <DropdownMenuItem
-                  disabled={disabled}
-                  onClick={() => {
-                    setDialog({ kind: "request" });
-                  }}
-                >
-                  <MailPlus aria-hidden />
-                  {copy("translation.request")}
-                </DropdownMenuItem>
-              ) : null}
-              {actions.requestTranslation &&
-              abilities.canInvite &&
-              abilities.canGiveAccess &&
-              saved ? (
-                <DropdownMenuItem
-                  disabled={disabled}
-                  onClick={() => {
-                    setDialog({ kind: "access" });
-                  }}
-                >
-                  <UserPlus aria-hidden />
-                  {copy("language.giveAccess")}
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuGroup>
-          )}
-
-          {actionable ? (
-            <>
-              {state.isSource ? null : <DropdownMenuSeparator />}
+      <div className="flex shrink-0 items-center gap-2">
+        {showPublishAction ? (
+          <Button
+            type="button"
+            size="sm"
+            disabled={pending}
+            onClick={publishNow}
+          >
+            <Globe aria-hidden />
+            {copy("publication.now")}
+          </Button>
+        ) : showReviewAction ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={pending}
+            onClick={() => {
+              setDialog({ kind: "review", stage: "platform" });
+            }}
+          >
+            <ShieldCheck aria-hidden />
+            {copy("review.sendToPlatform")}
+          </Button>
+        ) : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={pending}
+                aria-label={formatMessage(copy("language.actionsFor"), {
+                  language: languageName,
+                })}
+              />
+            }
+          >
+            <MoreHorizontal aria-hidden />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-56">
+            {state.isSource ? null : (
               <DropdownMenuGroup>
                 <DropdownMenuLabel>
-                  {copy("language.haveItRead")}
+                  {copy("language.writeIt")}
                 </DropdownMenuLabel>
-                <DropdownMenuItem
-                  disabled={state.dirty}
-                  aria-describedby={state.dirty ? dirtyHintId : undefined}
-                  onClick={() => {
-                    setDialog({ kind: "review", stage: "team" });
-                  }}
-                >
-                  <Users aria-hidden />
-                  {copy("review.sendToTeam")}
-                  {/* Which of the two reads publishing actually waits for,
-                   * said where the choice is made rather than one dialog
-                   * later. */}
-                  <span className="text-copy-muted ms-auto ps-2 text-xs">
-                    {copy("optional")}
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={state.dirty}
-                  aria-describedby={state.dirty ? dirtyHintId : undefined}
-                  onClick={() => {
-                    setDialog({ kind: "review", stage: "platform" });
-                  }}
-                >
-                  <ShieldCheck aria-hidden />
-                  {copy("review.sendToPlatform")}
-                  <span className="text-copy-muted ms-auto ps-2 text-xs">
-                    {copy("required")}
-                  </span>
-                </DropdownMenuItem>
-                {teamMayValidate ? (
+                {actions.generate ? (
                   <DropdownMenuItem
-                    onClick={() => {
-                      setDialog({ kind: "decide", decision: "team_validated" });
-                    }}
+                    disabled={disabled || !abilities.aiEnabled}
+                    onClick={actions.generate}
                   >
-                    <BadgeCheck aria-hidden />
-                    {copy("review.validate")}
+                    <Sparkles aria-hidden />
+                    {copy(
+                      state.hasText
+                        ? "language.regenerateAi"
+                        : "language.generateAi",
+                    )}
                   </DropdownMenuItem>
                 ) : null}
-                {platformMayVerify ? (
+                {/* Handing a language to somebody needs a record for them to open,
+                 * so on a form that has never been saved these are absent rather
+                 * than offered and refused. */}
+                {actions.requestTranslation && abilities.canInvite && saved ? (
                   <DropdownMenuItem
+                    disabled={disabled}
                     onClick={() => {
-                      setDialog({
-                        kind: "decide",
-                        decision: "platform_verified",
-                      });
+                      setDialog({ kind: "request" });
+                    }}
+                  >
+                    <MailPlus aria-hidden />
+                    {copy("translation.request")}
+                  </DropdownMenuItem>
+                ) : null}
+                {actions.requestTranslation &&
+                abilities.canInvite &&
+                abilities.canGiveAccess &&
+                saved ? (
+                  <DropdownMenuItem
+                    disabled={disabled}
+                    onClick={() => {
+                      setDialog({ kind: "access" });
+                    }}
+                  >
+                    <UserPlus aria-hidden />
+                    {copy("language.giveAccess")}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuGroup>
+            )}
+
+            {actionable ? (
+              <>
+                {state.isSource ? null : <DropdownMenuSeparator />}
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>
+                    {copy("language.haveItRead")}
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem
+                    disabled={state.dirty}
+                    aria-describedby={state.dirty ? dirtyHintId : undefined}
+                    onClick={() => {
+                      setDialog({ kind: "review", stage: "team" });
+                    }}
+                  >
+                    <Users aria-hidden />
+                    {copy("review.sendToTeam")}
+                    {/* Which of the two reads publishing actually waits for,
+                     * said where the choice is made rather than one dialog
+                     * later. */}
+                    <span className="text-copy-muted ms-auto ps-2 text-xs">
+                      {copy("optional")}
+                    </span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={state.dirty}
+                    aria-describedby={state.dirty ? dirtyHintId : undefined}
+                    onClick={() => {
+                      setDialog({ kind: "review", stage: "platform" });
                     }}
                   >
                     <ShieldCheck aria-hidden />
-                    {copy("review.verify")}
+                    {copy("review.sendToPlatform")}
+                    <span className="text-copy-muted ms-auto ps-2 text-xs">
+                      {copy("required")}
+                    </span>
                   </DropdownMenuItem>
-                ) : null}
-                {mayReturn ? (
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setDialog({ kind: "changes" });
-                    }}
-                  >
-                    <RotateCcw aria-hidden />
-                    {copy("review.sendBack")}
-                  </DropdownMenuItem>
-                ) : null}
-                {/* Nobody should be sent text the record does not hold yet. */}
-                {state.dirty ? (
-                  <p
-                    id={dirtyHintId}
-                    role="presentation"
-                    /* A sentence wraps; the items above do not. Without a width
-                     * of its own it would set the menu's, and one explanation
-                     * would stretch the menu across the screen. */
-                    className="text-copy-muted max-w-52 px-1.5 py-1 text-xs"
-                  >
-                    {copy("language.saveFirst")}
-                  </p>
-                ) : null}
-              </DropdownMenuGroup>
-            </>
-          ) : null}
-
-          {/* Publication is offered only when there is something to publish. */}
-          {actionable && abilities.canPublish ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>
-                  {copy("language.publishIt")}
-                </DropdownMenuLabel>
-                {live ? (
-                  <DropdownMenuItem variant="destructive" onClick={unpublish}>
-                    {state.scheduled ? (
-                      <CalendarX aria-hidden />
-                    ) : (
-                      <EyeOff aria-hidden />
-                    )}
-                    {copy(
-                      state.scheduled
-                        ? "publication.cancelSchedule"
-                        : "translation.unpublish",
-                    )}
-                  </DropdownMenuItem>
-                ) : (
-                  <>
+                  {teamMayValidate ? (
                     <DropdownMenuItem
-                      disabled={!publishable || state.dirty}
-                      aria-describedby={publishHintId}
-                      onClick={publishNow}
-                    >
-                      <Globe aria-hidden />
-                      {copy("publication.now")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={!publishable || state.dirty}
-                      aria-describedby={publishHintId}
                       onClick={() => {
-                        setDialog({ kind: "schedule" });
+                        setDialog({
+                          kind: "decide",
+                          decision: "team_validated",
+                        });
                       }}
                     >
-                      <CalendarClock aria-hidden />
-                      {copy("publication.scheduleAction")}
+                      <BadgeCheck aria-hidden />
+                      {copy("review.validate")}
                     </DropdownMenuItem>
-                  </>
-                )}
-                {/* Why the two items above are refused, before they are tried. */}
-                {!live && (!publishable || state.dirty) ? (
-                  <p
-                    id={publishHintId}
-                    role="presentation"
-                    className="text-copy-muted max-w-52 px-1.5 py-1 text-xs"
-                  >
-                    {publishable
-                      ? copy("language.saveFirst")
-                      : copy(needsPlatform)}
-                  </p>
-                ) : null}
-              </DropdownMenuGroup>
-            </>
-          ) : null}
-        </DropdownMenuContent>
-      </DropdownMenu>
+                  ) : null}
+                  {platformMayVerify ? (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setDialog({
+                          kind: "decide",
+                          decision: "platform_verified",
+                        });
+                      }}
+                    >
+                      <ShieldCheck aria-hidden />
+                      {copy("review.verify")}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {mayReturn ? (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setDialog({ kind: "changes" });
+                      }}
+                    >
+                      <RotateCcw aria-hidden />
+                      {copy("review.sendBack")}
+                    </DropdownMenuItem>
+                  ) : null}
+                  {/* Nobody should be sent text the record does not hold yet. */}
+                  {state.dirty ? (
+                    <p
+                      id={dirtyHintId}
+                      role="presentation"
+                      /* A sentence wraps; the items above do not. Without a width
+                       * of its own it would set the menu's, and one explanation
+                       * would stretch the menu across the screen. */
+                      className="text-copy-muted max-w-52 px-1.5 py-1 text-xs"
+                    >
+                      {copy("language.saveFirst")}
+                    </p>
+                  ) : null}
+                </DropdownMenuGroup>
+              </>
+            ) : null}
+
+            {/* Publication is offered only when there is something to publish. */}
+            {actionable && abilities.canPublish ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>
+                    {copy("language.publishIt")}
+                  </DropdownMenuLabel>
+                  {live ? (
+                    <DropdownMenuItem variant="destructive" onClick={unpublish}>
+                      {state.scheduled ? (
+                        <CalendarX aria-hidden />
+                      ) : (
+                        <EyeOff aria-hidden />
+                      )}
+                      {copy(
+                        state.scheduled
+                          ? "publication.cancelSchedule"
+                          : "translation.unpublish",
+                      )}
+                    </DropdownMenuItem>
+                  ) : (
+                    <>
+                      <DropdownMenuItem
+                        disabled={!publishable || state.dirty}
+                        aria-describedby={publishHintId}
+                        onClick={publishNow}
+                      >
+                        <Globe aria-hidden />
+                        {copy("publication.now")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!publishable || state.dirty}
+                        aria-describedby={publishHintId}
+                        onClick={() => {
+                          setDialog({ kind: "schedule" });
+                        }}
+                      >
+                        <CalendarClock aria-hidden />
+                        {copy("publication.scheduleAction")}
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {/* Why the two items above are refused, before they are tried. */}
+                  {!live && (!publishable || state.dirty) ? (
+                    <p
+                      id={publishHintId}
+                      role="presentation"
+                      className="text-copy-muted max-w-52 px-1.5 py-1 text-xs"
+                    >
+                      {publishable
+                        ? copy("language.saveFirst")
+                        : copy(needsPlatform)}
+                    </p>
+                  ) : null}
+                </DropdownMenuGroup>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {/* Dialogs are siblings of the menu: the menu has closed by the time one
        * of them is on screen. */}

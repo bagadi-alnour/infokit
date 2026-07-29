@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, UserRound } from "lucide-react";
+import { UserRoundPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -8,7 +8,9 @@ import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import { StewardContactFields } from "~/components/admin/steward-contact";
 import { PendingButton } from "~/components/pending-button";
 import { Button } from "~/components/ui/button";
-import { cn } from "~/lib/utils";
+import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
+import { SelectField } from "~/components/ui/select-field";
+import { hasStewardContact } from "~/lib/steward-contact";
 import type {
   StewardCandidate,
   StewardContactValues,
@@ -21,6 +23,12 @@ import type {
  * Saving it on its own means recording a phone number never means re-submitting
  * a whole article.
  *
+ * The list of people the platform can already name is a dropdown, not a column
+ * of buttons: the contact is nearly always one of them, and one line of menu
+ * says so without taking the panel. Typing somebody else in is a deliberate
+ * second step behind "add contact" — which is also the only state a record with
+ * no candidates at all can be in.
+ *
  * The action is passed in so each content type keeps its own permission gate;
  * the record id travels as `recordId`, which is what every steward action reads.
  */
@@ -32,6 +40,8 @@ export function StewardContactForm({
   labels,
   columns,
   members = [],
+  embedded = false,
+  formId,
 }: {
   action: (formData: FormData) => Promise<void>;
   locale: string;
@@ -41,118 +51,161 @@ export function StewardContactForm({
   labels: Record<string, string>;
   columns?: boolean;
   /**
-   * The custodian organisation's own people, offered before the free text: the
-   * contact is nearly always one of them, and typing a colleague's name and
-   * address by hand is how a wrong address gets recorded.
+   * The people the platform can already name, offered before the free text: the
+   * custodian organisation's roster, and whoever entered the record. The contact
+   * is nearly always one of them, and typing a colleague's name and address by
+   * hand is how a wrong address gets recorded.
    */
   members?: StewardCandidate[];
+  /** Render only fields, associated with the activity editor's single form. */
+  embedded?: boolean;
+  formId?: string;
 }) {
   const showActionError = useActionErrorToast();
+  const label = (key: string) => labels[key] ?? key;
   /**
-   * Held in state only because the member list writes it too. What the action
-   * reads is still the three inputs, so a member choice is a shortcut for
-   * typing, not a second way of saving.
+   * "Someone in this organisation" is only true of a roster; once the record's
+   * own author is in the list — which is the whole list for a record the
+   * platform holds — the heading has to be the neutral one.
+   */
+  const heading = members.some((candidate) => candidate.source === "author")
+    ? label("steward.candidates")
+    : label("steward.members");
+  /**
+   * Held in state only because the dropdown writes it too. What the action reads
+   * is still the three values, so choosing somebody is a shortcut for typing,
+   * not a second way of saving.
    */
   const [draft, setDraft] = useState(values);
+  // An unset field reads as null here and as "" on a candidate the platform
+  // holds no number for; they mean the same thing, so a saved contact still
+  // shows as the chosen one on reload.
+  const same = (value: string | null, candidate: string) =>
+    (value ?? "") === candidate;
+  const chosen = members.find(
+    (member) =>
+      same(draft.stewardName, member.name) &&
+      same(draft.stewardEmail, member.email) &&
+      same(draft.stewardPhone, member.phone),
+  );
+  /**
+   * The fields open when there is nobody to choose from, and when what is
+   * recorded is not one of the candidates — a duty line, or a colleague who has
+   * no account. Hiding a saved contact behind a button would read as "nobody to
+   * ask", which is the one thing this panel must never say by accident.
+   */
+  const [expanded, setExpanded] = useState(
+    members.length === 0 || (hasStewardContact(draft) && !chosen),
+  );
   const submit = async (formData: FormData) => {
     try {
       await action(formData);
-      toast.success(labels["steward.saved"] ?? "steward.saved");
+      toast.success(label("steward.saved"));
     } catch (error) {
-      showActionError(
-        error,
-        labels["steward.saveError"] ?? "steward.saveError",
-      );
+      showActionError(error, label("steward.saveError"));
     }
   };
+  const fields = (
+    <>
+      {members.length > 0 ? (
+        <Field>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <FieldLabel htmlFor={`steward-candidate-${recordId}`}>
+              {heading}
+            </FieldLabel>
+            {expanded ? null : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setExpanded(true);
+                }}
+              >
+                <UserRoundPlus aria-hidden />
+                {label("steward.addContact")}
+              </Button>
+            )}
+          </div>
+          <SelectField
+            id={`steward-candidate-${recordId}`}
+            value={chosen?.id ?? ""}
+            onValueChange={(next) => {
+              const member = members.find((candidate) => candidate.id === next);
+              if (!member) return;
+              setDraft((current) => ({
+                ...current,
+                stewardName: member.name,
+                stewardEmail: member.email,
+                stewardPhone: member.phone,
+              }));
+            }}
+          >
+            <option value="">{label("steward.choose")}</option>
+            {members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {`${member.name} · ${
+                  member.source === "author"
+                    ? label("steward.author")
+                    : member.title
+                }`}
+              </option>
+            ))}
+          </SelectField>
+          <FieldDescription>{label("steward.membersHint")}</FieldDescription>
+        </Field>
+      ) : null}
+      {expanded ? (
+        <StewardContactFields
+          values={draft}
+          labels={labels}
+          columns={columns}
+          formId={formId}
+          // Uncontrolled unless the dropdown is there to write them too.
+          onChange={
+            members.length > 0
+              ? (patch) => {
+                  setDraft((current) => ({ ...current, ...patch }));
+                }
+              : undefined
+          }
+        />
+      ) : (
+        /* Collapsed, the chosen candidate is what gets saved: the three values
+         * still post, so the form's Save means the same thing either way. */
+        <>
+          <input
+            type="hidden"
+            name="stewardName"
+            form={formId}
+            value={draft.stewardName ?? ""}
+          />
+          <input
+            type="hidden"
+            name="stewardPhone"
+            form={formId}
+            value={draft.stewardPhone ?? ""}
+          />
+          <input
+            type="hidden"
+            name="stewardEmail"
+            form={formId}
+            value={draft.stewardEmail ?? ""}
+          />
+        </>
+      )}
+    </>
+  );
+
+  if (embedded) return <div className="grid gap-4">{fields}</div>;
+
   return (
     <form action={submit} className="grid gap-4">
       <input type="hidden" name="locale" value={locale} />
       <input type="hidden" name="recordId" value={recordId} />
-      {members.length > 0 ? (
-        <div className="grid gap-2">
-          <p className="text-sm font-medium">
-            {labels["steward.members"] ?? "steward.members"}
-          </p>
-          <ul className="grid gap-2">
-            {members.map((member) => {
-              const chosen =
-                draft.stewardName === member.name &&
-                (member.email === null || draft.stewardEmail === member.email);
-              return (
-                <li key={member.id}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      "h-auto w-full justify-start gap-3 px-3 py-2 text-start",
-                      chosen && "border-brand bg-brand-soft",
-                    )}
-                    aria-pressed={chosen}
-                    onClick={() => {
-                      setDraft((current) => ({
-                        ...current,
-                        stewardName: member.name,
-                        stewardEmail: member.email ?? current.stewardEmail,
-                      }));
-                    }}
-                  >
-                    {chosen ? (
-                      <Check
-                        className="text-brand size-4 shrink-0"
-                        aria-hidden
-                      />
-                    ) : (
-                      <UserRound
-                        className="text-copy-muted size-4 shrink-0"
-                        aria-hidden
-                      />
-                    )}
-                    <span className="grid min-w-0 gap-0.5">
-                      <span className="truncate text-sm font-medium">
-                        {member.name}
-                        {member.title ? (
-                          <span className="text-copy-muted font-normal">
-                            {" · "}
-                            {member.title}
-                          </span>
-                        ) : null}
-                      </span>
-                      {member.email ? (
-                        <span className="text-copy-muted truncate text-xs">
-                          {member.email}
-                        </span>
-                      ) : null}
-                    </span>
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-          {/* The fields below stay editable: the phone is nowhere in a
-           * membership record, and the person to ask is not always a member. */}
-          <p className="text-copy-muted text-xs">
-            {labels["steward.membersHint"] ?? "steward.membersHint"}
-          </p>
-        </div>
-      ) : null}
-      <StewardContactFields
-        values={draft}
-        labels={labels}
-        columns={columns}
-        // Uncontrolled unless the member list is there to write them too.
-        onChange={
-          members.length > 0
-            ? (patch) => {
-                setDraft((current) => ({ ...current, ...patch }));
-              }
-            : undefined
-        }
-      />
+      {fields}
       <div>
-        <PendingButton>
-          {labels["steward.save"] ?? "steward.save"}
-        </PendingButton>
+        <PendingButton>{label("steward.save")}</PendingButton>
       </div>
     </form>
   );

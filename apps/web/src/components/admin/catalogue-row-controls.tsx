@@ -53,7 +53,7 @@ type Action = (formData: FormData) => Promise<void>;
  * itself (duplicate name, still in use, permission denied). Toasting here as
  * well would say the same thing twice, in vaguer words.
  */
-function isRedirectError(error: unknown) {
+export function isRedirectError(error: unknown) {
   return (
     typeof error === "object" &&
     error !== null &&

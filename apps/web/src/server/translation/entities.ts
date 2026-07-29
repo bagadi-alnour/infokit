@@ -14,10 +14,15 @@ import {
   organizationProfiles,
   translationSourceVersions,
 } from "~/server/db/schema";
+import { clearedLanguageReview } from "~/server/content/language-review";
 import type {
   TranslationEntityKind,
   TranslationMethod,
   TranslationState,
+} from "./provenance";
+import {
+  resolveTranslationProvenance,
+  translationPayloadHash,
 } from "./provenance";
 
 /**
@@ -76,6 +81,19 @@ export interface TranslationEntityAdapter {
     entityId: string,
     languageCode: EditorialLanguage,
   ): Promise<TargetTranslation | null>;
+  /**
+   * Persist a freshly generated draft when this entity supports an isolated
+   * language save. Creation forms and versioned entities keep returning a signed
+   * proposal for their owning form to save instead.
+   */
+  saveMachineDraft?(input: {
+    entityId: string;
+    languageCode: EditorialLanguage;
+    title: string;
+    bodyHtml: string;
+    plainText: string;
+    signature: string;
+  }): Promise<boolean>;
   /** Promote a checked translation. Returns false when the row is missing. */
   markVerified(input: {
     entityId: string;
@@ -145,6 +163,71 @@ const activityAdapter: TranslationEntityAdapter = {
       languageCode: row.languageCode as EditorialLanguage,
       verifiedByName: null,
     };
+  },
+  async saveMachineDraft({
+    entityId,
+    languageCode,
+    title,
+    bodyHtml,
+    plainText,
+    signature,
+  }) {
+    return db.transaction(async (tx) => {
+      const [sourceVersion] = await tx
+        .select({ id: translationSourceVersions.id })
+        .from(translationSourceVersions)
+        .where(
+          and(
+            eq(translationSourceVersions.entityKind, "activity"),
+            eq(translationSourceVersions.entityId, entityId),
+          ),
+        )
+        .orderBy(desc(translationSourceVersions.version))
+        .limit(1);
+      if (!sourceVersion) return false;
+
+      const payload = { title, bodyHtml };
+      const provenance = resolveTranslationProvenance({
+        entityKind: "activity",
+        targetLanguageCode: languageCode,
+        payload,
+        signature,
+      });
+      const row = {
+        name: title,
+        descriptionHtml: bodyHtml,
+        descriptionText: plainText,
+        shortDescription: plainText.slice(0, 500),
+        state: provenance.state,
+        method: provenance.method,
+        providerCode: provenance.providerCode,
+        sourceVersionId: sourceVersion.id,
+        contentHash: translationPayloadHash({
+          languageCode,
+          ...payload,
+        }),
+        carriedForwardFromSourceVersionId: null,
+        verifiedById: null,
+        verifiedAt: null,
+        ...clearedLanguageReview,
+      };
+
+      await tx
+        .insert(activityTranslations)
+        .values({
+          activityId: entityId,
+          languageCode,
+          ...row,
+        })
+        .onConflictDoUpdate({
+          target: [
+            activityTranslations.activityId,
+            activityTranslations.languageCode,
+          ],
+          set: row,
+        });
+      return true;
+    });
   },
   async markVerified({ entityId, languageCode, userId, sourceVersionId }) {
     const updated = await db

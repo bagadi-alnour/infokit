@@ -7,8 +7,10 @@ import { z } from "zod";
 
 import { localizedPath } from "~/i18n/routing";
 import { eventLanguages } from "~/lib/event-languages";
+import { maxUploadBytes } from "~/lib/image-compression";
 import { recordAudit } from "~/server/audit";
-import { createAssetUploadUrl, verifyAssetUpload } from "~/server/assets/s3";
+import { createAssetUploadUrl } from "~/server/assets/s3";
+import { scanUploadedAsset } from "~/server/assets/scan";
 import {
   protectedPermissionAction,
   requireEditor,
@@ -78,9 +80,11 @@ async function claimUpload(
 ) {
   const [asset] = await db
     .select({
+      id: assets.id,
       storageKey: assets.storageKey,
       mimeType: assets.mimeType,
       byteSize: assets.byteSize,
+      scanState: assets.scanState,
     })
     .from(assets)
     .where(
@@ -94,7 +98,7 @@ async function claimUpload(
     )
     .limit(1);
   if (!asset) throw new Error("The uploaded file is unavailable");
-  await verifyAssetUpload(asset);
+  await scanUploadedAsset(asset);
 }
 
 function refresh(locale: Locale, id: string) {
@@ -106,11 +110,9 @@ function refresh(locale: Locale, id: string) {
 
 const imageUploadSchema = z.object({
   mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/avif"]),
-  byteSize: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(10 * 1024 * 1024),
+  // The same megabyte the console states and the browser encodes down to: this
+  // is where it is enforced, because this is where the upload URL is signed.
+  byteSize: z.coerce.number().int().positive().max(maxUploadBytes),
   languageCode: z.enum(eventLanguages),
   altText: z.string().trim().min(1).max(500),
   rightsConfirmed: z.literal("true"),
@@ -126,7 +128,7 @@ export const createEventImageUpload = protectedPermissionAction(
       altText: formData.get("altText"),
       rightsConfirmed: formData.get("rightsConfirmed"),
     });
-    await assertMayManage(eventId.parse(formData.get("eventId")));
+    const event = await assertMayManage(eventId.parse(formData.get("eventId")));
 
     const id = crypto.randomUUID();
     const storageKey = `uploads/events/${id}/original`;
@@ -156,6 +158,22 @@ export const createEventImageUpload = protectedPermissionAction(
         decorative: false,
         state: "draft",
       });
+    });
+    // A signed URL is a short-lived write credential for the bucket, so who was
+    // handed one for which key belongs in the trail whether or not the upload
+    // that follows ever gets attached to anything.
+    await recordAudit({
+      action: "asset.upload_authorized",
+      subjectType: "asset",
+      subjectId: id,
+      organizationId: event.hostOrganizationId,
+      metadata: {
+        kind: "image",
+        context: "coordination_event",
+        mimeType: parsed.mimeType,
+        byteSize: parsed.byteSize,
+        languageCode: parsed.languageCode,
+      },
     });
     return { assetId: id, uploadUrl };
   },
@@ -240,7 +258,7 @@ export const createEventFlyerUpload = protectedPermissionAction(
       languageCode: formData.get("languageCode"),
       rightsConfirmed: formData.get("rightsConfirmed"),
     });
-    await assertMayManage(eventId.parse(formData.get("eventId")));
+    const event = await assertMayManage(eventId.parse(formData.get("eventId")));
 
     const id = crypto.randomUUID();
     const storageKey = `uploads/events/${id}/flyer.pdf`;
@@ -261,6 +279,19 @@ export const createEventFlyerUpload = protectedPermissionAction(
       visibility: "workspace",
       scanState: "pending",
       rightsConfirmed: true,
+    });
+    await recordAudit({
+      action: "asset.upload_authorized",
+      subjectType: "asset",
+      subjectId: id,
+      organizationId: event.hostOrganizationId,
+      metadata: {
+        kind: "document",
+        context: "coordination_event",
+        mimeType: "application/pdf",
+        byteSize: parsed.byteSize,
+        languageCode: parsed.languageCode,
+      },
     });
     return { assetId: id, uploadUrl };
   },

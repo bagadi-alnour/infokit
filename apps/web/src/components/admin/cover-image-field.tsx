@@ -26,6 +26,10 @@ import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import type { EditorialLanguage } from "~/lib/editorial-languages";
 import { readLabel, type Labels } from "~/lib/form-messages";
+import {
+  compressImageForUpload,
+  isImageTooLargeError,
+} from "~/lib/image-compression";
 
 /**
  * The cover image, uploaded before the form is saved.
@@ -127,29 +131,38 @@ export function CoverImageField({
     setFileName(file.name);
     setPhase("uploading");
     try {
+      // Re-encoded before anything is signed: the upload URL is bound to the
+      // exact type and length declared here, so the size sent to the action has
+      // to be the size that is about to be PUT.
+      const image = await compressImageForUpload(file);
       const request = new FormData();
       request.set("locale", locale);
-      request.set("mimeType", file.type);
-      request.set("byteSize", String(file.size));
+      request.set("mimeType", image.type);
+      request.set("byteSize", String(image.size));
       request.set("languageCode", sourceLanguage);
       request.set("altText", altText);
       request.set("rightsConfirmed", rightsConfirmed ? "true" : "false");
       const created = await createUpload(request);
       const response = await fetch(created.uploadUrl, {
         method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
+        body: image,
+        headers: { "Content-Type": image.type },
       });
       if (!response.ok) throw new Error("Upload failed");
       setAssetId(created.assetId);
-      showFile(file);
+      showFile(image);
       setPhase("done");
     } catch (error) {
       setAssetId("");
       // A refused permission is not a broken upload: the editor may not attach
       // images here at all, which the toast explains.
       setPhase(isPermissionDeniedError(error) ? "idle" : "error");
-      showActionError(error, labels.error);
+      // The size rule is already written under the field; as a toast it says
+      // exactly which rule the chosen file broke.
+      showActionError(
+        error,
+        isImageTooLargeError(error) ? labels.constraints : labels.error,
+      );
     }
   };
 

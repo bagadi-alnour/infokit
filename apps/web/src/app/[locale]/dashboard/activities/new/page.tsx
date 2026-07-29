@@ -12,11 +12,8 @@ import { EDITOR_CONTACT_OPTION_ID } from "~/lib/editor-contact";
 import { PLATFORM_OWNER_OPTION_ID } from "~/lib/platform-owner";
 import { buildWorkspaceLabels } from "~/lib/workspace-labels";
 import { hasAiTranslationProvider } from "~/server/ai/provider";
-import {
-  getRoleTestState,
-  platformPermissionsForUser,
-} from "~/server/auth/authorization";
-import { requireEditor } from "~/server/auth/require";
+import { platformPermissionsForUser } from "~/server/auth/authorization";
+import { denyPageAccess, requireEditor } from "~/server/auth/require";
 import { platformVerifyPermission } from "~/server/content/language-review";
 import { db } from "~/server/db";
 import {
@@ -48,19 +45,26 @@ export default async function NewActivityPage({
     loadPageCatalog(locale, "dashboard-console"),
     loadPageCatalog(locale, "dashboard-overview"),
   ]);
+  const platformPermissions = await platformPermissionsForUser(editor.id);
+  /**
+   * The form is refused to anyone `createActivity` would refuse. That wrapper
+   * reads platform grants only (server/auth/require.ts), so without this grant
+   * there is no organisation to pick and no activity to file: the form would
+   * render every association's name into its host picker and then throw on
+   * submit.
+   */
+  if (!platformPermissions.has("content.activity.manage")) {
+    await denyPageAccess("content.activity.manage", locale);
+  }
   /**
    * Whether this editor may keep an activity for the platform: a platform
    * editor, working platform-wide. An association's own editor is acting for
-   * that association, and so is a superadmin testing an organisation role — the
-   * action applies the same rule to the post.
+   * that association — the action applies the same rule to the post. The gate
+   * above makes this true for everyone who reaches the form today; it stays a
+   * separate question because it is the one that changes when a membership grant
+   * can carry a mutation.
    */
-  const [authorization, platformPermissions] = await Promise.all([
-    getRoleTestState(editor.id),
-    platformPermissionsForUser(editor.id),
-  ]);
-  const mayHoldForPlatform =
-    authorization.assumedOrganizationId === null &&
-    platformPermissions.has("content.activity.manage");
+  const mayHoldForPlatform = platformPermissions.has("content.activity.manage");
   /**
    * Whether the two publishing choices are offered at all.
    *
@@ -70,9 +74,7 @@ export default async function NewActivityPage({
    * sends the text up the review chain instead, and is not shown a choice the
    * server would refuse.
    */
-  const canPublish =
-    authorization.assumedOrganizationId === null &&
-    platformPermissions.has(platformVerifyPermission);
+  const canPublish = platformPermissions.has(platformVerifyPermission);
   const [
     organizationRows,
     cityRows,
