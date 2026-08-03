@@ -10,7 +10,7 @@
 
 ## 1. Design Challenge
 
-People in Calais need to find essential services in unfamiliar conditions, languages, and places. Information changes quickly and is currently fragmented across messages, spreadsheets, websites, and paper. Text-only experiences also exclude people who cannot read confidently or who will not read a long page to find one urgent answer.
+People in Calais need clear information when seeking support with essential needs in unfamiliar conditions, languages, and places. Information changes quickly and is currently fragmented across messages, spreadsheets, websites, and paper. Text-only experiences also exclude people who cannot read confidently or who will not read a long page to find one urgent answer.
 
 Design Phase 1 as an anonymous public experience that makes current services, articles, personalized information guidance, fixed/basic information, and association specialities easy to find without creating a central registry of people seeking help.
 
@@ -98,6 +98,14 @@ Design for:
 The useful fallback is a text list, not an unloaded map, blank skeleton, or QR code.
 
 ## 6. Experience Principles
+
+The interface expresses the product's five values through observable behaviour:
+
+- **Dignity:** let a person find public information without an account, behavioural profile, or judgmental language.
+- **Reliability:** show the responsible source, check date, current status, and uncertainty beside the information they qualify.
+- **Accessibility:** keep essential answers usable across devices, connection speeds, supported languages, reading directions, and literacy levels.
+- **Collaboration:** give associations shared publishing and coordination surfaces without obscuring ownership or exposing private work.
+- **Responsibility:** make publication, approval, correction, and access decisions attributable and auditable.
 
 1. **Current before comprehensive.** Show whether information is reliable before extra detail.
 2. **A path without an account.** Essential information is always reachable anonymously.
@@ -271,7 +279,7 @@ Build every Phase 1 P0 screen before designing later phases. Open Design produce
 | W-05 | 2     | P0             | Organisation profile editor              | Verified identity, purpose, effective/pending speciality changes, primary/order, languages, contacts, freshness, public preview                                                                                                                                                                    |
 | W-06 | 2     | P1             | Simulator-content editor                 | Question tree, result content, source/owner/review dates, anonymous-public preview                                                                                                                                                                                                                 |
 | W-07 | 2     | P1             | Roles, invitations, and audit            | Phase 2 publishing roles, invite/account state, permission summary, audit events                                                                                                                                                                                                                   |
-| W-08 | 2     | P0             | Shared inter-organisation agenda         | Calendar/list of coordination events across organisations for the active city, visibility badges (organisation/inter-organisation), recurring occurrences, participation states (attending/interested/declined), cancellation with visible reason, event editor; never public                      |
+| W-08 | 2     | P0             | Shared inter-organisation agenda         | City calendar/list; organisation, inter-organisation, and public visibility; recurrence, participation, cancellation reason, and event editor. Private by default; only public-tier events leave the workspace                                                                                     |
 | T-01 | 3     | P0             | Members and teams                        | Staff/volunteer/intern state, team assignment, skills/languages, permissions, offboarding                                                                                                                                                                                                          |
 | T-02 | 3     | P0             | Availability and weekly planning         | Member-row/day-column board, team/member filters, availability, absence, assignments, coverage, conflicts, skill/language gaps, shift assignment                                                                                                                                                   |
 | T-03 | 3     | P0             | Mission and mobile agenda                | Mission detail, required/preferred language/permit/training/skills, match/gap explanation, accept/decline, notifications                                                                                                                                                                           |

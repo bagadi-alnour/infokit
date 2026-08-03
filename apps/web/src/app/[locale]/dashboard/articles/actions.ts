@@ -722,7 +722,7 @@ export const createArticle = protectedPermissionAction(
     }
     refresh(locale);
     redirect(
-      `${localizedPath("/dashboard/articles", locale)}?article=${entry.id}`,
+      `${localizedPath("/dashboard/articles", locale)}?article=${entry.id}&notice=article-created`,
     );
   },
 );

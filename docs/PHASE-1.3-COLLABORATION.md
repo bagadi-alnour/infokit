@@ -60,14 +60,30 @@ so the audit trail, not the permission grid, is what answers who edited what.
 - A **platform operator** verifies or creates the organisation record and
   sends an expiring, invitation-only invite to a designated representative
   (`core.invitations`, kind `association_publisher`). There is no public
-  organisation signup or self-service request.
+  organisation signup or self-service request. Creating the record and naming
+  its representative are one submit on the new-organisation form; the
+  representative half is optional, because a directory entry verified from
+  public sources exists before anybody at the organisation has agreed to
+  maintain it.
+- The invitation email links to `/[ui-locale]/invite/[token]`, which carries
+  the token and nothing else — no address in the query string. The page hashes
+  the token to find the invitation and states who invited them, to which
+  organisation, in which roles, and until when. Reading it grants nothing:
+  possession of the link is what lets somebody _see_ an invitation, never what
+  accepts it. Revoked, expired, already-accepted and unmatched links each get
+  their own answer, and an unmatched token is indistinguishable from a
+  malformed one.
 - The representative accepts by signing in with the invited address. A
   verified magic-link login or an existing verified account session proves
   ownership of that sole sign-in address, so acceptance links the pending
   organisation membership and marks the invitation accepted
-  (`linkPendingMemberships`). The representative reviews and records acceptance
+  (`linkPendingMemberships`). Somebody who was **already** signed in as the
+  invited address when the link arrived accepts in place from that page
+  (`acceptInvitationForUser`) rather than waiting for their next sign-in; a
+  session on any other address is told so and offered a sign-out, never
+  accepted silently. The representative reviews and records acceptance
   of the versioned publishing responsibilities (`core.legal_documents` /
-  `core.legal_acceptances`).
+  `core.legal_acceptances`) — specified, not yet built.
 - The representative receives only the organisation-scoped Phase 1
   publisher/verifier permissions. A Phase 1.3 invite grants no member
   administration, no organisation settings, no team management, and no access

@@ -136,6 +136,33 @@ export async function readAssetObject(
 }
 
 /**
+ * Read a stored object, treating "not there" as an answer rather than a fault.
+ *
+ * `readAssetObject` is right for a key the database says exists, where absence
+ * is corruption worth throwing on. A cache lookup is the other case: a miss is
+ * the ordinary path on first request, so it returns null and lets the caller
+ * do the work. Only the not-found codes are swallowed — credentials, network
+ * and permission failures still throw, because silently treating those as a
+ * miss would regenerate paid renditions forever without anyone noticing.
+ */
+export async function readAssetObjectIfPresent(
+  storageKey: string,
+  maxBytes: number,
+): Promise<Buffer | null> {
+  try {
+    return await readAssetObject(storageKey, maxBytes);
+  } catch (error) {
+    const name = (error as { name?: string }).name;
+    const status = (error as { $metadata?: { httpStatusCode?: number } })
+      .$metadata?.httpStatusCode;
+    if (name === "NoSuchKey" || name === "NotFound" || status === 404) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
  * Store bytes the server produced itself — a rendition, never an upload. No
  * signed URL is involved, so nothing outside the server can write this key.
  */

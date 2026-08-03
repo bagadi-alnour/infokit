@@ -9,7 +9,7 @@ import {
   deleteCourse,
   setCourseActive,
   updateCourse,
-} from "~/app/[locale]/dashboard/skills/actions";
+} from "~/app/[locale]/dashboard/my-organization/skills/actions";
 import {
   Field,
   Notice,

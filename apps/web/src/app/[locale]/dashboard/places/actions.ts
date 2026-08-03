@@ -105,7 +105,9 @@ export const createPlace = protectedPermissionAction(
       organizationId: parsed.organizationId,
     });
     refresh(locale, place.id);
-    redirect(localizedPath(`/dashboard/places/${place.id}`, locale));
+    redirect(
+      `${localizedPath(`/dashboard/places/${place.id}`, locale)}?notice=place-created`,
+    );
   },
 );
 

@@ -1,3 +1,4 @@
+import { brandName } from "@infokit/shared/i18n";
 import { Callout, Card, MetaRow, Text } from "@infokit/ui";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useCallback } from "react";
@@ -37,7 +38,7 @@ export default function ArticleScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: title ?? "InfoKit" }} />
+      <Stack.Screen options={{ title: title ?? brandName(locale) }} />
       <PayloadScreen request={request} strings={strings}>
         {({ article, labels }) => (
           <>

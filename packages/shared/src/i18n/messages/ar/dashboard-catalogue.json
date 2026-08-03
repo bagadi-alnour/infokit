@@ -25,6 +25,7 @@
   "catalogue.action.activate": "تنشيط",
   "catalogue.action.deactivate": "إلغاء التنشيط",
   "catalogue.actionError": "لم يُحفظ التغيير. أعد المحاولة.",
+  "catalogue.deleted": "تم حذف العنصر.",
 
   "catalogue.tabs.label": "أقسام الفهرس",
   "catalogue.stat.services": "الخدمات",

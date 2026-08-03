@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { createTeam } from "~/app/[locale]/dashboard/team/actions";
+import { createTeam } from "~/app/[locale]/dashboard/my-organization/city-team/actions";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import { SearchableSelect } from "~/components/admin/searchable-select";
 import { PendingButton } from "~/components/pending-button";

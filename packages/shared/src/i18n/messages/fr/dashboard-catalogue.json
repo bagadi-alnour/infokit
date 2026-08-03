@@ -25,6 +25,7 @@
   "catalogue.action.activate": "Activer",
   "catalogue.action.deactivate": "Désactiver",
   "catalogue.actionError": "La modification n’a pas été enregistrée. Réessayez.",
+  "catalogue.deleted": "Élément supprimé.",
 
   "catalogue.tabs.label": "Sections du catalogue",
   "catalogue.stat.services": "Services",

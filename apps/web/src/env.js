@@ -1,17 +1,34 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
+/**
+ * Named once because it has to be applied twice.
+ *
+ * `skipValidation` hands `runtimeEnv` back untouched rather than running the
+ * schema, so a `.default()` below never fires under `SKIP_ENV_VALIDATION` —
+ * skipping the checks also skips the fallbacks. `~/seo/site` reads this one at
+ * module load (`new URL(env.SITE_URL)`), so an unset value is not a late
+ * failure in one route but an import-time throw — `Invalid URL: undefined` —
+ * in every page that pulls site metadata in, which is what made the documented
+ * Docker escape hatch unusable. Applying it on the runtime path too means a
+ * skipped build behaves exactly like a validated build with SITE_URL unset.
+ */
+const SITE_URL_DEFAULT = "http://localhost:3030";
+
 export const env = createEnv({
   /**
    * Specify your server-side environment variables schema here. This way you can ensure the app
    * isn't built with invalid env vars.
    */
   server: {
+    /**
+     * Signs sessions and cookies, and encrypts the second factor's secrets.
+     * Better Auth would also read `BETTER_AUTH_SECRET`; it is passed explicitly
+     * under this name so no deployment has to be re-keyed. Rotating it signs
+     * every live session out and makes enrolled authenticator secrets
+     * unreadable, so it is a decision rather than a maintenance step.
+     */
     AUTH_SECRET: z.string().min(32),
-    AUTH_TRUST_HOST: z
-      .enum(["true", "false"])
-      .default("true")
-      .transform((value) => value === "true"),
     AUTH_EMAIL_FROM: z.string().default(""),
     /** Optional. Unset means the standard AWS credential chain. */
     AWS_PROFILE: z.string().min(1).optional(),
@@ -48,7 +65,8 @@ export const env = createEnv({
     OPEN_AI_API_KEY: z.string().min(1).optional(),
     AI_TRANSLATION_PROVIDER: z.enum(["openai"]).default("openai"),
     AI_TRANSLATION_MODEL: z.string().min(1).default("gpt-5.6-terra"),
-    SITE_URL: z.string().url().default("http://localhost:3030"),
+    AI_SPEECH_MODEL: z.string().min(1).default("gpt-4o-mini-tts"),
+    SITE_URL: z.string().url().default(SITE_URL_DEFAULT),
     /** Dev/test only: log magic links + SMS codes to the server console instead of AWS. */
     AUTH_DEV_LOG_DELIVERY: z
       .enum(["true", "false"])
@@ -88,7 +106,6 @@ export const env = createEnv({
    */
   runtimeEnv: {
     AUTH_SECRET: process.env.AUTH_SECRET,
-    AUTH_TRUST_HOST: process.env.AUTH_TRUST_HOST,
     AUTH_EMAIL_FROM: process.env.AUTH_EMAIL_FROM,
     AWS_PROFILE: process.env.AWS_PROFILE,
     AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
@@ -107,7 +124,10 @@ export const env = createEnv({
     OPEN_AI_API_KEY: process.env.OPEN_AI_API_KEY,
     AI_TRANSLATION_PROVIDER: process.env.AI_TRANSLATION_PROVIDER,
     AI_TRANSLATION_MODEL: process.env.AI_TRANSLATION_MODEL,
-    SITE_URL: process.env.SITE_URL,
+    AI_SPEECH_MODEL: process.env.AI_SPEECH_MODEL,
+    // `||`, not `??`: `emptyStringAsUndefined` would fold an empty value into
+    // the default on the validated path, so the skipped path has to agree.
+    SITE_URL: process.env.SITE_URL || SITE_URL_DEFAULT,
     AUTH_DEV_LOG_DELIVERY: process.env.AUTH_DEV_LOG_DELIVERY,
     ENABLE_PHASE3_MEMBER_ASSIGNMENTS:
       process.env.ENABLE_PHASE3_MEMBER_ASSIGNMENTS,

@@ -22,8 +22,10 @@ export default async function AccountLayout({
   params: Promise<{ locale: string }>;
 }>) {
   const locale = requireRouteLocale((await params).locale);
-  await requireEditor(locale);
-  const messages = await loadPageCatalog(locale, "dashboard-account");
+  const [, messages] = await Promise.all([
+    requireEditor(locale),
+    loadPageCatalog(locale, "dashboard-account"),
+  ]);
 
   const sections: readonly AccountSettingsNavItem[] = [
     {
@@ -59,24 +61,26 @@ export default async function AccountLayout({
   ];
 
   return (
-    <WorkspacePage width="contentStart">
+    <WorkspacePage width="full">
       <PageHeader
         title={messages["account.title"]}
         sub={messages["account.description"]}
       />
-      {/* The window is the wrong thing to measure here: the console's sidebar
-       * takes 16rem off the front of it, so a 1000px window leaves this section
-       * the room of a 700px one and the column would fold away with space to
-       * spare. Asking the section how wide it is answers that, and keeps the
-       * answer right when the sidebar is collapsed to icons. */}
-      <div className="@container">
-        <div className="@2xl:grid-cols-[15rem_minmax(0,1fr)] @2xl:gap-6 grid gap-5">
-          <AccountSettingsNav
-            ariaLabel={messages["account.nav.label"]}
-            items={sections}
-          />
-          <div className="min-w-0">{children}</div>
-        </div>
+      {/* The dashboard sidebar becomes persistent at the same large-screen
+       * breakpoint. From there, account sections use a fixed navigation rail;
+       * narrower screens keep the compact scrolling row above the form.
+       *
+       * The reading width is held here rather than taken from `WorkspacePage`,
+       * and it is wider than the `contentStart` preset: the security section
+       * lays its cards out in two columns on a large screen, which needs room
+       * for two of them beside a 13rem rail. Start-aligned, not centred — a
+       * page with its own inner navigation reads from one margin. */}
+      <div className="grid max-w-7xl gap-5 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-6">
+        <AccountSettingsNav
+          ariaLabel={messages["account.nav.label"]}
+          items={sections}
+        />
+        <div className="min-w-0">{children}</div>
       </div>
     </WorkspacePage>
   );

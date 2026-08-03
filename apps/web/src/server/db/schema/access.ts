@@ -66,7 +66,7 @@ export const organizationVerifications = core.table(
  *
  * A member is *not* required to belong to a city team: someone can be on the
  * books before there is a team to put them on (`core.city_team_members` is the
- * optional link, and `/dashboard/team` keeps the unassigned ones in view).
+ * optional link, and `/dashboard/my-organization/city-team` keeps the unassigned ones in view).
  */
 export const organizationMembers = core.table(
   "organization_members",

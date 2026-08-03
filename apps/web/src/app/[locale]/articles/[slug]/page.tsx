@@ -4,10 +4,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 
+import { ArticleActions } from "~/components/public/article-actions";
 import { PublicArticleDetailView } from "~/components/public/article-detail";
 import { PublicSiteShell } from "~/components/public/public-site-shell";
 import { JsonLd } from "~/components/seo/json-ld";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
+import { publicSpeechHref } from "~/lib/public-speech";
 import { metaDescription, publicMetadata } from "~/seo/metadata";
 import { articleJsonLd, breadcrumbJsonLd } from "~/seo/structured-data";
 import {
@@ -94,6 +96,7 @@ export default async function ArticleDetailPage({
   ]);
   if (!article) notFound();
   const page = articlePageLabels(messages);
+  const labels = articleLabels(messages);
 
   return (
     <PublicSiteShell
@@ -128,11 +131,36 @@ export default async function ArticleDetailPage({
           }),
         ]}
       />
-      <PublicArticleDetailView
-        eyebrow={page.eyebrow}
-        article={articleDetail({ article, locale, messages })}
-        labels={articleLabels(messages)}
-      />
+      <div className="flex flex-col gap-8">
+        <PublicArticleDetailView
+          eyebrow={page.eyebrow}
+          article={articleDetail({ article, locale, messages })}
+          labels={labels}
+          actions={
+            <ArticleActions
+              title={article.title}
+              href={`/${locale}/articles/${article.slug}`}
+              speechHref={publicSpeechHref({
+                kind: "article",
+                id: slug,
+                locale,
+              })}
+              downloadHref={`/api/public/articles/${encodeURIComponent(slug)}/download?locale=${encodeURIComponent(locale)}`}
+              labels={{
+                share: labels.share,
+                shareCopied: labels.shareCopied,
+                listen: labels.listen,
+                pause: labels.pauseListening,
+                resume: labels.resumeListening,
+                loading: labels.listenLoading,
+                retry: labels.listenRetry,
+                disclosure: labels.listenDisclosure,
+                download: labels.download,
+              }}
+            />
+          }
+        />
+      </div>
     </PublicSiteShell>
   );
 }

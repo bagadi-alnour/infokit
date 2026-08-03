@@ -249,7 +249,12 @@ export interface PublicArticleSummary {
   summary: string;
   articleDateLabel: string;
   ownerNames: string[];
+  /** Localized age of the review — "6 minutes ago", "yesterday". */
   lastReviewedLabel: string;
+  /** Calendar date behind the relative label, exposed as a tooltip. */
+  lastReviewedDateLabel: string;
+  /** Exact review instant for semantic web time markup. */
+  lastReviewedIso: string | null;
   fallbackUsed: boolean;
   /** Localized fallback notice with the content language name filled in. */
   fallbackLabel: string;
@@ -275,6 +280,15 @@ export interface PublicArticleDetail {
 export interface PublicArticleLabels {
   empty: string;
   read: string;
+  share: string;
+  shareCopied: string;
+  listen: string;
+  pauseListening: string;
+  resumeListening: string;
+  listenLoading: string;
+  listenRetry: string;
+  listenDisclosure: string;
+  download: string;
   publishedBy: string;
   lastReviewed: string;
   unreliable: string;
@@ -332,7 +346,12 @@ export interface PublicEventSummary {
   mapHref: string | null;
   /** How to get there on public transport; empty when nobody recorded it. */
   transit: PublicTransitLink[];
+  /** Empty for an event that happens online and in no city. */
   cityName: string;
+  /** Joinable from anywhere — said instead of a place, or beside one. */
+  isOnline: boolean;
+  /** The link people join on, when the organisers have published one. */
+  onlineUrl: string | null;
   hostName: string | null;
   hostHref: string | null;
   contactLabel: string | null;
@@ -354,6 +373,12 @@ export interface PublicEventLabels {
   when: string;
   where: string;
   city: string;
+  /** What an online event says instead of a street. */
+  online: string;
+  /** Names the joining link on an event's own page. */
+  onlineJoin: string;
+  /** Said when an event is online but the link has not been published yet. */
+  onlineNoLink: string;
   /** Heading over the transport links — "Getting here". */
   gettingHere: string;
   host: string;

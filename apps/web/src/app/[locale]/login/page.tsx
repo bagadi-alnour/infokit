@@ -6,7 +6,6 @@ import { AuthShell } from "~/components/auth/auth-shell";
 import { AuthStatus } from "~/components/auth/auth-status";
 import { LoginForms } from "~/components/auth/login-forms";
 import { requireRouteLocale } from "~/i18n/route-locale";
-import { authPath } from "~/i18n/routing";
 import { localizedAuthMetadata } from "~/seo/site";
 import { auth } from "~/server/auth";
 import { safeReturnTo } from "~/server/auth/return-to";
@@ -42,10 +41,11 @@ export default async function LoginPage({
   const messages = await loadPageCatalog(locale, "login");
   const returnTo = safeReturnTo(query.returnTo, locale);
   const session = await auth();
-  if (session?.secondFactorVerified) redirect(returnTo);
-  if (session?.user) {
-    redirect(authPath("verify", locale, { returnTo }));
-  }
+  // One test, not two. A session cannot exist unless Better Auth applied
+  // whatever factor is armed on the account, so there is never a signed-in
+  // visitor still owing a code; whether a *role* obliges this account to enrol
+  // one is `requireEditor`'s question, on the page they are heading for.
+  if (session?.user) redirect(returnTo);
 
   return (
     <AuthShell

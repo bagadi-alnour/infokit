@@ -26,6 +26,8 @@ import {
   assets,
   assetTranslations,
   audienceCategories,
+  basicInformationDetails,
+  editorialCustodianships,
   editorialEntries,
   editorialEntryAssets,
   editorialEntryRoutes,
@@ -929,4 +931,187 @@ export async function loadPublishedOrganization(
     fallbackUsed: localized.languageCode !== locale,
     contentLanguage: localized.languageCode,
   };
+}
+
+/**
+ * One published basic-information tile: a number to press, or a page to open.
+ *
+ * The words are editorial — authored, translated and reviewed like any other
+ * entry — and everything a translator must never touch is beside them: the
+ * digits, how they are reached, and whose phone rings. That last one,
+ * `operator`, is what the home page splits its two blocks on.
+ */
+export interface PublishedBasicInformation {
+  id: string;
+  slug: string;
+  languageCode: string;
+  /** True when the reader's own language had no publication of this tile. */
+  fallbackUsed: boolean;
+  title: string;
+  /**
+   * The sentence saying when to use this. Nullable because the column is: a
+   * tile can be published as a bare label and a number, and a card with no
+   * sentence is better than one padded with invented context.
+   */
+  summary: string | null;
+  icon: string;
+  priority: number;
+  /** The one number for danger, drawn loudest. At most one tile carries it. */
+  emergency: boolean;
+  operator: "state" | "association";
+  /** The digits as published, or null for a tile that opens a page. */
+  dial: string | null;
+  reach: "voice" | "sms" | "whatsapp" | null;
+  /** The number actually pressed, when that is not the one printed. */
+  dialInstead: string | null;
+  /** The association whose phone this is, or null for a state number. */
+  answeredBy: string | null;
+  /**
+   * Who maintains the record right now: the platform, or the organisation whose
+   * phone rings. It is the only fact the database holds that answers "has anyone
+   * on the other end of this line stood behind what it says" — the platform can
+   * copy a number out of a printed guide, but only the association can take the
+   * record on. The public surface turns it into the card's badge
+   * (`public-basics-payload.ts`); `lastReviewedAt` cannot do that job, because a
+   * platform editor rechecking a copied number also stamps that.
+   */
+  custodian: "platform" | "organization" | null;
+  lastReviewedAt: Date | null;
+  reviewDueAt: Date | null;
+}
+
+/**
+ * Every basic-information tile that is published, in the reader's language.
+ *
+ * Read exactly the way `listPublishedArticles` reads articles — same join to
+ * `editorial_publications`, same unpublish and schedule conditions, same
+ * language fallback — because these are editorial entries and the rule for what
+ * is public should not be re-invented per kind.
+ *
+ * The fallback matters more here than elsewhere. Eight of the eleven languages
+ * are only partly translated, so a tile may have no publication in the reader's
+ * language; falling back to the source language shows them a sentence they may
+ * not read, next to a number they can dial anyway. A tile withheld because its
+ * wording is missing would take the number with it, which is the worse failure.
+ */
+export async function listPublishedBasicInformation(
+  locale: PublicLocale,
+): Promise<PublishedBasicInformation[]> {
+  const now = new Date();
+  const rows = await db
+    .select({
+      entryId: editorialEntries.id,
+      slug: editorialEntries.slug,
+      sourceLanguage: editorialRevisions.sourceLanguageCode,
+      languageCode: editorialPublications.languageCode,
+      title: editorialRevisionTranslations.title,
+      summary: editorialRevisionTranslations.summary,
+      icon: basicInformationDetails.icon,
+      priority: basicInformationDetails.priority,
+      emergency: basicInformationDetails.emergency,
+      operator: basicInformationDetails.operator,
+      dial: basicInformationDetails.dial,
+      reach: basicInformationDetails.reach,
+      dialInstead: basicInformationDetails.dialInstead,
+      answeredBy: organizations.displayName,
+      custodian: editorialCustodianships.custodianKind,
+      lastReviewedAt: editorialRevisions.lastReviewedAt,
+      reviewDueAt: editorialRevisions.reviewDueAt,
+    })
+    .from(editorialEntries)
+    .innerJoin(
+      editorialPublications,
+      eq(editorialPublications.entryId, editorialEntries.id),
+    )
+    .innerJoin(
+      editorialRevisions,
+      eq(editorialRevisions.id, editorialPublications.revisionId),
+    )
+    .innerJoin(
+      editorialRevisionTranslations,
+      and(
+        eq(
+          editorialRevisionTranslations.revisionId,
+          editorialPublications.revisionId,
+        ),
+        eq(
+          editorialRevisionTranslations.languageCode,
+          editorialPublications.languageCode,
+        ),
+      ),
+    )
+    .innerJoin(
+      basicInformationDetails,
+      eq(basicInformationDetails.entryId, editorialEntries.id),
+    )
+    // Left, not inner: a state number has no association behind it, and an inner
+    // join would silently drop 112.
+    .leftJoin(
+      organizations,
+      eq(organizations.id, basicInformationDetails.answeredByOrganizationId),
+    )
+    // The custody in force, if any. One row at most: the table's unique index
+    // allows a single open custodianship per entry, so this cannot multiply the
+    // rows the language fallback below is choosing between.
+    .leftJoin(
+      editorialCustodianships,
+      and(
+        eq(editorialCustodianships.entryId, editorialEntries.id),
+        isNull(editorialCustodianships.endedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(editorialEntries.kind, "basic_information"),
+        isNull(editorialEntries.archivedAt),
+        isNull(editorialPublications.unpublishedAt),
+        or(
+          isNull(editorialPublications.scheduledFor),
+          lte(editorialPublications.scheduledFor, now),
+        ),
+      ),
+    );
+
+  const rowsByEntry = new Map<string, (typeof rows)[number][]>();
+  for (const row of rows) {
+    const entries = rowsByEntry.get(row.entryId) ?? [];
+    entries.push(row);
+    rowsByEntry.set(row.entryId, entries);
+  }
+
+  return (
+    [...rowsByEntry.values()]
+      .flatMap((entryRows) => {
+        const sourceLanguage = entryRows[0]?.sourceLanguage;
+        const row =
+          entryRows.find((candidate) => candidate.languageCode === locale) ??
+          entryRows.find(
+            (candidate) => candidate.languageCode === sourceLanguage,
+          ) ??
+          entryRows[0];
+        return row ? [row] : [];
+      })
+      .map((row) => ({
+        id: row.entryId,
+        slug: row.slug,
+        languageCode: row.languageCode,
+        fallbackUsed: row.languageCode !== locale,
+        title: row.title,
+        summary: row.summary,
+        icon: row.icon,
+        priority: row.priority,
+        emergency: row.emergency,
+        operator: row.operator,
+        dial: row.dial,
+        reach: row.reach,
+        dialInstead: row.dialInstead,
+        answeredBy: row.answeredBy,
+        custodian: row.custodian,
+        lastReviewedAt: row.lastReviewedAt,
+        reviewDueAt: row.reviewDueAt,
+      }))
+      // `priority` is the editor's ordering and is spaced by ten so a number can
+      // be slotted between two others without renumbering the block.
+      .sort((a, b) => a.priority - b.priority)
+  );
 }

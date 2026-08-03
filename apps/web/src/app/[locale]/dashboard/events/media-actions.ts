@@ -1,7 +1,7 @@
 "use server";
 
 import { type Locale } from "@infokit/shared/i18n";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -10,7 +10,6 @@ import { eventLanguages } from "~/lib/event-languages";
 import { maxUploadBytes } from "~/lib/image-compression";
 import { recordAudit } from "~/server/audit";
 import { createAssetUploadUrl } from "~/server/assets/s3";
-import { scanUploadedAsset } from "~/server/assets/scan";
 import {
   protectedPermissionAction,
   requireEditor,
@@ -20,6 +19,9 @@ import {
   coordinationViewer,
 } from "~/server/content/coordination-events";
 import {
+  appendEventFlyer,
+  attachEventCover,
+  claimUploadedAsset,
   EVENT_COVER_ROLE,
   EVENT_FLYER_ROLE,
 } from "~/server/content/event-media";
@@ -72,33 +74,17 @@ async function assertMayManage(id: string) {
   return event;
 }
 
-/** The uploader's own fresh, rights-confirmed file — nobody else's. */
-async function claimUpload(
-  id: string,
-  kind: "image" | "document",
-  uploaderId: string,
-) {
-  const [asset] = await db
-    .select({
-      id: assets.id,
-      storageKey: assets.storageKey,
-      mimeType: assets.mimeType,
-      byteSize: assets.byteSize,
-      scanState: assets.scanState,
-    })
-    .from(assets)
-    .where(
-      and(
-        eq(assets.id, id),
-        eq(assets.uploaderId, uploaderId),
-        eq(assets.kind, kind),
-        eq(assets.rightsConfirmed, true),
-        isNull(assets.archivedAt),
-      ),
-    )
-    .limit(1);
-  if (!asset) throw new Error("The uploaded file is unavailable");
-  await scanUploadedAsset(asset);
+/**
+ * The event an upload is being prepared for, when there is one.
+ *
+ * A file chosen while the event is still being written has no event to check
+ * against — nothing exists yet to be a member of. The permission this action
+ * already carries is the whole gate there, and the asset reaches no reader
+ * until `createCoordinationEvent` attaches it to an event its author may host.
+ */
+async function uploadContext(value: FormDataEntryValue | null) {
+  if (value === null || value === "") return null;
+  return assertMayManage(eventId.parse(value));
 }
 
 function refresh(locale: Locale, id: string) {
@@ -128,7 +114,7 @@ export const createEventImageUpload = protectedPermissionAction(
       altText: formData.get("altText"),
       rightsConfirmed: formData.get("rightsConfirmed"),
     });
-    const event = await assertMayManage(eventId.parse(formData.get("eventId")));
+    const event = await uploadContext(formData.get("eventId"));
 
     const id = crypto.randomUUID();
     const storageKey = `uploads/events/${id}/original`;
@@ -166,10 +152,10 @@ export const createEventImageUpload = protectedPermissionAction(
       action: "asset.upload_authorized",
       subjectType: "asset",
       subjectId: id,
-      organizationId: event.hostOrganizationId,
+      organizationId: event?.hostOrganizationId ?? null,
       metadata: {
         kind: "image",
-        context: "coordination_event",
+        context: event ? "coordination_event" : "coordination_event_draft",
         mimeType: parsed.mimeType,
         byteSize: parsed.byteSize,
         languageCode: parsed.languageCode,
@@ -186,25 +172,15 @@ export const setEventCoverImage = protectedPermissionAction(
     const id = eventId.parse(formData.get("eventId"));
     const uploaded = assetId.parse(formData.get("assetId"));
     const event = await assertMayManage(id);
-    await claimUpload(uploaded, "image", user.id);
-
-    await db.transaction(async (tx) => {
-      // One cover: replacing it detaches the previous file, which stays in
-      // storage and in the trail rather than disappearing.
-      await tx
-        .delete(coordinationEventAssets)
-        .where(
-          and(
-            eq(coordinationEventAssets.eventId, id),
-            eq(coordinationEventAssets.role, EVENT_COVER_ROLE),
-          ),
-        );
-      await tx.insert(coordinationEventAssets).values({
-        eventId: id,
-        assetId: uploaded,
-        role: EVENT_COVER_ROLE,
-        languageCode: event.sourceLanguageCode,
-      });
+    await claimUploadedAsset({
+      assetId: uploaded,
+      kind: "image",
+      uploaderId: user.id,
+    });
+    await attachEventCover({
+      eventId: id,
+      assetId: uploaded,
+      languageCode: event.sourceLanguageCode,
     });
     await recordAudit({
       action: "coordination_event.cover_set",
@@ -258,7 +234,7 @@ export const createEventFlyerUpload = protectedPermissionAction(
       languageCode: formData.get("languageCode"),
       rightsConfirmed: formData.get("rightsConfirmed"),
     });
-    const event = await assertMayManage(eventId.parse(formData.get("eventId")));
+    const event = await uploadContext(formData.get("eventId"));
 
     const id = crypto.randomUUID();
     const storageKey = `uploads/events/${id}/flyer.pdf`;
@@ -284,10 +260,10 @@ export const createEventFlyerUpload = protectedPermissionAction(
       action: "asset.upload_authorized",
       subjectType: "asset",
       subjectId: id,
-      organizationId: event.hostOrganizationId,
+      organizationId: event?.hostOrganizationId ?? null,
       metadata: {
         kind: "document",
-        context: "coordination_event",
+        context: event ? "coordination_event" : "coordination_event_draft",
         mimeType: "application/pdf",
         byteSize: parsed.byteSize,
         languageCode: parsed.languageCode,
@@ -317,37 +293,16 @@ export const addEventFlyer = protectedPermissionAction(
       title: formData.get("title"),
     });
     const event = await assertMayManage(id);
-    await claimUpload(uploaded, "document", user.id);
-
-    await db.transaction(async (tx) => {
-      const existing = await tx
-        .select({ id: coordinationEventAssets.id })
-        .from(coordinationEventAssets)
-        .where(
-          and(
-            eq(coordinationEventAssets.eventId, id),
-            eq(coordinationEventAssets.role, EVENT_FLYER_ROLE),
-          ),
-        );
-      await tx.insert(coordinationEventAssets).values({
-        eventId: id,
-        assetId: uploaded,
-        role: EVENT_FLYER_ROLE,
-        languageCode: parsed.languageCode,
-        displayOrder: existing.length,
-      });
-      await tx
-        .insert(assetTranslations)
-        .values({
-          assetId: uploaded,
-          languageCode: parsed.languageCode,
-          title: parsed.title,
-          state: "draft",
-        })
-        .onConflictDoUpdate({
-          target: [assetTranslations.assetId, assetTranslations.languageCode],
-          set: { title: parsed.title },
-        });
+    await claimUploadedAsset({
+      assetId: uploaded,
+      kind: "document",
+      uploaderId: user.id,
+    });
+    await appendEventFlyer({
+      eventId: id,
+      assetId: uploaded,
+      languageCode: parsed.languageCode,
+      title: parsed.title,
     });
     await recordAudit({
       action: "coordination_event.flyer_added",

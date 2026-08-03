@@ -41,6 +41,12 @@ export type TranslationAssignmentSummary = {
   state: string;
   translatorEmail: string;
   translatorName: string | null;
+  /**
+   * When the link was sent, already formatted in the reader's locale. It is what
+   * turns "request a translation" into "a translation was requested": an errand
+   * with no date on it reads as one nobody has run yet.
+   */
+  requestedAt: string;
   expiresAt: string;
 };
 

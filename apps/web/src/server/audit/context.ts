@@ -66,7 +66,13 @@ function trim(value: string | null | undefined, max: number): string | null {
   return cleaned.length > max ? cleaned.slice(0, max) : cleaned;
 }
 
-function clientAddress(bag: Headers): string | null {
+/**
+ * Exported for the one other column that stores an address the edge reported:
+ * `auth.trusted_devices.ip_address`, shown so somebody can recognise the device
+ * they are about to revoke. The parsing is fiddly enough — forwarded chains,
+ * bracketed IPv6, ports — that a second copy would be a second set of bugs.
+ */
+export function clientAddress(bag: Headers): string | null {
   for (const name of CLIENT_IP_HEADERS) {
     const raw = bag.get(name);
     if (!raw) continue;

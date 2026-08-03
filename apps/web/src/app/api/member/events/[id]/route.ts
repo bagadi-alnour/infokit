@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { recordRestrictedRead } from "~/server/audit/reads";
-import { deviceViewer } from "~/server/auth/device-session";
+import { memberViewer } from "~/server/auth/member-viewer";
 import { loadMemberEventPayload } from "~/server/content/member-payload";
 import {
   memberJson,
@@ -17,7 +17,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const viewer = await deviceViewer(request);
+  const viewer = await memberViewer(request);
   if (!viewer) return memberUnauthorized();
   const parsed = z
     .string()
@@ -30,7 +30,7 @@ export async function GET(
     eventId: parsed.data,
   });
   if (!payload) {
-    // A device session asking by id for an event its memberships do not open.
+    // A member session asking by id for an event its memberships do not open.
     // The answer stays 404 — the tier hides existence — and the attempt is
     // written down, because a phone walking a list of ids looks like nothing at
     // all from one request.

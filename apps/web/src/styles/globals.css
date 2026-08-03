@@ -334,30 +334,56 @@
 }
 
 /* Leaflet renders its own chrome; the tokens own its colours. */
-.leaflet-container {
+.leaflet-container.infokit-map {
   font-family: var(--infokit-font-body);
-  background: var(--infokit-surface-subtle);
+  background: var(--infokit-map-canvas);
 }
 
-.leaflet-container a.leaflet-popup-close-button,
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
+/*
+ * Standard OSM raster tiles have no dark variant. Keep that private, keyless
+ * source and quieten its printed palette in dark mode; the token-owned map
+ * background then supplies the colour family. Controls, popups, and pins stay
+ * crisp and are styled separately below.
+ */
+.infokit-map .infokit-soft-plan-tiles {
+  filter: grayscale(0.85) saturate(0.35) contrast(0.9);
+  mix-blend-mode: luminosity;
+  /* Leaflet writes opacity inline while fading tile layers. */
+  opacity: 0.82 !important;
+}
+
+:root[data-theme="dark"] .infokit-map .infokit-plan-tiles {
+  filter: grayscale(1) invert(1) brightness(0.86) contrast(1.12);
+  mix-blend-mode: luminosity;
+  /* Let the #11403C map canvas remain the dominant dark-mode colour. */
+  opacity: 0.62 !important;
+}
+
+:root[data-theme="dark"] .infokit-map .infokit-soft-plan-tiles {
+  filter: grayscale(1) invert(1) brightness(0.96) contrast(0.9);
+  mix-blend-mode: luminosity;
+  opacity: 0.42 !important;
+}
+
+.infokit-map a.leaflet-popup-close-button,
+.infokit-map .leaflet-popup-content-wrapper,
+.infokit-map .leaflet-popup-tip {
   background: var(--infokit-surface);
   color: var(--infokit-ink);
 }
 
-.leaflet-popup-content-wrapper {
+.infokit-map .leaflet-popup-content-wrapper {
   border-radius: var(--infokit-radius-control);
   box-shadow: var(--infokit-shadow-md);
 }
 
-.leaflet-bar a,
-.leaflet-control-attribution {
+.infokit-map .leaflet-bar a,
+.infokit-map .leaflet-control-attribution {
   background: var(--infokit-surface);
   color: var(--infokit-ink);
   border-color: var(--infokit-border);
 }
 
-.leaflet-control-attribution a {
+.infokit-map .leaflet-control-attribution a {
   color: var(--infokit-accent-deep);
 }

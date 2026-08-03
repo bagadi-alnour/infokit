@@ -1,7 +1,10 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import { createAssetReadUrl } from "~/server/assets/s3";
-import { sanitizedImageRendition } from "~/server/assets/scan";
+import {
+  sanitizedImageRendition,
+  scanUploadedAsset,
+} from "~/server/assets/scan";
 import { db } from "~/server/db";
 import {
   assetTranslations,
@@ -27,6 +30,120 @@ import {
 /** The roles an event asset may take. */
 export const EVENT_COVER_ROLE = "cover";
 export const EVENT_FLYER_ROLE = "flyer";
+
+/**
+ * Take delivery of a file the uploader was handed a signed URL for: theirs,
+ * fresh, rights-confirmed, and not archived. The safety scan runs here, so a
+ * file is only ever attached to an event once storage confirms what arrived.
+ *
+ * Shared by the media actions and by event creation, where the upload happens
+ * before the event it belongs to exists.
+ */
+export async function claimUploadedAsset({
+  assetId,
+  kind,
+  uploaderId,
+}: {
+  assetId: string;
+  kind: "image" | "document";
+  uploaderId: string;
+}) {
+  const [asset] = await db
+    .select({
+      id: assets.id,
+      storageKey: assets.storageKey,
+      mimeType: assets.mimeType,
+      byteSize: assets.byteSize,
+      scanState: assets.scanState,
+    })
+    .from(assets)
+    .where(
+      and(
+        eq(assets.id, assetId),
+        eq(assets.uploaderId, uploaderId),
+        eq(assets.kind, kind),
+        eq(assets.rightsConfirmed, true),
+        isNull(assets.archivedAt),
+      ),
+    )
+    .limit(1);
+  if (!asset) throw new Error("The uploaded file is unavailable");
+  await scanUploadedAsset(asset);
+}
+
+/**
+ * The event's one cover image. Replacing it detaches the previous file, which
+ * stays in storage and in the trail rather than disappearing.
+ */
+export async function attachEventCover({
+  eventId,
+  assetId,
+  languageCode,
+}: {
+  eventId: string;
+  assetId: string;
+  languageCode: string;
+}) {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(coordinationEventAssets)
+      .where(
+        and(
+          eq(coordinationEventAssets.eventId, eventId),
+          eq(coordinationEventAssets.role, EVENT_COVER_ROLE),
+        ),
+      );
+    await tx.insert(coordinationEventAssets).values({
+      eventId,
+      assetId,
+      role: EVENT_COVER_ROLE,
+      languageCode,
+    });
+  });
+}
+
+/**
+ * One more flyer, last in the list. The title lives on the asset's own
+ * translation rather than in `content.downloads`: that table needs an owning
+ * organisation, and an event may be hosted by the platform itself.
+ */
+export async function appendEventFlyer({
+  eventId,
+  assetId,
+  languageCode,
+  title,
+}: {
+  eventId: string;
+  assetId: string;
+  languageCode: string;
+  title: string;
+}) {
+  await db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ id: coordinationEventAssets.id })
+      .from(coordinationEventAssets)
+      .where(
+        and(
+          eq(coordinationEventAssets.eventId, eventId),
+          eq(coordinationEventAssets.role, EVENT_FLYER_ROLE),
+        ),
+      );
+    await tx.insert(coordinationEventAssets).values({
+      eventId,
+      assetId,
+      role: EVENT_FLYER_ROLE,
+      languageCode,
+      displayOrder: existing.length,
+    });
+    await tx
+      .insert(assetTranslations)
+      .values({ assetId, languageCode, title, state: "draft" })
+      .onConflictDoUpdate({
+        target: [assetTranslations.assetId, assetTranslations.languageCode],
+        set: { title },
+      });
+  });
+}
 
 export interface PublicEventCover {
   url: string;

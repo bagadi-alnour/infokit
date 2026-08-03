@@ -9,6 +9,7 @@ import type {
   CoordinationEventRecord,
 } from "~/server/content/coordination-events";
 import {
+  eventCity,
   eventDetailView,
   eventWhereLabel,
   formatEventRange,
@@ -36,7 +37,7 @@ export function toTableRows({
   return events.map((event) => {
     const range = formatEventRange(
       event,
-      cityById.get(event.cityId),
+      eventCity(cityById, event),
       locale,
       labels,
     );
@@ -54,7 +55,7 @@ export function toTableRows({
       dateLabel: range.dateLabel,
       timeLabel: range.timeLabel,
       whereLabel: eventWhereLabel(event),
-      cityName: cityById.get(event.cityId)?.name ?? "",
+      cityName: eventCity(cityById, event)?.name ?? "",
     };
   });
 }
@@ -74,7 +75,7 @@ export function toCalendarItems({
   visibilityLabels: Record<EventVisibilityValue, string>;
 }): EventCalendarItem[] {
   return events.map((event) => {
-    const city = cityById.get(event.cityId);
+    const city = eventCity(cityById, event);
     const range = formatEventRange(event, city, locale, labels);
     const href = localizedPath(`/dashboard/events/${event.id}`, locale);
     return {

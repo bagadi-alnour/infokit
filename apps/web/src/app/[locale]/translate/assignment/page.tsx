@@ -3,9 +3,12 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import { Languages, LockKeyhole } from "lucide-react";
 
 import { saveExternalTranslation } from "~/app/[locale]/translate/assignment/actions";
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { PendingButton } from "~/components/pending-button";
 import { SimulatorTranslationAssignment } from "~/components/simulator-translation-assignment";
+import { TranslatorContextPanel } from "~/components/translator-context-panel";
 import { TranslatorProfileInvitation } from "~/components/translator-profile-invitation";
+import { TranslatorRichTextField } from "~/components/translator-rich-text-field";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Field, FieldDescription, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
@@ -15,36 +18,54 @@ import {
   editorialTextDirection,
   type EditorialLanguage,
 } from "~/lib/editorial-languages";
+import { buildWorkspaceLabels } from "~/lib/workspace-labels";
 import { recordRestrictedRead } from "~/server/audit/reads";
 import { db } from "~/server/db";
 import {
   translationAssignments,
   translationSourceVersions,
 } from "~/server/db/schema";
+import {
+  hasAssignmentContext,
+  loadAssignmentContext,
+} from "~/server/translation/assignment-context";
 import { readTranslationAssignmentSession } from "~/server/translation-assignment-session";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type SourcePayload = {
+/** The translatable fields of one language, as a sealed source version holds them. */
+type SourceFields = {
+  title?: unknown;
+  summary?: unknown;
+  /** Present when the text was authored in the rich-text editor. */
+  bodyHtml?: unknown;
+  plainText?: unknown;
+  /** Organisation narrative fields. */
+  purpose?: unknown;
+  goals?: unknown;
+  values?: unknown;
+};
+
+/**
+ * A sealed source payload, in the two shapes the content types write it in.
+ *
+ * An article and an organisation narrative key their fields by language, because
+ * a revision carries every language it was saved with. An activity seals only
+ * the language it was authored in — sealing the rest would declare every
+ * translation stale each time a translator touched one — so it writes those
+ * fields flat. `sourceFieldsOf` reads both, rather than each screen having to
+ * know which content type it is looking at.
+ */
+type SourcePayload = SourceFields & {
   sourceLanguage?: unknown;
-  translations?: Record<
-    string,
-    {
-      title?: unknown;
-      summary?: unknown;
-      plainText?: unknown;
-      /** Organisation narrative fields. */
-      purpose?: unknown;
-      goals?: unknown;
-      values?: unknown;
-    }
-  >;
+  translations?: Record<string, SourceFields>;
 };
 
 type TargetPayload = {
   title?: unknown;
   summary?: unknown;
+  bodyHtml?: unknown;
   plainText?: unknown;
   purpose?: unknown;
   goals?: unknown;
@@ -55,17 +76,29 @@ function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function sourceFieldsOf(
+  payload: SourcePayload,
+  sourceLanguage: string,
+): SourceFields {
+  return payload.translations?.[sourceLanguage] ?? payload;
+}
+
 export default async function TranslationAssignmentPage({
   params,
 }: {
   params: Promise<{ locale: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const [labels, simulatorLabels, consoleLabels] = await Promise.all([
-    loadPageCatalog(locale, "dashboard-articles"),
-    loadPageCatalog(locale, "dashboard-simulator"),
-    loadPageCatalog(locale, "dashboard-console"),
-  ]);
+  const [labels, simulatorLabels, consoleLabels, overviewLabels] =
+    await Promise.all([
+      loadPageCatalog(locale, "dashboard-articles"),
+      loadPageCatalog(locale, "dashboard-simulator"),
+      loadPageCatalog(locale, "dashboard-console"),
+      // The rich-text editor's own vocabulary lives once, in the create
+      // catalogue, and travels with the editor wherever it is mounted.
+      loadPageCatalog(locale, "dashboard-overview"),
+    ]);
+  const editorLabels = buildWorkspaceLabels(overviewLabels);
   // Article keys win: the console catalog only fills in the organisation
   // narrative field names this page borrows.
   const text: Record<string, string> = {
@@ -79,6 +112,7 @@ export default async function TranslationAssignmentPage({
         .select({
           id: translationAssignments.id,
           entityKind: translationAssignments.entityKind,
+          entityId: translationAssignments.entityId,
           /** Present only when the link went to someone the directory knows. */
           translatorId: translationAssignments.translatorId,
           targetLanguage: translationAssignments.targetLanguageCode,
@@ -140,8 +174,10 @@ export default async function TranslationAssignmentPage({
   }
 
   const sourcePayload = assignment.sourceContent as SourcePayload;
-  const sourceTranslation =
-    sourcePayload.translations?.[assignment.sourceLanguage];
+  const sourceTranslation = sourceFieldsOf(
+    sourcePayload,
+    assignment.sourceLanguage,
+  );
   const target = assignment.targetContent as TargetPayload | null;
   const editable =
     assignment.state === "requested" || assignment.state === "draft";
@@ -150,6 +186,26 @@ export default async function TranslationAssignmentPage({
   const targetDir = editorialTextDirection(
     assignment.targetLanguage as EditorialLanguage,
   );
+  /**
+   * Only what the source actually holds is asked for. A record with no summary
+   * offering a summary field invites a translator to write one, and a sentence
+   * nobody authored in the source language is not a translation of anything.
+   */
+  const sourceBodyHtml = asText(sourceTranslation.bodyHtml);
+  const sourcePlainText = asText(sourceTranslation.plainText);
+  const hasSummary = asText(sourceTranslation.summary).length > 0;
+  const hasBody = Boolean(sourceBodyHtml || sourcePlainText);
+  /**
+   * The record the words belong to: its photo, and the labels it already
+   * carries in this translator's language. Reference only — see
+   * `~/server/translation/assignment-context`.
+   */
+  const context = await loadAssignmentContext({
+    kind: assignment.entityKind,
+    entityId: assignment.entityId,
+    targetLanguage: assignment.targetLanguage,
+    sourceLanguage: assignment.sourceLanguage,
+  });
 
   if (assignment.entityKind === "simulator_flow") {
     return (
@@ -195,6 +251,17 @@ export default async function TranslationAssignmentPage({
         <TranslatorProfileInvitation locale={locale} labels={labels} />
       ) : null}
 
+      {/* The record before its words: a translator who can see the photo and
+       * the labels the record already carries is translating a thing, not a
+       * paragraph. */}
+      {hasAssignmentContext(context) ? (
+        <TranslatorContextPanel
+          context={context}
+          direction={targetDir}
+          labels={text}
+        />
+      ) : null}
+
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -217,9 +284,9 @@ export default async function TranslationAssignmentPage({
               <>
                 {(
                   [
-                    ["field.purpose", sourceTranslation?.purpose],
-                    ["field.goals", sourceTranslation?.goals],
-                    ["field.values", sourceTranslation?.values],
+                    ["field.purpose", sourceTranslation.purpose],
+                    ["field.goals", sourceTranslation.goals],
+                    ["field.values", sourceTranslation.values],
                   ] as const
                 ).map(([labelKey, value]) =>
                   asText(value) ? (
@@ -241,32 +308,40 @@ export default async function TranslationAssignmentPage({
                   {labels["field.title"]}
                 </p>
                 <p className="mt-1.5 text-xl font-semibold">
-                  {typeof sourceTranslation?.title === "string"
-                    ? sourceTranslation.title
-                    : labels.untitled}
+                  {asText(sourceTranslation.title) || labels.untitled}
                 </p>
               </div>
             )}
-            {!isOrganization &&
-            typeof sourceTranslation?.summary === "string" ? (
+            {!isOrganization && hasSummary ? (
               <div>
                 <p className="text-copy-muted text-xs font-medium uppercase tracking-wide">
                   {labels["field.summary"]}
                 </p>
                 <p className="mt-1.5 leading-relaxed">
-                  {sourceTranslation.summary}
+                  {asText(sourceTranslation.summary)}
                 </p>
               </div>
             ) : null}
-            {!isOrganization &&
-            typeof sourceTranslation?.plainText === "string" ? (
+            {!isOrganization && hasBody ? (
               <div>
                 <p className="text-copy-muted text-xs font-medium uppercase tracking-wide">
                   {labels["field.body"]}
                 </p>
-                <p className="mt-1.5 whitespace-pre-wrap leading-relaxed">
-                  {sourceTranslation.plainText}
-                </p>
+                {/* Shown with its headings, lists and links intact: a
+                 * translator asked to reproduce structure has to be able to see
+                 * it. The markup was sanitised before it was stored
+                 * (`sanitizeRichText`) and the source version sealed a copy of
+                 * that same sanitised text. */}
+                {sourceBodyHtml ? (
+                  <div
+                    className="prose-article [&_a]:text-brand mt-1.5 leading-relaxed [&_a]:underline [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:ps-5 [&_p:not(:last-child)]:mb-3 [&_ul]:list-disc [&_ul]:ps-5"
+                    dangerouslySetInnerHTML={{ __html: sourceBodyHtml }}
+                  />
+                ) : (
+                  <p className="mt-1.5 whitespace-pre-wrap leading-relaxed">
+                    {sourcePlainText}
+                  </p>
+                )}
               </div>
             ) : null}
           </CardContent>
@@ -288,7 +363,17 @@ export default async function TranslationAssignmentPage({
               </div>
             ) : null}
             {editable && isOrganization ? (
-              <form action={saveExternalTranslation} className="grid gap-4">
+              <ActionFeedbackForm
+                action={saveExternalTranslation}
+                successMessage={labels["translator.draftSaved"]}
+                successMessageField="intent"
+                successMessages={{
+                  draft: labels["translator.draftSaved"],
+                  submit: labels["translator.submittedSuccess"],
+                }}
+                errorMessage={labels["translator.saveError"]}
+                className="grid gap-4"
+              >
                 <input type="hidden" name="locale" value={locale} />
                 <input
                   type="hidden"
@@ -347,9 +432,19 @@ export default async function TranslationAssignmentPage({
                     {labels["translator.submit"]}
                   </PendingButton>
                 </div>
-              </form>
+              </ActionFeedbackForm>
             ) : editable ? (
-              <form action={saveExternalTranslation} className="grid gap-4">
+              <ActionFeedbackForm
+                action={saveExternalTranslation}
+                successMessage={labels["translator.draftSaved"]}
+                successMessageField="intent"
+                successMessages={{
+                  draft: labels["translator.draftSaved"],
+                  submit: labels["translator.submittedSuccess"],
+                }}
+                errorMessage={labels["translator.saveError"]}
+                className="grid gap-4"
+              >
                 <input type="hidden" name="locale" value={locale} />
                 <Field>
                   <FieldLabel htmlFor="translation-title">
@@ -358,54 +453,60 @@ export default async function TranslationAssignmentPage({
                   <Input
                     id="translation-title"
                     name="title"
-                    defaultValue={
-                      typeof target?.title === "string" ? target.title : ""
-                    }
-                    dir={editorialTextDirection(
-                      assignment.targetLanguage as EditorialLanguage,
-                    )}
+                    defaultValue={asText(target?.title)}
+                    dir={targetDir}
                     maxLength={200}
                   />
                 </Field>
-                <Field>
-                  <FieldLabel htmlFor="translation-summary">
-                    {labels["field.summary"]}
-                  </FieldLabel>
-                  <Textarea
-                    id="translation-summary"
-                    name="summary"
-                    defaultValue={
-                      typeof target?.summary === "string" ? target.summary : ""
-                    }
-                    dir={editorialTextDirection(
-                      assignment.targetLanguage as EditorialLanguage,
+                {hasSummary ? (
+                  <Field>
+                    <FieldLabel htmlFor="translation-summary">
+                      {labels["field.summary"]}
+                    </FieldLabel>
+                    <Textarea
+                      id="translation-summary"
+                      name="summary"
+                      defaultValue={asText(target?.summary)}
+                      dir={targetDir}
+                      rows={4}
+                      maxLength={2000}
+                    />
+                  </Field>
+                ) : null}
+                {hasBody ? (
+                  <Field>
+                    <FieldLabel htmlFor="translation-body">
+                      {labels["field.body"]}
+                    </FieldLabel>
+                    {/* The field matches the field the source was written in:
+                     * rich text where the newsroom used the editor, a plain box
+                     * where the source is one sentence. */}
+                    {sourceBodyHtml ? (
+                      <TranslatorRichTextField
+                        name="bodyHtml"
+                        locale={locale}
+                        direction={targetDir}
+                        defaultHtml={asText(target?.bodyHtml)}
+                        placeholder={labels["translator.bodyPlaceholder"]}
+                        labels={editorLabels}
+                      />
+                    ) : (
+                      <Textarea
+                        id="translation-body"
+                        name="body"
+                        defaultValue={asText(target?.plainText)}
+                        dir={targetDir}
+                        rows={14}
+                        maxLength={40_000}
+                      />
                     )}
-                    rows={4}
-                    maxLength={2000}
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="translation-body">
-                    {labels["field.body"]}
-                  </FieldLabel>
-                  <Textarea
-                    id="translation-body"
-                    name="body"
-                    defaultValue={
-                      typeof target?.plainText === "string"
-                        ? target.plainText
-                        : ""
-                    }
-                    dir={editorialTextDirection(
-                      assignment.targetLanguage as EditorialLanguage,
-                    )}
-                    rows={14}
-                    maxLength={40_000}
-                  />
-                  <FieldDescription>
-                    {labels["translator.bodyHint"]}
-                  </FieldDescription>
-                </Field>
+                    <FieldDescription>
+                      {sourceBodyHtml
+                        ? labels["translator.bodyRichHint"]
+                        : labels["translator.bodyHint"]}
+                    </FieldDescription>
+                  </Field>
+                ) : null}
                 <div className="flex flex-wrap justify-end gap-2">
                   <PendingButton
                     variant="secondary"
@@ -418,7 +519,7 @@ export default async function TranslationAssignmentPage({
                     {labels["translator.submit"]}
                   </PendingButton>
                 </div>
-              </form>
+              </ActionFeedbackForm>
             ) : (
               <p className="text-copy-muted text-sm">
                 {text[`translator.state.${assignment.state}`] ??

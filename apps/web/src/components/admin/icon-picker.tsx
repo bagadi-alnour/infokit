@@ -19,6 +19,7 @@ import { cn } from "~/lib/utils";
  */
 export function IconPicker({
   name,
+  form,
   icons,
   defaultValue = "circle-help",
   ariaLabel,
@@ -27,6 +28,8 @@ export function IconPicker({
   variant = "dropdown",
 }: {
   name: string;
+  /** Associate the posted value with a form elsewhere on the page. */
+  form?: string;
   icons: readonly string[];
   defaultValue?: string;
   ariaLabel?: string;
@@ -94,7 +97,7 @@ export function IconPicker({
   if (variant === "grid") {
     return (
       <div className="flex flex-col gap-2.5">
-        <input type="hidden" name={name} value={selected} />
+        <input type="hidden" name={name} form={form} value={selected} />
         {grid}
       </div>
     );
@@ -102,7 +105,7 @@ export function IconPicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <input type="hidden" name={name} value={selected} />
+      <input type="hidden" name={name} form={form} value={selected} />
       <PopoverTrigger
         aria-label={ariaLabel}
         className="border-input bg-background focus-visible:ring-brand/50 flex min-h-9 w-full items-center gap-2 rounded-md border px-3 py-1 text-sm outline-none focus-visible:ring-2"

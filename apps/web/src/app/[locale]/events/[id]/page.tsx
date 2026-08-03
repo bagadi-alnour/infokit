@@ -7,6 +7,8 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import { ContactValue, contactIcon } from "~/components/public/contact-value";
+import { ListenControl } from "~/components/public/listen-control";
+import { listenControlLabels } from "~/components/public/listen-control-copy";
 import {
   ActionAnchor,
   ActionLink,
@@ -14,6 +16,7 @@ import {
   Chip,
   EventDateBlock,
   MetaRow,
+  OnlineChip,
   SurfaceCard,
   inlineLinkClass,
 } from "~/components/public/primitives";
@@ -26,6 +29,7 @@ import { JsonLd } from "~/components/seo/json-ld";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { eventIcsHref, eventMapHref } from "~/lib/event-links";
+import { publicSpeechHref } from "~/lib/public-speech";
 import { presentTransitLinks } from "~/lib/transit-presentation";
 import { metaDescription, publicMetadata } from "~/seo/metadata";
 import { breadcrumbJsonLd, eventJsonLd } from "~/seo/structured-data";
@@ -132,6 +136,8 @@ export default async function PublicEventPage({
             placeName: where ?? city?.name,
             address: event.placeAddressLine,
             precision: event.placePrecision,
+            isOnline: event.isOnline,
+            onlineUrl: event.onlineUrl,
             image: media.cover?.url,
           }),
           breadcrumbJsonLd({
@@ -171,7 +177,15 @@ export default async function PublicEventPage({
             timeLabel={range.timeLabel}
             ariaLabel={`${messages["events.addToCalendar"]} — ${range.dateLabel} ${range.timeLabel}`}
           />
-          {mapHref ? (
+          {/* Said before the place, because an event that is only online has
+           * no place to say. */}
+          {event.isOnline ? (
+            <OnlineChip
+              label={messages["events.online"]}
+              url={event.onlineUrl}
+            />
+          ) : null}
+          {(where ?? city?.name ?? "") === "" ? null : mapHref ? (
             <a
               href={mapHref}
               target="_blank"
@@ -228,12 +242,35 @@ export default async function PublicEventPage({
             <MetaRow label={messages["events.when"]}>
               {range.dateLabel} · {range.timeLabel}
             </MetaRow>
-            <MetaRow label={messages["events.where"]}>
-              {where ?? messages["public.notAvailable"]}
-            </MetaRow>
-            <MetaRow label={messages["events.city"]}>
-              {city?.name ?? messages["public.notAvailable"]}
-            </MetaRow>
+            {/* An online event answers "where" with a link, or with the
+             * promise of one: "not available" would read as a missing answer
+             * rather than as the answer. */}
+            {event.isOnline ? (
+              <MetaRow label={messages["events.onlineJoin"]}>
+                {event.onlineUrl === null ? (
+                  messages["events.onlineNoLink"]
+                ) : (
+                  <a
+                    href={event.onlineUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={inlineLinkClass}
+                  >
+                    {event.onlineUrl}
+                  </a>
+                )}
+              </MetaRow>
+            ) : null}
+            {where === null && event.isOnline ? null : (
+              <MetaRow label={messages["events.where"]}>
+                {where ?? messages["public.notAvailable"]}
+              </MetaRow>
+            )}
+            {city === undefined && event.isOnline ? null : (
+              <MetaRow label={messages["events.city"]}>
+                {city?.name ?? messages["public.notAvailable"]}
+              </MetaRow>
+            )}
             {/* After the place and before who is running it: a reader who has
              * just read an address they do not recognise asks this next, and the
              * organisers are the only ones who can answer it. The row is absent
@@ -297,6 +334,15 @@ export default async function PublicEventPage({
         <Callout tone="info" role="note">
           {messages["events.checkBefore"]}
         </Callout>
+
+        <ListenControl
+          src={publicSpeechHref({
+            kind: "event",
+            id,
+            locale,
+          })}
+          labels={listenControlLabels(messages)}
+        />
       </div>
     </PublicSiteShell>
   );

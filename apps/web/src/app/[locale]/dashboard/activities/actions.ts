@@ -92,6 +92,7 @@ import {
   activityTags,
   activityTransitLinks,
   activityTranslations,
+  activityVerifications,
   assets,
   assetTranslations,
   cities,
@@ -393,8 +394,8 @@ export const createActivity = protectedPermissionAction(
      * the only one the console knows. An account without one cannot stand in as
      * the contact for a whole activity.
      */
-    const editorContactValue = user.email?.trim() ?? "";
-    const editorContactLabel = user.name?.trim() ?? "";
+    const editorContactValue = user.email.trim();
+    const editorContactLabel = user.name.trim();
     if (wantsEditorContact && !editorContactValue) {
       throw new Error("Your account has no address to publish as a contact");
     }
@@ -1076,7 +1077,7 @@ export const createActivity = protectedPermissionAction(
     }
     refresh(locale);
     redirect(
-      `${localizedPath("/dashboard/activities", locale)}?activity=${activity.id}`,
+      `${localizedPath("/dashboard/activities", locale)}?activity=${activity.id}&notice=activity-created`,
     );
   },
 );
@@ -1981,6 +1982,267 @@ export const updateActivityDetails = protectedPermissionAction(
   },
 );
 
+/**
+ * Where the activity happens, changed after the fact.
+ *
+ * The same three answers the creation form asks — city, then an existing place,
+ * a new one, or none — because a service that moves premises, or was filed
+ * against the wrong city on the day it was entered, must be correctable without
+ * re-creating the record and losing its translations, schedule and photo with
+ * it.
+ */
+const activityLocationSchema = z.object({
+  activityId: z.string().uuid(),
+  scope: z.enum(activityScopes).default("city"),
+  cityId: optionalUuid,
+  locationMode: z.enum(activityLocationModes),
+  placeId: optionalUuid,
+  placeName: optionalText,
+  addressLine: optionalText,
+  postalCode: optionalText,
+  lat: optionalText,
+  lng: optionalText,
+  precision: z.enum(placePrecisions).default("exact"),
+});
+
+export const updateActivityLocation = protectedPermissionAction(
+  "content.activity.manage",
+  async (formData, locale) => {
+    const scope = formData.get("scope") === "global" ? "global" : "city";
+    const parsed = activityLocationSchema.parse({
+      activityId: formData.get("activityId"),
+      scope,
+      // A global activity submits no city, and must not inherit the old one.
+      cityId: scope === "global" ? "" : (formData.get("cityId") ?? ""),
+      locationMode:
+        scope === "global" ? "mobile" : formData.get("locationMode"),
+      placeId: formData.get("placeId") ?? "",
+      placeName: formData.get("placeName") ?? "",
+      addressLine: formData.get("addressLine") ?? "",
+      postalCode: formData.get("postalCode") ?? "",
+      lat: formData.get("lat") ?? "",
+      lng: formData.get("lng") ?? "",
+      precision: formData.get("precision") ?? undefined,
+    });
+
+    // The same refusals the creation form makes, in the same order: this screen
+    // may not write a shape that one could not have produced.
+    if (parsed.scope === "city" && !parsed.cityId) {
+      throw new Error("Choose the city this activity happens in");
+    }
+    if (parsed.locationMode === "existing" && !parsed.placeId) {
+      throw new Error("Choose an existing place");
+    }
+    if (parsed.locationMode === "new" && !parsed.placeName) {
+      throw new Error("A new place needs a name");
+    }
+    if (
+      parsed.locationMode === "new" &&
+      parsed.precision === "exact" &&
+      (!parsed.addressLine || !parsed.lat || !parsed.lng)
+    ) {
+      throw new Error("Select an address suggestion for an exact location");
+    }
+
+    const organizationId = await db.transaction(async (tx) => {
+      const [activity] = await tx
+        .select({
+          organizationId: activities.organizationId,
+          cityId: activities.cityId,
+          teamId: activities.teamId,
+          sourceLanguageCode: activities.sourceLanguageCode,
+        })
+        .from(activities)
+        .where(eq(activities.id, parsed.activityId))
+        .limit(1);
+      if (!activity) throw new Error("Unknown activity");
+
+      const cityId = parsed.scope === "global" ? null : parsed.cityId;
+
+      if (parsed.locationMode === "existing" && parsed.placeId) {
+        const [place] = await tx
+          .select({ cityId: places.cityId })
+          .from(places)
+          .where(eq(places.id, parsed.placeId))
+          .limit(1);
+        if (place?.cityId !== cityId) {
+          throw new Error("The activity location must be in the selected city");
+        }
+      }
+
+      let placeId = parsed.locationMode === "existing" ? parsed.placeId : null;
+      if (parsed.locationMode === "new") {
+        if (!cityId) throw new Error("A new place needs a city");
+        const latitude = parsed.lat === null ? null : Number(parsed.lat);
+        const longitude = parsed.lng === null ? null : Number(parsed.lng);
+        if (
+          (latitude !== null && !Number.isFinite(latitude)) ||
+          (longitude !== null && !Number.isFinite(longitude))
+        ) {
+          throw new Error("The selected address coordinates are invalid");
+        }
+        const [createdPlace] = await tx
+          .insert(places)
+          .values({
+            organizationId: activity.organizationId,
+            cityId,
+            addressLine: parsed.addressLine,
+            postalCode: parsed.postalCode,
+            lat: latitude,
+            lng: longitude,
+            precision: parsed.precision,
+          })
+          .returning({ id: places.id });
+        if (!createdPlace) throw new Error("Place insert returned no row");
+        placeId = createdPlace.id;
+        await tx.insert(placeTranslations).values({
+          placeId,
+          languageCode: activity.sourceLanguageCode,
+          name: parsed.placeName ?? "",
+          state: "draft",
+        });
+      }
+
+      /**
+       * A city team is an organisation-and-city pair, so a team from the city
+       * this activity is leaving cannot come with it — and a global activity
+       * may hold none at all (`activities_global_has_no_team_check`). Moving
+       * the record therefore drops the team rather than carrying a wrong one;
+       * the new city's team is picked up the next time one is assigned.
+       */
+      const teamId = cityId === activity.cityId ? activity.teamId : null;
+
+      await tx
+        .update(activities)
+        .set({ cityId, teamId, placeId, updatedAt: new Date() })
+        .where(eq(activities.id, parsed.activityId));
+
+      return activity.organizationId;
+    });
+
+    await recordAudit({
+      action: "activity.location_saved",
+      subjectType: "activity",
+      subjectId: parsed.activityId,
+      organizationId,
+      // Which shape it took, never the address itself: the record holds that.
+      metadata: { scope: parsed.scope, locationMode: parsed.locationMode },
+    });
+    refresh(locale);
+  },
+);
+
+/** How long a confirmed activity stays fresh, matching the runbook's window. */
+const FRESHNESS_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * "I have checked this and it is still right."
+ *
+ * An activity goes stale on a timer, and until now the only thing that could
+ * reset it was confirming a *scheduled occurrence on the day it ran*
+ * (`dashboard/actions.ts`). An editor reading the record and finding it correct
+ * had nothing to click: the banner said it was due and then said it again
+ * tomorrow. So the same bookkeeping is offered from the record itself.
+ *
+ * "Uncertain" clears with it, exactly as confirming an occurrence clears it.
+ * The notification bell reads `manual_status` *before* freshness
+ * (`~/lib/freshness`), so leaving it set would have kept the record in the
+ * queue after the editor had just answered the question the queue was asking —
+ * the "count never goes down" complaint that comment was written about.
+ *
+ * "Cancelled" is the one status left alone. A cancelled activity is not in the
+ * queue to begin with, and quietly un-cancelling it to tidy a badge would
+ * change what the public is told.
+ */
+export const confirmActivityFreshness = protectedPermissionAction(
+  "content.activity.manage",
+  async (formData, locale, user) => {
+    const id = z.string().uuid().parse(formData.get("activityId"));
+    const now = new Date();
+    const validUntil = new Date(now.getTime() + FRESHNESS_WINDOW_MS);
+
+    const organizationId = await db.transaction(async (tx) => {
+      const [activity] = await tx
+        .select({
+          organizationId: activities.organizationId,
+          manualStatus: activities.manualStatus,
+        })
+        .from(activities)
+        .where(eq(activities.id, id))
+        .limit(1);
+      if (!activity) throw new Error("Unknown activity");
+
+      await tx
+        .update(activities)
+        .set({
+          lastVerifiedAt: now,
+          reviewDueAt: validUntil,
+          verifiedById: user.id,
+          ...(activity.manualStatus === "uncertain"
+            ? { manualStatus: "normal" as const }
+            : {}),
+          updatedAt: now,
+        })
+        .where(eq(activities.id, id));
+
+      /**
+       * The verification trail is scoped by a foreign key onto
+       * `activity_providers`: an organisation-scoped row may only name an
+       * organisation that actually provides this activity. Most activities have
+       * no provider row at all, so the trail entry is written when it can be
+       * attributed truthfully and skipped when it cannot — the audit entry below
+       * records the check either way, and it is the audit log that answers "who
+       * said this was current".
+       */
+      if (!activity.organizationId) {
+        await tx.insert(activityVerifications).values({
+          activityId: id,
+          organizationId: null,
+          verifiedById: user.id,
+          actorScope: "platform",
+          method: "editor_freshness_check",
+          verifiedAt: now,
+          validUntil,
+        });
+        return null;
+      }
+      const [provider] = await tx
+        .select({ organizationId: activityProviders.organizationId })
+        .from(activityProviders)
+        .where(
+          and(
+            eq(activityProviders.activityId, id),
+            eq(activityProviders.organizationId, activity.organizationId),
+            eq(activityProviders.state, "confirmed"),
+            eq(activityProviders.active, true),
+          ),
+        )
+        .limit(1);
+      if (provider) {
+        await tx.insert(activityVerifications).values({
+          activityId: id,
+          organizationId: provider.organizationId,
+          verifiedById: user.id,
+          actorScope: "organization",
+          method: "editor_freshness_check",
+          verifiedAt: now,
+          validUntil,
+        });
+      }
+      return activity.organizationId;
+    });
+
+    await recordAudit({
+      action: "activity.freshness_confirmed",
+      subjectType: "activity",
+      subjectId: id,
+      organizationId,
+      metadata: { validUntil: validUntil.toISOString() },
+    });
+    refresh(locale);
+  },
+);
+
 const createServiceSchema = z.object({
   organizationId: optionalUuid,
   categoryId: z.string().uuid(),
@@ -2112,7 +2374,7 @@ export const createAndAssignService = protectedPermissionAction(
     });
     refresh(locale);
     redirect(
-      `${localizedPath("/dashboard/activities", locale)}?activity=${activityId}`,
+      `${localizedPath("/dashboard/activities", locale)}?activity=${activityId}&notice=service-created`,
     );
   },
 );
@@ -2931,7 +3193,9 @@ export const assignMemberToActivity = protectedPermissionAction(
         locale,
         organizationName: activity.organizationName,
         teamName: activity.teamName,
-        inviterName: user.name ?? user.email ?? activity.teamName,
+        // An account may never have been given a name; its address still tells
+        // the invited person who is asking.
+        inviterName: user.name || user.email,
       });
     }
 

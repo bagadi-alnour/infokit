@@ -1,4 +1,4 @@
-import { deviceViewer } from "~/server/auth/device-session";
+import { memberViewer } from "~/server/auth/member-viewer";
 import { loadMemberAgendaPayload } from "~/server/content/member-payload";
 import {
   memberJson,
@@ -12,7 +12,7 @@ import {
  * their memberships; `?month=YYYY-MM` only moves the calendar's labels.
  */
 export async function GET(request: Request) {
-  const viewer = await deviceViewer(request);
+  const viewer = await memberViewer(request);
   if (!viewer) return memberUnauthorized();
   const payload = await loadMemberAgendaPayload({
     viewer,

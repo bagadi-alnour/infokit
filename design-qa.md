@@ -1,31 +1,44 @@
-# Dashboard design QA
+# Article list design QA
 
-- Reference: `/Users/bagadi/.codex/generated_images/019f79f2-00be-79a1-b241-189ea4309b7a/exec-e33c4867-d374-4adb-9b03-2327738fea91.png`
-- Implementation capture: `/Users/bagadi/.codex/visualizations/2026/07/19/019f79f2-00be-79a1-b241-189ea4309b7a/dashboard-final.jpg`
-- Side-by-side comparison: `/Users/bagadi/.codex/visualizations/2026/07/19/019f79f2-00be-79a1-b241-189ea4309b7a/dashboard-comparison.jpg`
-- Tested viewport: 1442 × 1025 CSS pixels, English, dark theme, Calais demo organisation, 19 July 2026.
-- Tested routes: `/en/dashboard` and the selected `/en/dashboard/activities` record.
+## Evidence
 
-## Verified experience
+- Reference: `/Users/bagadi/Documents/screen-shots/Screenshot 2026-07-30 at 12.42.44.png`
+- Implementation, light: `/private/tmp/infokit-article-list-light.png`
+- Implementation, dark: `/private/tmp/infokit-article-list-dark.png`
+- Implementation, compact viewport: `/private/tmp/infokit-article-list-mobile.png`
+- Full comparison: `/private/tmp/infokit-article-list-comparison.png`
+- Focused row comparison: `/private/tmp/infokit-article-row-comparison.png`
 
-- Wide layout resolves to a 250 px navigation rail, an 840.86 px runbook, and a 352 px calendar/create rail with no document-level horizontal overflow.
-- Calendar selection updates the runbook date and does not expose same-day freshness actions on another date.
-- A same-day occurrence confirmation updates the visible state and reduces the remaining confirmation count.
-- New activity, reusable-service assignment, exceptional closure, theme, and language menus open without runtime errors.
-- Existing or future members can be assigned by email with expertise and association-only visibility. Public attribution reveals separately authored public name/expertise fields and never reuses the member email or private profile.
-- The member, activity, service, schedule, and closure inputs have programmatic labels and keyboard-accessible native/shadcn controls.
+The reference was captured at 1372 × 1158. The desktop implementation was
+captured at the same aspect ratio and normalized to 1372 × 1158 for the
+side-by-side comparison. The compact implementation was also checked at a
+390 × 844 browser viewport override.
 
-## Findings resolved
+## Review
 
-- P1: Replaced non-navigating Base UI button/link composition with Next links styled by the shadcn button variants.
-- P1: Replaced locale-dependent calendar `data-day` output with a stable ISO value to remove hydration mismatches.
-- P1: Wrapped dropdown labels and items in the Base UI menu group required by the downloaded shadcn primitive.
-- P1: Added explicit input/select label associations throughout the create and member-assignment workflows.
-- P1: Added visible cancelled, uncertain, and confirmed occurrence badges and corrected future-date summary/all-confirmed copy.
-- P2: Normalized accented demo organisation names before showing the non-publishable fixture warning.
+The reference is used as the structural target for the article rows rather
+than as a replacement for InfoKit's existing visual language. The implemented
+rows preserve the reference's hierarchy: date first, a wider title and concise
+summary, then factual owner and a relative review age beside one another at
+the bottom. Article cards retain the requested rounded outline and transparent
+surface, while semantic color tokens keep the treatment legible in light and
+dark themes.
 
-The in-app browser screenshot transport applies device-pixel scaling to the right edge of wide captures. DOM geometry, scroll width, accessibility snapshots, and live interactions confirmed that the implementation itself keeps the 352 px right rail fully inside the viewport.
+Responsive inspection confirmed that the metadata remains on one line when
+space permits and wraps without horizontal overflow on compact screens.
+Relative review text is server-prepared and the exact review date remains
+available through semantic `<time>` markup and its tooltip.
 
-No unresolved P0, P1, or P2 findings remain.
+## Issue history
 
-final result: passed
+- P0: none.
+- P1: none.
+- P2: the reference includes thumbnails, but the current published article
+  fixtures do not provide cover images. The component keeps a compact,
+  rounded logical-end thumbnail slot for articles that do provide one.
+
+Browser console errors: none.
+
+## Final result
+
+passed

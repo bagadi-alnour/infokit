@@ -27,6 +27,9 @@ export interface AppStrings {
   tabMap: string;
   tabGuide: string;
   tabArticles: string;
+  mapStyle: string;
+  mapMuted: string;
+  mapHybrid: string;
 
   // The header.
   language: string;
@@ -49,11 +52,25 @@ export interface AppStrings {
   eventsPublic: string;
   eventsMembers: string;
 
-  // The typed fallback when the deep link does not fire.
-  codeLabel: string;
-  codeHint: string;
-  codeSubmit: string;
-  codeInvalid: string;
+  // The members' door: the app signs in for itself now.
+  emailLabel: string;
+  passwordLabel: string;
+  signInSubmit: string;
+  magicLinkSubmit: string;
+  magicLinkSent: string;
+  invalidCredentials: string;
+
+  // The second factor, when a sign-in stops to ask for one.
+  twoFactorTitle: string;
+  twoFactorBody: string;
+  twoFactorTotpLabel: string;
+  twoFactorSmsLabel: string;
+  twoFactorSendSms: string;
+  twoFactorBackupLabel: string;
+  twoFactorSubmit: string;
+  twoFactorUseBackup: string;
+  twoFactorUseCode: string;
+  twoFactorCancel: string;
 }
 
 const english: AppStrings = {
@@ -71,6 +88,9 @@ const english: AppStrings = {
   tabMap: "Map",
   tabGuide: "Guide",
   tabArticles: "Articles",
+  mapStyle: "Map style",
+  mapMuted: "Muted",
+  mapHybrid: "Hybrid",
 
   language: "Language",
   languageTitle: "Choose a language",
@@ -90,10 +110,26 @@ const english: AppStrings = {
   eventsPublic: "Open to everyone",
   eventsMembers: "For members",
 
-  codeLabel: "Sign-in code",
-  codeHint: "Nine digits, from the page in your browser.",
-  codeSubmit: "Finish signing in",
-  codeInvalid: "That code is not valid any more. Ask for a new one.",
+  emailLabel: "Email address",
+  passwordLabel: "Password",
+  signInSubmit: "Sign in",
+  magicLinkSubmit: "Email me a sign-in link",
+  magicLinkSent:
+    "If that address has an account, a sign-in link is on its way. The link works once and expires after 15 minutes.",
+  invalidCredentials:
+    "That email address and password do not match an account.",
+
+  twoFactorTitle: "Confirm it is you",
+  twoFactorBody:
+    "Your password was accepted. One more proof is needed before the session opens.",
+  twoFactorTotpLabel: "Code from your authenticator app",
+  twoFactorSmsLabel: "Code received by SMS",
+  twoFactorSendSms: "Send a code by SMS",
+  twoFactorBackupLabel: "Backup code",
+  twoFactorSubmit: "Confirm and continue",
+  twoFactorUseBackup: "Use a backup code instead",
+  twoFactorUseCode: "Use a six-digit code instead",
+  twoFactorCancel: "Cancel and start again",
 };
 
 const translated: Partial<Record<PublicLocale, AppStrings>> = {
@@ -113,6 +149,9 @@ const translated: Partial<Record<PublicLocale, AppStrings>> = {
     tabMap: "Carte",
     tabGuide: "Guide",
     tabArticles: "Articles",
+    mapStyle: "Fond de carte",
+    mapMuted: "Atténué",
+    mapHybrid: "Hybride",
 
     language: "Langue",
     languageTitle: "Choisir une langue",
@@ -132,10 +171,26 @@ const translated: Partial<Record<PublicLocale, AppStrings>> = {
     eventsPublic: "Ouvert à tous",
     eventsMembers: "Pour les membres",
 
-    codeLabel: "Code de connexion",
-    codeHint: "Neuf chiffres, depuis la page ouverte dans votre navigateur.",
-    codeSubmit: "Terminer la connexion",
-    codeInvalid: "Ce code n’est plus valable. Demandez-en un nouveau.",
+    emailLabel: "Adresse e-mail",
+    passwordLabel: "Mot de passe",
+    signInSubmit: "Se connecter",
+    magicLinkSubmit: "M’envoyer un lien de connexion",
+    magicLinkSent:
+      "Si un compte existe pour cette adresse, un lien de connexion est en route. Il ne fonctionne qu’une fois et expire après 15 minutes.",
+    invalidCredentials:
+      "Cette adresse e-mail et ce mot de passe ne correspondent à aucun compte.",
+
+    twoFactorTitle: "Confirmez votre identité",
+    twoFactorBody:
+      "Votre mot de passe a été accepté. Il reste une preuve à apporter avant d’ouvrir la session.",
+    twoFactorTotpLabel: "Code de votre application d’authentification",
+    twoFactorSmsLabel: "Code reçu par SMS",
+    twoFactorSendSms: "Envoyer un code par SMS",
+    twoFactorBackupLabel: "Code de secours",
+    twoFactorSubmit: "Confirmer et continuer",
+    twoFactorUseBackup: "Utiliser un code de secours à la place",
+    twoFactorUseCode: "Utiliser un code à six chiffres à la place",
+    twoFactorCancel: "Annuler et recommencer",
   },
   ar: {
     loading: "جارٍ تحميل المعلومات المنشورة…",
@@ -152,6 +207,9 @@ const translated: Partial<Record<PublicLocale, AppStrings>> = {
     tabMap: "الخريطة",
     tabGuide: "الدليل",
     tabArticles: "المقالات",
+    mapStyle: "نمط الخريطة",
+    mapMuted: "هادئة",
+    mapHybrid: "هجين",
 
     language: "اللغة",
     languageTitle: "اختر اللغة",
@@ -171,10 +229,26 @@ const translated: Partial<Record<PublicLocale, AppStrings>> = {
     eventsPublic: "مفتوح للجميع",
     eventsMembers: "للأعضاء",
 
-    codeLabel: "رمز الدخول",
-    codeHint: "تسعة أرقام، من الصفحة المفتوحة في متصفحك.",
-    codeSubmit: "إتمام تسجيل الدخول",
-    codeInvalid: "لم يعد هذا الرمز صالحًا. اطلب رمزًا جديدًا.",
+    emailLabel: "عنوان البريد الإلكتروني",
+    passwordLabel: "كلمة المرور",
+    signInSubmit: "تسجيل الدخول",
+    magicLinkSubmit: "أرسل لي رابط تسجيل الدخول",
+    magicLinkSent:
+      "إذا كان لهذا العنوان حساب، فإن رابط تسجيل الدخول في الطريق. يعمل الرابط مرة واحدة وتنتهي صلاحيته بعد 15 دقيقة.",
+    invalidCredentials:
+      "عنوان البريد الإلكتروني وكلمة المرور لا يطابقان أي حساب.",
+
+    twoFactorTitle: "أكد أنك أنت",
+    twoFactorBody:
+      "قُبلت كلمة مرورك. تبقى خطوة إثبات واحدة قبل أن تُفتح الجلسة.",
+    twoFactorTotpLabel: "الرمز من تطبيق المصادقة",
+    twoFactorSmsLabel: "الرمز الوارد برسالة نصية",
+    twoFactorSendSms: "إرسال رمز برسالة نصية",
+    twoFactorBackupLabel: "رمز احتياطي",
+    twoFactorSubmit: "تأكيد ومتابعة",
+    twoFactorUseBackup: "استخدام رمز احتياطي بدلًا من ذلك",
+    twoFactorUseCode: "استخدام رمز من ستة أرقام بدلًا من ذلك",
+    twoFactorCancel: "إلغاء والبدء من جديد",
   },
 };
 

@@ -1,4 +1,4 @@
-import type { PublicLocale } from "../i18n";
+import { localizeBrandName, type PublicLocale } from "../i18n";
 
 import { amharic } from "./am";
 import { arabic } from "./ar";
@@ -47,7 +47,25 @@ const tables: Record<PublicLocale, AboutStrings> = {
 };
 
 export function aboutStrings(locale: PublicLocale): AboutStrings {
-  return tables[locale];
+  return localizeAboutValue(tables[locale], locale);
+}
+
+function localizeAboutValue<T>(value: T, locale: PublicLocale): T {
+  if (typeof value === "string") {
+    return localizeBrandName(value, locale) as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item: unknown) => localizeAboutValue(item, locale)) as T;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        localizeAboutValue(item, locale),
+      ]),
+    ) as T;
+  }
+  return value;
 }
 
 export type { AboutSection, AboutStrings } from "./types";

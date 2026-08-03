@@ -15,6 +15,8 @@ export interface SemanticTheme {
   surface: string;
   /** Recessed band inside a surface (table headers, inset blocks). */
   surfaceSubtle: string;
+  /** Canvas behind map geometry and raster tiles. */
+  mapCanvas: string;
   /** Primary copy. */
   ink: string;
   /** Secondary copy — labels, metadata, hints. Never for body text. */
@@ -73,6 +75,7 @@ export const light: SemanticTheme = {
   canvas: "#EFF5F3",
   surface: "#FBFEFD",
   surfaceSubtle: "#E4EFEC",
+  mapCanvas: "#E4EFEC",
   ink: "#10231F",
   textMuted: "#5B6F6B",
   border: "#D3E2DE",
@@ -104,6 +107,7 @@ export const dark: SemanticTheme = {
   canvas: "#0D1A18",
   surface: "#142523",
   surfaceSubtle: "#1B302D",
+  mapCanvas: "#11403C",
   ink: "#E6F2EF",
   textMuted: "#9FB3AF",
   border: "#22403C",

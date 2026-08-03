@@ -1,0 +1,23 @@
+-- The two freshness columns 0003 missed.
+--
+-- 0003 established that `content.editorial_revisions` is append-only in its
+-- *content* and mutable in its *annotations*, and granted column-level UPDATE on
+-- the three it found by grepping for writes: `can_become_outdated`,
+-- `unreliable_from`, `source_summary`. That sweep missed two more, and they
+-- surface the way that comment predicted — as `permission denied for table
+-- editorial_revisions` inside a server action, at the moment somebody presses a
+-- button:
+--
+--   * `confirmBasicInformation` (basics/actions.ts) — "I have checked this
+--     number today", which is the whole freshness mechanic for the contact
+--     block.
+--   * `confirmArticleFreshness` (articles/actions.ts) — the same act on an
+--     article.
+--
+-- Both stamp a date on a revision nobody re-authored, which is exactly the case
+-- 0003 carved out: publishing a new revision to record that an old one was read
+-- would inflate `revision_number` for something that has not changed a word. The
+-- authored text stays sealed — `editorial_revision_translations` is untouched by
+-- this grant, and so is `revision_number`.
+GRANT UPDATE ("last_reviewed_at", "review_due_at")
+  ON TABLE content.editorial_revisions TO infokit_app;

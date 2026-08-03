@@ -23,9 +23,11 @@ export default async function AccountProfilePage({
   searchParams: Promise<{ status?: string; error?: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const user = await requireEditor(locale);
-  const query = await searchParams;
-  const messages = await loadPageCatalog(locale, "dashboard-account");
+  const [user, query, messages] = await Promise.all([
+    requireEditor(locale),
+    searchParams,
+    loadPageCatalog(locale, "dashboard-account"),
+  ]);
   const [account] = await db
     .select({ name: users.name, email: users.email })
     .from(users)

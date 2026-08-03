@@ -74,7 +74,16 @@ export interface CoordinationEventRecord extends CoordinationEventText {
    * so "organised by" is never a link to a 404.
    */
   hostPageSlug: string | null;
-  cityId: string;
+  /**
+   * Null only on an event that happens online and nowhere else: it belongs to
+   * no city's agenda, and every reader of this record has to be ready for that
+   * rather than assuming a town.
+   */
+  cityId: string | null;
+  /** Joinable from anywhere. An event may be both online and in a city. */
+  isOnline: boolean;
+  /** The link people join on, when the organisers have published one. */
+  onlineUrl: string | null;
   visibility: CoordinationVisibility;
   status: CoordinationStatus;
   placeId: string | null;
@@ -235,6 +244,8 @@ const eventColumns = {
     string | null
   >`case when ${organizations.status} = 'verified' and ${organizations.publishingSuspended} = false and ${organizationProfiles.published} then ${organizations.slug} end`,
   cityId: coordinationEvents.cityId,
+  isOnline: coordinationEvents.isOnline,
+  onlineUrl: coordinationEvents.onlineUrl,
   visibility: coordinationEvents.visibility,
   status: coordinationEvents.status,
   placeId: coordinationEvents.placeId,
@@ -279,7 +290,9 @@ interface EventRow {
   hostOrganizationId: string | null;
   hostName: string | null;
   hostPageSlug: string | null;
-  cityId: string;
+  cityId: string | null;
+  isOnline: boolean;
+  onlineUrl: string | null;
   visibility: CoordinationVisibility;
   status: CoordinationStatus;
   placeId: string | null;

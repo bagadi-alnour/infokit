@@ -30,8 +30,16 @@ yarn-error.log*
 
 # local env files
 # do not commit any .env files to git, except for the .env.example file.
-.env
-.env*.local
+# match every .env variant, including suffixed copies like .env.prod.local.bak
+.env*
+!.env.example
+!.env*.example
+
+# belt and braces: editor/manual copies of a secret file keep their payload but
+# lose the extension the rules above key on (.env.prod.local.bak got staged once)
+*.bak
+*.orig
+*~
 
 # vercel
 .vercel

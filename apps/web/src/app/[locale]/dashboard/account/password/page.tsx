@@ -1,15 +1,13 @@
 import { loadCatalog, loadPageCatalog } from "@infokit/shared/i18n/catalogs";
-import { eq } from "drizzle-orm";
 
-import { updatePassword } from "../../../login/actions";
+import { updatePassword } from "../actions";
 import { AdminPasswordCreationFields } from "~/components/admin/password-creation-fields";
-import { Card } from "~/components/admin/workspace";
+import { Card, Field, TextInput } from "~/components/admin/workspace";
 import { PendingButton } from "~/components/pending-button";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { requireRouteLocale } from "~/i18n/route-locale";
+import { passwordStatus } from "~/server/auth/password-status";
 import { requireEditor } from "~/server/auth/require";
-import { db } from "~/server/db";
-import { users } from "~/server/db/schema";
 
 /**
  * Password sign-in, on its own route: the reset link the sign-in flow sends
@@ -24,18 +22,14 @@ export default async function AccountPasswordPage({
   searchParams: Promise<{ error?: string; status?: string; reset?: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const user = await requireEditor(locale);
-  const query = await searchParams;
-  const isReset = query.reset === "1";
-  const [messages, auth] = await Promise.all([
+  const [user, query, messages, auth] = await Promise.all([
+    requireEditor(locale),
+    searchParams,
     loadPageCatalog(locale, "dashboard-account"),
     loadCatalog(locale, "login"),
   ]);
-  const [account] = await db
-    .select({ passwordUpdatedAt: users.passwordUpdatedAt })
-    .from(users)
-    .where(eq(users.id, user.id))
-    .limit(1);
+  const isReset = query.reset === "1";
+  const password = await passwordStatus(user.id);
 
   return (
     <div className="grid gap-5">
@@ -65,14 +59,34 @@ export default async function AccountPasswordPage({
           ) : null}
           {query.error ? (
             <Alert variant="destructive">
-              <AlertDescription>{auth["auth.account.error"]}</AlertDescription>
+              <AlertDescription>
+                {query.error === "currentPassword"
+                  ? auth["auth.account.currentPasswordError"]
+                  : auth["auth.account.error"]}
+              </AlertDescription>
             </Alert>
           ) : null}
           <p className="text-copy-muted text-sm">
-            {account?.passwordUpdatedAt
+            {password.set
               ? auth["auth.account.passwordExists"]
               : auth["auth.account.passwordMissing"]}
           </p>
+          {/* Only when there is one to prove. A session is not enough to re-key
+              an account — a borrowed laptop is a session — but an account that
+              has never had a password cannot be asked for its current one. */}
+          {password.set ? (
+            <Field
+              label={auth["auth.account.currentPasswordLabel"]}
+              hint={auth["auth.account.currentPasswordHint"]}
+            >
+              <TextInput
+                name="currentPassword"
+                type="password"
+                autoComplete="current-password"
+                required
+              />
+            </Field>
+          ) : null}
           <AdminPasswordCreationFields
             passwordLabel={auth["auth.account.passwordLabel"]}
             confirmationLabel={auth["auth.account.passwordConfirmationLabel"]}

@@ -1,4 +1,5 @@
 import {
+  localizeBrandName,
   translatedInterfaceLocales,
   type PublicLocale,
   type TranslatedInterfaceLocale,
@@ -25,6 +26,7 @@ export interface CatalogMap {
   "dashboard-account": typeof import("./messages/en/dashboard-account.json");
   "dashboard-articles": typeof import("./messages/en/dashboard-articles.json");
   "dashboard-audit": typeof import("./messages/en/dashboard-audit.json");
+  "dashboard-basics": typeof import("./messages/en/dashboard-basics.json");
   "dashboard-catalogue": typeof import("./messages/en/dashboard-catalogue.json");
   "dashboard-console": typeof import("./messages/en/dashboard-console.json");
   "dashboard-events": typeof import("./messages/en/dashboard-events.json");
@@ -34,6 +36,8 @@ export interface CatalogMap {
   "dashboard-simulator": typeof import("./messages/en/dashboard-simulator.json");
   "dashboard-skills": typeof import("./messages/en/dashboard-skills.json");
   home: typeof import("./messages/en/home.json");
+  invite: typeof import("./messages/en/invite.json");
+  legal: typeof import("./messages/en/legal.json");
   member: typeof import("./messages/en/member.json");
   login: typeof import("./messages/en/login.json");
   "login-check": typeof import("./messages/en/login-check.json");
@@ -65,6 +69,8 @@ const catalogLoaders = {
       (await import("./messages/fr/dashboard-articles.json")).default,
     "dashboard-audit": async () =>
       (await import("./messages/fr/dashboard-audit.json")).default,
+    "dashboard-basics": async () =>
+      (await import("./messages/fr/dashboard-basics.json")).default,
     "dashboard-catalogue": async () =>
       (await import("./messages/fr/dashboard-catalogue.json")).default,
     "dashboard-console": async () =>
@@ -82,6 +88,8 @@ const catalogLoaders = {
     "dashboard-skills": async () =>
       (await import("./messages/fr/dashboard-skills.json")).default,
     home: async () => (await import("./messages/fr/home.json")).default,
+    invite: async () => (await import("./messages/fr/invite.json")).default,
+    legal: async () => (await import("./messages/fr/legal.json")).default,
     member: async () => (await import("./messages/fr/member.json")).default,
     login: async () => (await import("./messages/fr/login.json")).default,
     "login-check": async () =>
@@ -105,6 +113,8 @@ const catalogLoaders = {
       (await import("./messages/en/dashboard-articles.json")).default,
     "dashboard-audit": async () =>
       (await import("./messages/en/dashboard-audit.json")).default,
+    "dashboard-basics": async () =>
+      (await import("./messages/en/dashboard-basics.json")).default,
     "dashboard-catalogue": async () =>
       (await import("./messages/en/dashboard-catalogue.json")).default,
     "dashboard-console": async () =>
@@ -122,6 +132,8 @@ const catalogLoaders = {
     "dashboard-skills": async () =>
       (await import("./messages/en/dashboard-skills.json")).default,
     home: async () => (await import("./messages/en/home.json")).default,
+    invite: async () => (await import("./messages/en/invite.json")).default,
+    legal: async () => (await import("./messages/en/legal.json")).default,
     member: async () => (await import("./messages/en/member.json")).default,
     login: async () => (await import("./messages/en/login.json")).default,
     "login-check": async () =>
@@ -145,6 +157,8 @@ const catalogLoaders = {
       (await import("./messages/ar/dashboard-articles.json")).default,
     "dashboard-audit": async () =>
       (await import("./messages/ar/dashboard-audit.json")).default,
+    "dashboard-basics": async () =>
+      (await import("./messages/ar/dashboard-basics.json")).default,
     "dashboard-catalogue": async () =>
       (await import("./messages/ar/dashboard-catalogue.json")).default,
     "dashboard-console": async () =>
@@ -162,6 +176,8 @@ const catalogLoaders = {
     "dashboard-skills": async () =>
       (await import("./messages/ar/dashboard-skills.json")).default,
     home: async () => (await import("./messages/ar/home.json")).default,
+    invite: async () => (await import("./messages/ar/invite.json")).default,
+    legal: async () => (await import("./messages/ar/legal.json")).default,
     member: async () => (await import("./messages/ar/member.json")).default,
     login: async () => (await import("./messages/ar/login.json")).default,
     "login-check": async () =>
@@ -191,54 +207,75 @@ const catalogLoaders = {
 const overlayLoaders = {
   fa: {
     common: async () => (await import("./messages/fa/common.json")).default,
+    home: async () => (await import("./messages/fa/home.json")).default,
     "public-content": async () =>
       (await import("./messages/fa/public-content.json")).default,
   },
   prs: {
     common: async () => (await import("./messages/prs/common.json")).default,
+    home: async () => (await import("./messages/prs/home.json")).default,
     "public-content": async () =>
       (await import("./messages/prs/public-content.json")).default,
   },
   ps: {
     common: async () => (await import("./messages/ps/common.json")).default,
+    home: async () => (await import("./messages/ps/home.json")).default,
     "public-content": async () =>
       (await import("./messages/ps/public-content.json")).default,
   },
   ckb: {
     common: async () => (await import("./messages/ckb/common.json")).default,
+    home: async () => (await import("./messages/ckb/home.json")).default,
     "public-content": async () =>
       (await import("./messages/ckb/public-content.json")).default,
   },
   ti: {
     common: async () => (await import("./messages/ti/common.json")).default,
+    home: async () => (await import("./messages/ti/home.json")).default,
     "public-content": async () =>
       (await import("./messages/ti/public-content.json")).default,
   },
   am: {
     common: async () => (await import("./messages/am/common.json")).default,
+    home: async () => (await import("./messages/am/home.json")).default,
     "public-content": async () =>
       (await import("./messages/am/public-content.json")).default,
   },
   om: {
     common: async () => (await import("./messages/om/common.json")).default,
+    home: async () => (await import("./messages/om/home.json")).default,
     "public-content": async () =>
       (await import("./messages/om/public-content.json")).default,
   },
   so: {
     common: async () => (await import("./messages/so/common.json")).default,
+    home: async () => (await import("./messages/so/home.json")).default,
     "public-content": async () =>
       (await import("./messages/so/public-content.json")).default,
   },
 } satisfies Partial<Record<PublicLocale, OverlayLoaders>>;
+
+function localizeCatalogBrand<Messages extends Record<string, string>>(
+  messages: Messages,
+  locale: PublicLocale,
+): Messages {
+  return Object.fromEntries(
+    Object.entries(messages).map(([key, value]) => [
+      key,
+      localizeBrandName(value, locale),
+    ]),
+  ) as Messages;
+}
 
 export async function loadCatalog<Name extends CatalogName>(
   locale: PublicLocale,
   name: Name,
 ): Promise<CatalogMap[Name]> {
   if ((translatedInterfaceLocales as readonly string[]).includes(locale)) {
-    return catalogLoaders[locale as TranslatedInterfaceLocale][
+    const catalog = (await catalogLoaders[locale as TranslatedInterfaceLocale][
       name
-    ]() as Promise<CatalogMap[Name]>;
+    ]()) as CatalogMap[Name];
+    return localizeCatalogBrand(catalog, locale);
   }
 
   // Every other public locale reads the English base and overlays any
@@ -247,8 +284,9 @@ export async function loadCatalog<Name extends CatalogName>(
   const overlay = (overlayLoaders as Record<string, OverlayLoaders>)[locale]?.[
     name
   ];
-  if (!overlay) return base;
-  return { ...base, ...(await overlay()) };
+  if (!overlay) return localizeCatalogBrand(base, locale);
+  const combined: CatalogMap[Name] = { ...base, ...(await overlay()) };
+  return localizeCatalogBrand(combined, locale);
 }
 
 export async function loadPageCatalog<Name extends PageCatalogName>(

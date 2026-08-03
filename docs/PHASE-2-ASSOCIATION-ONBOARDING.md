@@ -68,7 +68,7 @@ Team coordinators, staff, volunteers, interns, and restricted participation-docu
 ### Shared inter-organisation agenda
 
 - A workspace agenda (calendar and list) shows coordination events across organisations for the active city.
-- An event is hosted by one organisation (or the platform) and is either **organisation-scoped** (internal) or **inter-organisation** — visible to authenticated members of every verified organisation. Coordination events are never public.
+- An event is hosted by one organisation (or the platform) and is **organisation-scoped** (internal), **inter-organisation** (visible to authenticated members of every verified organisation), or **public** (announced on the public agenda). Events are private by default; only the host can choose the public tier.
 - Events support one-off and recurring schedules (for example, a daily inter-association coordination briefing that other organisations join), concrete occurrences, safe location and contact details, and cancellation or changes with a visible reason.
 - Creating and editing requires an explicit coordination permission granted by the organisation administrator; every active member of a verified organisation can view inter-organisation events.
 - Organisations can mark participation (attending / interested / declined), visible to the other participants.

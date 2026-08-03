@@ -3,6 +3,7 @@ import type {
   PublicArticleLabels,
 } from "@infokit/shared/public-content";
 import { CalendarDays, Languages, ShieldCheck, Users } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { ArticleUnreliableNotice } from "~/components/public/article-collection";
 import {
@@ -33,11 +34,14 @@ export function PublicArticleDetailView({
   article,
   labels,
   eyebrow,
+  actions,
 }: {
   article: PublicArticleDetail;
   labels: PublicArticleLabels;
   /** Section name, e.g. "Practical information". */
   eyebrow: string;
+  /** Portable article actions shown only after the full article is read. */
+  actions?: ReactNode;
 }) {
   const blocks = paragraphs(article.body);
 
@@ -116,6 +120,10 @@ export function PublicArticleDetailView({
           </MetaRow>
         </dl>
       </SurfaceCard>
+
+      {actions ? (
+        <footer className="border-line border-t pt-6">{actions}</footer>
+      ) : null}
     </article>
   );
 }

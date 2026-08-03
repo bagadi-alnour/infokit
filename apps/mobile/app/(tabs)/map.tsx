@@ -69,6 +69,11 @@ export default function MapScreen() {
           selectedId={selectedId}
           onSelect={setSelectedId}
           statusWord={(activity) => statusLabel(activity.status, labels)}
+          viewLabels={{
+            group: strings.mapStyle,
+            muted: strings.mapMuted,
+            hybrid: strings.mapHybrid,
+          }}
           hint={labels.mapHint}
         />
       )}

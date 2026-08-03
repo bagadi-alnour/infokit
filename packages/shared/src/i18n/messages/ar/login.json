@@ -64,5 +64,8 @@
   "auth.account.passwordConfirmationLabel": "تأكيد كلمة المرور الجديدة",
   "auth.account.passwordSubmit": "حفظ كلمة المرور",
   "auth.account.updated": "تم تحديث كلمة المرور.",
-  "auth.account.error": "يجب أن تتطابق كلمتا المرور وأن تتكونا من 12 حرفًا على الأقل."
+  "auth.account.error": "يجب أن تتطابق كلمتا المرور وأن تتكونا من 12 حرفًا على الأقل.",
+  "auth.account.currentPasswordLabel": "كلمة المرور الحالية",
+  "auth.account.currentPasswordHint": "مطلوبة لاستبدال كلمة مرور موجودة.",
+  "auth.account.currentPasswordError": "كلمة المرور الحالية غير صحيحة."
 }

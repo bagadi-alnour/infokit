@@ -17,11 +17,11 @@ InfoKit helps a person answer two questions quickly: **Where can I get help?** a
 
 ### Personality
 
-- Trustworthy, practical, and human.
-- Calm in urgent situations; never alarmist or bureaucratic.
-- Structured like Airtable, but not spreadsheet-like on public pages.
-- Welcoming without being playful about serious needs.
-- Neutral toward organisations, nationalities, routes, and legal situations.
+- **Dignity:** calm and non-judgmental about needs, organisations, nationalities, routes, and legal situations.
+- **Reliability:** practical about sources, check dates, current status, and uncertainty.
+- **Accessibility:** clear across supported devices, connection conditions, languages, reading directions, and literacy levels.
+- **Collaboration:** structured enough for associations to work together without making public pages feel like spreadsheets.
+- **Responsibility:** explicit about who published, approved, corrected, or owns information.
 
 ### Visual signature
 

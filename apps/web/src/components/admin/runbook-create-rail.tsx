@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { useId, useState } from "react";
 
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { SearchableSelect } from "~/components/admin/searchable-select";
 import { PendingButton } from "~/components/pending-button";
 import { Button } from "~/components/ui/button";
@@ -142,7 +143,12 @@ export function RunbookCreateRail({
             </Field>
 
             {availableServices.length > 0 ? (
-              <form action={assignServiceToActivity} className="grid gap-3">
+              <ActionFeedbackForm
+                action={assignServiceToActivity}
+                successMessage={labels["create.feedbackServiceAssigned"] ?? ""}
+                errorMessage={labels["create.feedbackActionError"] ?? ""}
+                className="grid gap-3"
+              >
                 <input type="hidden" name="locale" value={locale} />
                 <input type="hidden" name="activityId" value={activityId} />
                 <Field>
@@ -166,7 +172,7 @@ export function RunbookCreateRail({
                 <PendingButton variant="secondary" className="justify-self-end">
                   {labels.assignService}
                 </PendingButton>
-              </form>
+              </ActionFeedbackForm>
             ) : null}
 
             <div className="flex items-center gap-3">
@@ -175,8 +181,10 @@ export function RunbookCreateRail({
               <Separator className="flex-1" />
             </div>
 
-            <form
+            <ActionFeedbackForm
               action={createAndAssignService}
+              successMessage={labels["create.feedbackServiceCreated"] ?? ""}
+              errorMessage={labels["create.feedbackActionError"] ?? ""}
               className="grid gap-3 sm:grid-cols-2"
             >
               <input type="hidden" name="locale" value={locale} />
@@ -235,7 +243,7 @@ export function RunbookCreateRail({
               <PendingButton className="sm:col-span-2 sm:justify-self-end">
                 {labels.createAndAssign}
               </PendingButton>
-            </form>
+            </ActionFeedbackForm>
           </DialogContent>
         </Dialog>
 
@@ -260,7 +268,12 @@ export function RunbookCreateRail({
               <DialogTitle>{labels.exceptionalClosure}</DialogTitle>
               <DialogDescription>{labels.closureDescription}</DialogDescription>
             </DialogHeader>
-            <form action={addExceptionalClosure} className="grid gap-4">
+            <ActionFeedbackForm
+              action={addExceptionalClosure}
+              successMessage={labels["create.feedbackClosureAdded"] ?? ""}
+              errorMessage={labels["create.feedbackActionError"] ?? ""}
+              className="grid gap-4"
+            >
               <input type="hidden" name="locale" value={locale} />
               <Field>
                 <FieldLabel htmlFor={fieldId("closure-activity")}>
@@ -309,7 +322,7 @@ export function RunbookCreateRail({
               <PendingButton className="justify-self-end">
                 {labels.addClosure}
               </PendingButton>
-            </form>
+            </ActionFeedbackForm>
           </DialogContent>
         </Dialog>
       </div>

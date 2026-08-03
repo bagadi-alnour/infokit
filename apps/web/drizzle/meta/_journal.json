@@ -29,6 +29,62 @@
       "when": 1785318692485,
       "tag": "0003_append_only_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785428513063,
+      "tag": "0004_chief_purifiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785430216433,
+      "tag": "0005_awesome_boomer",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785445362146,
+      "tag": "0006_superb_jimmy_woo",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785478862434,
+      "tag": "0007_dashing_bug",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785585397678,
+      "tag": "0008_basic_information_authoring",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785609549717,
+      "tag": "0009_typical_silhouette",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785609549718,
+      "tag": "0010_revision_review_dates",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785626004251,
+      "tag": "0011_online_events",
+      "breakpoints": true
     }
   ]
 }

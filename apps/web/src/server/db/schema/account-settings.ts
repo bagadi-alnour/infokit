@@ -5,7 +5,6 @@ import {
   index,
   integer,
   time,
-  timestamp,
   uniqueIndex,
   uuid,
   varchar,
@@ -21,7 +20,6 @@ import {
   digestFrequency,
   notificationKind,
   notifications,
-  secondFactorMethod,
   signInMethod,
   themePreference,
   timestamps,
@@ -41,9 +39,11 @@ import {
  *    policy and RBAC decide what a person may do; this decides what they
  *    are shown and how they are told.
  *
- * Deliberately absent: phone numbers and any second-factor secret. The SMS
- * recipient stays deployment configuration (docs/DATABASE-SCHEMA.md §4), so
- * this table can never become a phone-number list.
+ * Deliberately absent: phone numbers and any second-factor secret. Both belong
+ * to authentication, and both live in tables of their own — the SMS recipient in
+ * `auth.user_second_factors`, the authenticator secret and recovery codes in
+ * `auth.two_factor`. So a settings write can never touch either, and this table
+ * can never become a phone-number list.
  */
 export const userSettings = authSchema.table(
   "user_settings",
@@ -83,25 +83,23 @@ export const userSettings = authSchema.table(
     /** ISO weekday, 1 = Monday, for the schedule and calendar grids. */
     weekStartsOn: integer("week_starts_on").notNull().default(1),
 
-    /* -------- Sign-in and second factor -------- */
+    /* -------- Sign-in -------- */
     /** Which method the login page offers first for this account. */
     preferredSignInMethod: signInMethod("preferred_sign_in_method")
       .notNull()
       .default("magic_link"),
-    /**
-     * Whether this account is asked for a second factor. On by default, and an
-     * account holding a role marked `requires_second_factor` cannot turn it off
-     * — the server re-checks the roles on every write and on every gated read
-     * (`secondFactorRequired`), so flipping this column is not a bypass.
+    /*
+     * The second factor is deliberately not a preference here any more.
+     *
+     * `two_factor_enabled`, `two_factor_method` and `two_factor_updated_at` used
+     * to live in this block, and a column saying "on" was never the same thing as
+     * a factor that existed — it could claim protection with no secret behind it.
+     * Better Auth writes the fact instead: `auth.users.two_factor_enabled` when an
+     * enrolment is proven, `auth.two_factor` for the secret and recovery codes,
+     * and `auth.sessions.second_factor_verified_at` for whether a given session
+     * passed one. Which channels an account can answer with is derived from those
+     * (`availableSecondFactors`), not stored.
      */
-    twoFactorEnabled: boolean("two_factor_enabled").notNull().default(true),
-    twoFactorMethod: secondFactorMethod("two_factor_method")
-      .notNull()
-      .default("sms"),
-    /** When the enrolment last changed; the reason lives in `audit.events`. */
-    twoFactorUpdatedAt: timestamp("two_factor_updated_at", {
-      withTimezone: true,
-    }),
 
     /* -------- Notifications -------- */
     /** Per-kind channels live in `notifications.preferences`. */

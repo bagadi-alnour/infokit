@@ -8,59 +8,147 @@
  * every link is settled here, on the server, so the site and the app can say the
  * same thing (docs/UI-ARCHITECTURE.md §1).
  */
-import { emergencyNumbers, type EmergencyNumber } from "@infokit/shared/basics";
 import type { PublicLocale } from "@infokit/shared/i18n";
 import type { PageCatalog } from "@infokit/shared/i18n/catalogs";
 
 import { localizedPath } from "~/i18n/routing";
-import type { PublishedActivity } from "~/server/content/public-content";
+import type {
+  PublishedActivity,
+  PublishedBasicInformation,
+} from "~/server/content/public-content";
 
 type Messages = PageCatalog<"public-content">;
 
-/** One number, with the words that say what it is for and how to reach it. */
-export interface EmergencyContact {
-  code: EmergencyNumber["code"];
+/**
+ * Both blocks are read from `content.basic_information_details` now, not from a
+ * hardcoded table.
+ *
+ * What that buys is the whole point of the product: every number arrives with a
+ * custodian, a source, a review date and a revision history, so a reader can be
+ * told how old it is and an editor can correct it without a deploy. The words
+ * come with it — they are editorial translations, not interface strings — which
+ * is why nothing here looks a label up in the catalogue any more.
+ *
+ * What still comes from the catalogue is the chrome around the number: "Call
+ * 112" and "Text 114" are how the interface describes pressing a card, and they
+ * are the same sentence whatever the card says.
+ */
+
+/** How a tile is pressed, given what it says and what it is about. */
+function dialHref(tile: PublishedBasicInformation): string | null {
+  // The number actually pressed is `dialInstead` where one is set — the
+  // sea-rescue card prints an association's number and dials 112.
+  const pressed = tile.dialInstead ?? tile.dial;
+  if (!pressed) return null;
+  // Spaces are for reading, not for dialling.
+  const digits = pressed.replace(/\s/g, "");
+  return tile.reach === "sms" ? `sms:${digits}` : `tel:${digits}`;
+}
+
+/** "Call 112" or "Text 114", already carrying the digits a reader will press. */
+function dialAction(
+  tile: PublishedBasicInformation,
+  messages: Messages,
+): string {
+  const shown = tile.dial ?? "";
+  return (
+    tile.reach === "sms" ? messages["basics.sms"] : messages["basics.call"]
+  ).replace("{number}", shown);
+}
+
+/**
+ * How much weight a card's words carry, said on the card itself.
+ *
+ * A grey line at the bottom of the block saying "these are not confirmed yet"
+ * asks a reader in trouble to hold a caveat in their head while they scan five
+ * cards, and they will not: the caveat has to be *on* the card it qualifies.
+ * Three states, and each is read off a fact rather than a judgement:
+ *
+ * - `official` — the number is the country's, from `operator`. 112 is 112.
+ * - `confirmed` — an association line whose record the association itself now
+ *   holds (`custodian`), so what the card says is theirs to say.
+ * - `unconfirmed` — an association line the platform copied from a printed guide
+ *   and nobody at the other end has taken on yet. Today that is all three of
+ *   them, and saying so is the point.
+ */
+export type BasicConfirmation = "official" | "confirmed" | "unconfirmed";
+
+export interface BasicConfirmationBadge {
+  kind: BasicConfirmation;
+  label: string;
+}
+
+function confirmation(tile: PublishedBasicInformation): BasicConfirmation {
+  if (tile.operator === "state") return "official";
+  return tile.custodian === "organization" ? "confirmed" : "unconfirmed";
+}
+
+function confirmationBadge(
+  tile: PublishedBasicInformation,
+  messages: Messages,
+): BasicConfirmationBadge {
+  const kind = confirmation(tile);
+  const label =
+    kind === "official"
+      ? messages["basics.badge.official"]
+      : kind === "confirmed"
+        ? messages["basics.badge.confirmed"]
+        : messages["basics.badge.unconfirmed"];
+  return { kind, label };
+}
+
+/** One association-run line, as published. */
+export interface HelpLineContact {
+  /** The entry's slug: stable, and the only key a surface may match on. */
+  code: string;
   dial: string;
   icon: string;
   label: string;
   hint: string;
-  /** "Call 15" or "Text 114" — already carrying the digits. */
   action: string;
-  /** `tel:` for a number that is answered, `sms:` for one that is written to. */
   href: string;
+  /** True where the same number is also reachable on WhatsApp. */
+  whatsapp: boolean;
+  /** The association whose phone rings, where one is named. */
+  answeredBy: string | null;
+  /** Whether the association behind this line has stood behind it yet. */
+  confirmation: BasicConfirmationBadge;
 }
 
-const numberLabelKeys = {
-  emergency: ["basics.number.emergency", "basics.number.emergencyHint"],
-  ambulance: ["basics.number.ambulance", "basics.number.ambulanceHint"],
-  police: ["basics.number.police", "basics.number.policeHint"],
-  fire: ["basics.number.fire", "basics.number.fireHint"],
-  shelter: ["basics.number.shelter", "basics.number.shelterHint"],
-  deaf: ["basics.number.deaf", "basics.number.deafHint"],
-} as const;
-
 /**
- * The emergency numbers of the city's country, worded in the reader's language.
+ * The association-run lines: every published tile whose `operator` says an
+ * association answers it.
  *
- * The digits are configuration and the words are catalogue entries: neither is
- * written into a screen, so another country's deployment changes one list and
- * translates one table (docs/PRODUCT.md §2).
+ * The block's heading tells a reader these are *not* the State's, which is a
+ * claim about the number, so it is read from the column that records exactly
+ * that rather than inferred from whether an organisation happens to be linked —
+ * Alarm Phone is a transnational network with no record here and would be
+ * mis-filed by any such guess (`~/server/db/schema/schemas`).
+ *
+ * A tile with no number to press is skipped: this block is a list of phones.
  */
-export function emergencyContacts(messages: Messages): EmergencyContact[] {
-  return emergencyNumbers.map((number) => {
-    const [labelKey, hintKey] = numberLabelKeys[number.code];
-    return {
-      code: number.code,
-      dial: number.dial,
-      icon: number.icon,
-      label: messages[labelKey],
-      hint: messages[hintKey],
-      action: (number.callable
-        ? messages["basics.call"]
-        : messages["basics.sms"]
-      ).replace("{number}", number.dial),
-      href: `${number.callable ? "tel" : "sms"}:${number.dial}`,
-    };
+export function helpLineContacts(
+  basics: PublishedBasicInformation[],
+  messages: Messages,
+): HelpLineContact[] {
+  return basics.flatMap((tile) => {
+    if (tile.operator !== "association" || !tile.dial) return [];
+    const href = dialHref(tile);
+    if (!href) return [];
+    return [
+      {
+        code: tile.slug,
+        dial: tile.dial,
+        icon: tile.icon,
+        label: tile.title,
+        hint: tile.summary ?? "",
+        action: dialAction(tile, messages),
+        href,
+        whatsapp: tile.reach === "whatsapp",
+        answeredBy: tile.answeredBy,
+        confirmation: confirmationBadge(tile, messages),
+      },
+    ];
   });
 }
 
@@ -75,18 +163,17 @@ export interface UrgentRoute {
   href: string;
   /** True for the one call that is for danger — colour is never the only cue. */
   danger: boolean;
+  /**
+   * Present on a published number, absent on the water card: that one opens a
+   * filter on activities rather than making a claim about a phone line, and a
+   * badge there would be a claim about nothing.
+   */
+  confirmation?: BasicConfirmationBadge;
 }
 
 /**
- * The two numbers worth a card of their own: the one for danger, and the one for
- * a bed tonight. The rest of the numbers are configuration the urgent row does
- * not promote — order matters here, since it is the order the cards are read in.
- */
-const URGENT_NUMBER_CODES: EmergencyNumber["code"][] = ["emergency", "shelter"];
-
-/**
- * The third card is water and washing: the need that is counted in hours rather
- * than days, and the one thing the two numbers above it cannot answer.
+ * The last card is water and washing: the need that is counted in hours rather
+ * than days, and the one thing the numbers before it cannot answer.
  *
  * Water leads, and showers stand in for it where a city publishes washing but no
  * water point — the list takes one service filter, so the card names both and
@@ -95,36 +182,54 @@ const URGENT_NUMBER_CODES: EmergencyNumber["code"][] = ["emergency", "shelter"];
 const WATER_SERVICE_CODES = ["drinking_water", "showers_hygiene"];
 
 /**
- * The shortest routes on the page: the call for danger, the call for a bed
- * tonight, and the way to water and a shower.
+ * The shortest routes on the page: every published state number, in the order an
+ * editor put them in, and then the way to water and a shower.
  *
- * The numbers come from the same configuration as the grid and the third card
- * opens a filter on what is published, so the row states no fact of its own — it
- * only puts three answers first, and it shrinks to two where nothing offers
- * water or washing yet (AGENTS.md rule 5: never route a reader to an empty page).
+ * Which numbers appear is now an editorial decision rather than a constant in
+ * this file — publishing a tile adds a card, unpublishing removes it, and
+ * `priority` is the order they are read in. That is the whole reason the block
+ * moved into the database: the numbers a city puts first are a local judgement,
+ * and it should not take a deploy to change one.
+ *
+ * The association lines are deliberately not here. They are drawn below the row
+ * under a heading that says they are volunteer-run — a distinction that matters
+ * when somebody is deciding who to call, and one this row would erase by mixing
+ * them in with the numbers the State answers.
+ *
+ * The row still states no fact of its own: the numbers are the tiles' and the
+ * water card opens a filter on what is published, so it disappears where nothing
+ * offers water or washing (AGENTS.md rule 5: never route a reader to an empty
+ * page).
  */
 export function urgentRoutes({
+  basics,
   activities,
   locale,
   messages,
 }: {
+  basics: PublishedBasicInformation[];
   activities: PublishedActivity[];
   locale: PublicLocale;
   messages: Messages;
 }): UrgentRoute[] {
-  const contacts = emergencyContacts(messages);
   const routes: UrgentRoute[] = [];
-  for (const code of URGENT_NUMBER_CODES) {
-    const contact = contacts.find((item) => item.code === code);
-    if (!contact) continue;
+  for (const tile of basics) {
+    if (tile.operator !== "state") continue;
+    const href = dialHref(tile);
+    if (!href) continue;
     routes.push({
-      code: contact.code,
-      icon: contact.icon,
-      // The digits are in the action wording already: "Call 112".
-      title: contact.action,
-      hint: contact.hint,
-      href: contact.href,
-      danger: contact.code === "emergency",
+      code: tile.slug,
+      icon: tile.icon,
+      // The digits belong in the title, because the card *is* the instruction:
+      // "Call 112" reads as something to do, where the label alone does not.
+      title: dialAction(tile, messages),
+      hint: tile.summary ?? "",
+      href,
+      // One red on the row. A second would make neither of them the loudest
+      // thing on the page (DESIGN-SYSTEM.md §5), which is why at most one tile
+      // may carry `emergency`.
+      danger: tile.emergency,
+      confirmation: confirmationBadge(tile, messages),
     });
   }
 

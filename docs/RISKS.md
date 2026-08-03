@@ -53,7 +53,7 @@ One person is the bus factor for a service people may rely on.
 ### R5 — Hostile use of public data
 
 In Calais, precise distribution times and places can attract police pressure and hostile attention. Confidentiality of personal data is already strong in the PRD; **integrity and precision of public data is the residual risk**.
-**Mitigations (decided 16–17 July 2026):** every place records **"should this be public?" with a precision level** — exact point / area only / contact to learn; the same consideration applies to exact schedule times; the choice belongs to the providing organisation; a standing Phase 0 interview question: "what must never be published, and at what precision?"; no attendance/crowd-size data anywhere; rapid unpublish path. Inter-organisation coordination events (the shared agenda, including meeting locations) are authenticated-only and never public.
+**Mitigations (decided 16–17 July 2026):** every place records **"should this be public?" with a precision level** — exact point / area only / contact to learn; the same consideration applies to exact schedule times; the choice belongs to the providing organisation; a standing Phase 0 interview question: "what must never be published, and at what precision?"; no attendance/crowd-size data anywhere; rapid unpublish path. Organisation-scoped and inter-organisation coordination events, including their meeting locations, remain authenticated-only. A host must explicitly choose the public tier before an event reaches the public agenda.
 **Signals:** an org reports enforcement activity correlated with a listing; a takedown request.
 **Response if fired:** unpublish within the correction SLA, contact the org, record the incident, review precision defaults for that category.
 

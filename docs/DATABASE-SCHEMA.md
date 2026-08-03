@@ -208,6 +208,7 @@ One account has one sign-in email. Organisation-specific contact addresses may r
 | `auth.verification_tokens`       | Email verification and passwordless login           | hashed token, purpose, email/user, expiry, consumed time                                                                                             |
 | `auth.second_factor_challenges`  | Short-lived SMS verification for a specific session | user, hashed session token, keyed code digest, locale, delivery state, bounded attempts, expiry, consumed time; never store the phone number or code |
 | `auth.user_second_factors`       | The number one account receives codes on            | `user_id PK FK`, E.164 `phone` (checked), nullable `verified_at`; one number per account, unusable until a code sent to it comes back                |
+| `auth.trusted_devices`           | Browsers the owner told us to stop asking a code on | `user_id FK`, unique `token_hash` (SHA-256 digest, never the secret), `user_agent`/`ip_address` to recognise it, fixed `expires_at`, `last_used_at`  |
 | `auth.password_reset_tokens`     | Single-use password recovery                        | hashed token, user, expiry, consumed time                                                                                                            |
 | `auth.password_sign_in_attempts` | Identifier-level password throttle ledger           | HMACed normalized identifier, nullable resolved user, success flag, attempted time; bounded retention                                                |
 | `auth.authenticators`            | Optional WebAuthn/passkey credentials               | credential ID, public key, counter, transports                                                                                                       |
@@ -1069,6 +1070,7 @@ At minimum:
 
 - Exactly one normalized `auth.users.email` per account, with a global case-insensitive unique index; this protects account identity and does not constrain organisation membership.
 - At most one second-factor number per account (`auth.user_second_factors.user_id` is the primary key), checked against E.164 in the database as well as in the form; `verified_at` is what makes it usable, and re-enrolling clears it.
+- One `auth.trusted_devices` row per trusted browser, unique on `token_hash` and never holding the secret itself; a device is trusted only while `expires_at` is in the future, and disabling the second factor deletes every row for the account, so trust can never outlive the factor it was granted against.
 - Unique organisation slug.
 - Unique `(organization_id, user_id)` membership identity where `user_id` is not null; the same user ID may appear in other organisations.
 - Unique `(organization_id, contact_email)` for non-null normalized email-first memberships; identity linking updates the stable row rather than recreating assignments.

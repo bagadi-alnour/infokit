@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { type Locale } from "@infokit/shared/i18n";
 
@@ -16,7 +16,11 @@ import {
 } from "~/server/auth/authorization";
 import { claimOrganizationIfSteward } from "~/server/auth/link-memberships";
 import { assertOrganizationWritable } from "~/server/auth/org-access";
-import { protectedPermissionAction } from "~/server/auth/require";
+import {
+  protectedEditorAction,
+  protectedPermissionAction,
+  requirePermission,
+} from "~/server/auth/require";
 import { hashContent } from "~/server/content/editorial";
 import { db } from "~/server/db";
 import { insertMember } from "~/server/members";
@@ -33,10 +37,12 @@ import {
   organizations,
   organizationSpecialities,
   roles,
+  rolePermissions,
   translationSourceVersions,
   users,
 } from "~/server/db/schema";
 import {
+  ASSIGNABLE_ORGANIZATION_ROLE_CODES,
   INVITABLE_ROLE_CODES,
   invitationKindForRole,
   sendRepresentativeInvitation,
@@ -54,8 +60,27 @@ function refresh(locale: Locale, organizationId?: string) {
     revalidatePath(
       localizedPath(`/dashboard/organizations/${organizationId}`, locale),
     );
+    revalidatePath(localizedPath("/dashboard/my-organization", locale));
+    revalidatePath(localizedPath("/dashboard/my-organization/roles", locale));
   }
   revalidatePath(localizedPath("/dashboard", locale));
+}
+
+/**
+ * Organisation-owned writes accept either a platform grant or the same grant
+ * held through a role in the organisation named by the form. The record-level
+ * permission check binds that role to this tenant before the action body reads
+ * any other form value.
+ */
+function protectedOrganizationAction<Result>(
+  permissionCode: string,
+  action: Parameters<typeof protectedEditorAction<Result>>[0],
+) {
+  return protectedEditorAction<Result>(async (formData, locale, user) => {
+    const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await requirePermission(permissionCode, locale, organizationId);
+    return action(formData, locale, user);
+  });
 }
 
 function slugify(input: string): string {
@@ -77,15 +102,68 @@ const createOrganizationSchema = z.object({
   status: z.enum(["draft", "verified"]),
 });
 
+/**
+ * The representative half of the creation form. Optional as a block and
+ * required within it: an operator either names the person who will take the
+ * record over or leaves the whole fieldset alone, because
+ * `core.organization_members` takes no half-filled rows and a roster entry with
+ * no phone number is one nobody can act on.
+ *
+ * Leaving it empty is a real choice, not an omission — a directory record
+ * verified from public sources exists before anybody at the organisation has
+ * agreed to maintain it (docs/PRODUCT.md §11.3).
+ */
+const createRepresentativeSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  firstName: personName,
+  lastName: personName,
+  phone: phoneNumber,
+  title: z.string().trim().min(2).max(160),
+  roleCode: z.enum(INVITABLE_ROLE_CODES),
+});
+
 export const createOrganization = protectedPermissionAction(
   "organization.verify",
-  async (formData, locale) => {
+  async (formData, locale, user) => {
     const parsed = createOrganizationSchema.parse({
       displayName: formData.get("displayName"),
       legalName: formData.get("legalName") ?? "",
       foundedYear: formData.get("foundedYear"),
       status: formData.get("status"),
     });
+
+    /**
+     * The fieldset is validated before the organisation exists, so a mistyped
+     * address fails the form rather than leaving behind a record whose
+     * representative step never ran.
+     */
+    const representativeEmail = formData.get("representativeEmail");
+    const representative =
+      typeof representativeEmail === "string" && representativeEmail.trim()
+        ? createRepresentativeSchema.parse({
+            email: representativeEmail,
+            firstName: formData.get("representativeFirstName"),
+            lastName: formData.get("representativeLastName"),
+            phone: formData.get("representativePhone"),
+            title: formData.get("representativeTitle"),
+            roleCode: formData.get("representativeRoleCode"),
+          })
+        : null;
+    /**
+     * The wrapper above reads *effective* permissions, which include a
+     * superadmin role-testing into an operator context. Inviting reads the
+     * grant the account actually holds, the same test the invitation panel
+     * applies — a role test may create a directory record, but handing an
+     * organisation to somebody is not a thing to do in a simulated role.
+     */
+    if (
+      representative &&
+      !(await hasActualPlatformPermission(user.id, "organization.verify"))
+    ) {
+      throw new Error(
+        "Inviting the representative needs the organisation verification grant",
+      );
+    }
 
     const base = slugify(parsed.displayName) || "organisation";
     let slug = base;
@@ -123,9 +201,31 @@ export const createOrganization = protectedPermissionAction(
       subjectId: organization.id,
       organizationId: organization.id,
     });
+
+    /**
+     * Creating the record and naming who will maintain it are one errand for
+     * the operator, so they are one submit. They stay two events in the ledger:
+     * `organization.created` above, then the invitation's own event — which is
+     * what the audit trail needs, because an organisation outliving the
+     * representative who was first invited to it is the normal case.
+     */
+    let notice = "organization-created";
+    if (representative) {
+      const { invited } = await onboardRepresentative({
+        organizationId: organization.id,
+        organizationName: parsed.displayName,
+        representative,
+        locale,
+        actor: user,
+      });
+      notice = invited
+        ? "organization-created-invited"
+        : "organization-created-granted";
+    }
+
     refresh(locale, organization.id);
     redirect(
-      localizedPath(`/dashboard/organizations/${organization.id}`, locale),
+      `${localizedPath(`/dashboard/organizations/${organization.id}`, locale)}?notice=${notice}`,
     );
   },
 );
@@ -146,7 +246,7 @@ const updateOrganizationSchema = z.object({
   published: z.literal("on").nullable(),
 });
 
-export const updateOrganization = protectedPermissionAction(
+export const updateOrganization = protectedOrganizationAction(
   "organization.profile.manage",
   async (formData, locale, user) => {
     const parsed = updateOrganizationSchema.parse({
@@ -285,7 +385,7 @@ async function sealNarrativeSource(organizationId: string, actorId: string) {
  * Which language the narrative is written in. Changing it re-seals the source
  * version, so the request buttons immediately target the other languages.
  */
-export const setOrganizationNarrativeLanguage = protectedPermissionAction(
+export const setOrganizationNarrativeLanguage = protectedOrganizationAction(
   "organization.profile.manage",
   async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
@@ -323,7 +423,7 @@ const purposeSchema = z.object({
   values: optionalText,
 });
 
-export const upsertOrganizationPurpose = protectedPermissionAction(
+export const upsertOrganizationPurpose = protectedOrganizationAction(
   "organization.profile.manage",
   async (formData, locale, user) => {
     const parsed = purposeSchema.parse({
@@ -369,7 +469,7 @@ export const upsertOrganizationPurpose = protectedPermissionAction(
 
 /* ---------------------------- specialities --------------------------- */
 
-export const addOrganizationSpeciality = protectedPermissionAction(
+export const addOrganizationSpeciality = protectedOrganizationAction(
   "organization.profile.manage",
   async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
@@ -389,7 +489,7 @@ export const addOrganizationSpeciality = protectedPermissionAction(
   },
 );
 
-export const retireOrganizationSpeciality = protectedPermissionAction(
+export const retireOrganizationSpeciality = protectedOrganizationAction(
   "organization.profile.manage",
   async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
@@ -415,7 +515,7 @@ export const retireOrganizationSpeciality = protectedPermissionAction(
 );
 
 /** Primary is optionalText (PRODUCT.md §14.3): empty value clears it (co-equal). */
-export const setPrimarySpeciality = protectedPermissionAction(
+export const setPrimarySpeciality = protectedOrganizationAction(
   "organization.profile.manage",
   async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
@@ -456,7 +556,7 @@ export const setPrimarySpeciality = protectedPermissionAction(
 
 /* ------------------------------ languages ---------------------------- */
 
-export const toggleOrganizationLanguage = protectedPermissionAction(
+export const toggleOrganizationLanguage = protectedOrganizationAction(
   "organization.profile.manage",
   async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
@@ -502,7 +602,7 @@ const contactSchema = z.object({
   labelFr: optionalText,
 });
 
-export const addOrganizationContact = protectedPermissionAction(
+export const addOrganizationContact = protectedOrganizationAction(
   "organization.profile.manage",
   async (formData, locale, user) => {
     const parsed = contactSchema.parse({
@@ -537,7 +637,7 @@ export const addOrganizationContact = protectedPermissionAction(
   },
 );
 
-export const toggleOrganizationContact = protectedPermissionAction(
+export const toggleOrganizationContact = protectedOrganizationAction(
   "organization.profile.manage",
   async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
@@ -643,6 +743,21 @@ async function requireRoleTemplate(code: string) {
 }
 
 /**
+ * Platform operators onboard the first representative; after the organisation
+ * is claimed, its own administrators invite members and assign their access.
+ * Both routes land on the same audited invitation lifecycle.
+ */
+async function requireMemberAdministration(
+  userId: string,
+  organizationId: string,
+  locale: Locale,
+) {
+  if (await hasActualPlatformPermission(userId, "organization.verify")) return;
+  await requirePermission("members.manage", locale, organizationId);
+  await requirePermission("roles.manage", locale, organizationId);
+}
+
+/**
  * Invite the organisation's own representative — the platform side of Phase 1.3
  * Flow 1 (docs/PHASE-1.3-COLLABORATION.md). There is no public organisation
  * signup: an operator names the address, and the invitation is what turns into
@@ -654,8 +769,130 @@ async function requireRoleTemplate(code: string) {
  * has an account there is nothing left to prove, so the roles are granted on the
  * spot and no email is sent.
  */
-export const inviteOrganizationRepresentative = protectedPermissionAction(
-  "organization.verify",
+/**
+ * Reserve the representative's membership and turn it into access — the part
+ * that is identical whether the organisation was created a moment ago or has
+ * been in the directory for a year. It performs no permission check of its
+ * own: both callers gate on `requireMemberAdministration` first, and keeping
+ * the gate at the entry point is what makes it visible there.
+ *
+ * Returns whether an email went out, which is the difference the operator
+ * needs told: an address that already has an account is granted on the spot.
+ */
+async function onboardRepresentative({
+  organizationId,
+  organizationName,
+  representative,
+  locale,
+  actor,
+}: {
+  organizationId: string;
+  organizationName: string;
+  representative: Omit<
+    z.infer<typeof inviteRepresentativeSchema>,
+    "organizationId"
+  >;
+  locale: Locale;
+  actor: { id: string; name: string; email: string };
+}): Promise<{ invited: boolean }> {
+  const { email, roleCode } = representative;
+  const role = await requireRoleTemplate(roleCode);
+  const [account] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${email}`)
+    .limit(1);
+
+  const memberId = await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({
+        id: organizationMembers.id,
+        userId: organizationMembers.userId,
+      })
+      .from(organizationMembers)
+      .where(
+        and(
+          eq(organizationMembers.organizationId, organizationId),
+          account
+            ? or(
+                eq(organizationMembers.contactEmail, email),
+                eq(organizationMembers.userId, account.id),
+              )
+            : eq(organizationMembers.contactEmail, email),
+        ),
+      )
+      .limit(1);
+
+    const identity = {
+      firstName: representative.firstName,
+      lastName: representative.lastName,
+      contactEmail: email,
+      phone: representative.phone,
+      title: representative.title,
+    };
+    if (!existing) {
+      return insertMember(tx, {
+        organizationId,
+        userId: account?.id ?? null,
+        identity,
+      });
+    }
+
+    /**
+     * Re-inviting someone who left, or who has since created an account,
+     * revives the same membership row: activity assignments and audit events
+     * already point at it. The identity is rewritten from the form rather than
+     * kept, because an operator inviting somebody again is stating who they are
+     * now — a stale name and an unreachable number are what made the row worth
+     * re-inviting.
+     */
+    const userId = account?.id ?? existing.userId;
+    await tx
+      .update(organizationMembers)
+      .set({
+        firstName: identity.firstName,
+        lastName: identity.lastName,
+        phone: identity.phone,
+        title: identity.title,
+        userId,
+        status: userId ? "active" : "invited",
+        offboardedAt: null,
+      })
+      .where(eq(organizationMembers.id, existing.id));
+    return existing.id;
+  });
+
+  if (account) {
+    await db
+      .insert(memberRoles)
+      .values({ memberId, roleId: role.id, grantedById: actor.id })
+      .onConflictDoNothing();
+    await claimOrganizationIfSteward(memberId, organizationId);
+    await recordAudit({
+      action: "organization.representative_granted",
+      subjectType: "member",
+      subjectId: memberId,
+      organizationId,
+      metadata: { role: roleCode },
+    });
+    return { invited: false };
+  }
+
+  await sendRepresentativeInvitation({
+    organizationId,
+    email,
+    memberId,
+    kind: invitationKindForRole(roleCode),
+    roleIds: [role.id],
+    invitedById: actor.id,
+    locale,
+    organizationName,
+    inviterName: actor.name || actor.email,
+  });
+  return { invited: true };
+}
+
+export const inviteOrganizationRepresentative = protectedEditorAction(
   async (formData, locale, user) => {
     const parsed = inviteRepresentativeSchema.parse({
       organizationId: formData.get("organizationId"),
@@ -666,108 +903,17 @@ export const inviteOrganizationRepresentative = protectedPermissionAction(
       title: formData.get("title"),
       roleCode: formData.get("roleCode"),
     });
+    await requireMemberAdministration(user.id, parsed.organizationId, locale);
     await assertOrganizationWritable(user.id, parsed.organizationId);
 
-    const [organization, role] = await Promise.all([
-      requireOrganization(parsed.organizationId),
-      requireRoleTemplate(parsed.roleCode),
-    ]);
-    const [account] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(sql`lower(${users.email}) = ${parsed.email}`)
-      .limit(1);
-
-    const memberId = await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select({
-          id: organizationMembers.id,
-          userId: organizationMembers.userId,
-        })
-        .from(organizationMembers)
-        .where(
-          and(
-            eq(organizationMembers.organizationId, parsed.organizationId),
-            account
-              ? or(
-                  eq(organizationMembers.contactEmail, parsed.email),
-                  eq(organizationMembers.userId, account.id),
-                )
-              : eq(organizationMembers.contactEmail, parsed.email),
-          ),
-        )
-        .limit(1);
-
-      const identity = {
-        firstName: parsed.firstName,
-        lastName: parsed.lastName,
-        contactEmail: parsed.email,
-        phone: parsed.phone,
-        title: parsed.title,
-      };
-      if (!existing) {
-        return insertMember(tx, {
-          organizationId: parsed.organizationId,
-          userId: account?.id ?? null,
-          identity,
-        });
-      }
-
-      /**
-       * Re-inviting someone who left, or who has since created an account,
-       * revives the same membership row: activity assignments and audit events
-       * already point at it. The identity is rewritten from the form rather than
-       * kept, because an operator inviting somebody again is stating who they are
-       * now — a stale name and an unreachable number are what made the row worth
-       * re-inviting.
-       */
-      const userId = account?.id ?? existing.userId;
-      await tx
-        .update(organizationMembers)
-        .set({
-          firstName: identity.firstName,
-          lastName: identity.lastName,
-          phone: identity.phone,
-          title: identity.title,
-          userId,
-          status: userId ? "active" : "invited",
-          offboardedAt: null,
-        })
-        .where(eq(organizationMembers.id, existing.id));
-      return existing.id;
+    const organization = await requireOrganization(parsed.organizationId);
+    await onboardRepresentative({
+      organizationId: parsed.organizationId,
+      organizationName: organization.displayName,
+      representative: parsed,
+      locale,
+      actor: user,
     });
-
-    const linkedAccount = Boolean(account);
-    if (linkedAccount) {
-      await db
-        .insert(memberRoles)
-        .values({
-          memberId,
-          roleId: role.id,
-          grantedById: user.id,
-        })
-        .onConflictDoNothing();
-      await claimOrganizationIfSteward(memberId, parsed.organizationId);
-      await recordAudit({
-        action: "organization.representative_granted",
-        subjectType: "member",
-        subjectId: memberId,
-        organizationId: parsed.organizationId,
-        metadata: { role: parsed.roleCode },
-      });
-    } else {
-      await sendRepresentativeInvitation({
-        organizationId: parsed.organizationId,
-        email: parsed.email,
-        memberId,
-        kind: invitationKindForRole(parsed.roleCode),
-        roleIds: [role.id],
-        invitedById: user.id,
-        locale,
-        organizationName: organization.displayName,
-        inviterName: user.name ?? user.email ?? organization.displayName,
-      });
-    }
     refresh(locale, parsed.organizationId);
   },
 );
@@ -777,10 +923,10 @@ export const inviteOrganizationRepresentative = protectedPermissionAction(
  * has already lapsed is replaced rather than extended, so the old link stays
  * dead.
  */
-export const resendOrganizationInvitation = protectedPermissionAction(
-  "organization.verify",
+export const resendOrganizationInvitation = protectedEditorAction(
   async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await requireMemberAdministration(user.id, organizationId, locale);
     await assertOrganizationWritable(user.id, organizationId);
     const invitationId = invitationIdSchema.parse(formData.get("invitationId"));
 
@@ -847,7 +993,7 @@ export const resendOrganizationInvitation = protectedPermissionAction(
       invitedById: user.id,
       locale,
       organizationName: organization.displayName,
-      inviterName: user.name ?? user.email ?? organization.displayName,
+      inviterName: user.name || user.email,
     });
     refresh(locale, organizationId);
   },
@@ -859,10 +1005,10 @@ export const resendOrganizationInvitation = protectedPermissionAction(
  * Anyone who already signed in keeps their membership — that invitation is
  * accepted, and this action does not touch it.
  */
-export const revokeOrganizationInvitation = protectedPermissionAction(
-  "organization.verify",
+export const revokeOrganizationInvitation = protectedEditorAction(
   async (formData, locale, user) => {
     const organizationId = orgIdSchema.parse(formData.get("organizationId"));
+    await requireMemberAdministration(user.id, organizationId, locale);
     await assertOrganizationWritable(user.id, organizationId);
     const invitationId = invitationIdSchema.parse(formData.get("invitationId"));
 
@@ -899,6 +1045,135 @@ export const revokeOrganizationInvitation = protectedPermissionAction(
       organizationId,
     });
     refresh(locale, organizationId);
+  },
+);
+
+/* ------------------------------- roles ------------------------------- */
+
+const memberRoleSchema = z.object({
+  memberId: z.string().uuid(),
+  roleId: z.string().uuid(),
+});
+
+async function requireMemberForRoleChange(memberId: string) {
+  const [member] = await db
+    .select({
+      id: organizationMembers.id,
+      organizationId: organizationMembers.organizationId,
+      userId: organizationMembers.userId,
+    })
+    .from(organizationMembers)
+    .where(eq(organizationMembers.id, memberId))
+    .limit(1);
+  if (!member) throw new Error("Unknown organisation member");
+  return member;
+}
+
+async function requireAssignableRole(roleId: string, organizationId: string) {
+  const [role] = await db
+    .select({
+      id: roles.id,
+      code: roles.code,
+      organizationId: roles.organizationId,
+    })
+    .from(roles)
+    .where(
+      and(
+        eq(roles.id, roleId),
+        or(
+          eq(roles.organizationId, organizationId),
+          and(
+            isNull(roles.organizationId),
+            inArray(roles.code, [...ASSIGNABLE_ORGANIZATION_ROLE_CODES]),
+          ),
+        ),
+      ),
+    )
+    .limit(1);
+  if (!role)
+    throw new Error("That role cannot be assigned in this organisation");
+  return role;
+}
+
+export const grantOrganizationMemberRole = protectedEditorAction(
+  async (formData, locale, user) => {
+    const parsed = memberRoleSchema.parse({
+      memberId: formData.get("memberId"),
+      roleId: formData.get("roleId"),
+    });
+    const member = await requireMemberForRoleChange(parsed.memberId);
+    await requirePermission("roles.manage", locale, member.organizationId);
+    await assertOrganizationWritable(user.id, member.organizationId);
+    const role = await requireAssignableRole(
+      parsed.roleId,
+      member.organizationId,
+    );
+
+    await db
+      .insert(memberRoles)
+      .values({
+        memberId: member.id,
+        roleId: role.id,
+        grantedById: user.id,
+      })
+      .onConflictDoNothing();
+    await recordAudit({
+      action: "member.role_granted",
+      subjectType: "member",
+      subjectId: member.id,
+      organizationId: member.organizationId,
+      metadata: { role: role.code },
+    });
+    refresh(locale, member.organizationId);
+  },
+);
+
+export const revokeOrganizationMemberRole = protectedEditorAction(
+  async (formData, locale, user) => {
+    const parsed = memberRoleSchema.parse({
+      memberId: formData.get("memberId"),
+      roleId: formData.get("roleId"),
+    });
+    const member = await requireMemberForRoleChange(parsed.memberId);
+    await requirePermission("roles.manage", locale, member.organizationId);
+    await assertOrganizationWritable(user.id, member.organizationId);
+    const role = await requireAssignableRole(
+      parsed.roleId,
+      member.organizationId,
+    );
+
+    if (member.userId === user.id) {
+      const [managingGrant] = await db
+        .select({ code: rolePermissions.permissionCode })
+        .from(rolePermissions)
+        .where(
+          and(
+            eq(rolePermissions.roleId, role.id),
+            eq(rolePermissions.permissionCode, "roles.manage"),
+          ),
+        )
+        .limit(1);
+      if (managingGrant) {
+        throw new Error("You cannot remove your own role-management access.");
+      }
+    }
+
+    await db
+      .delete(memberRoles)
+      .where(
+        and(
+          eq(memberRoles.memberId, member.id),
+          eq(memberRoles.roleId, role.id),
+        ),
+      );
+    await recordAudit({
+      action: "member.role_revoked",
+      subjectType: "member",
+      subjectId: member.id,
+      organizationId: member.organizationId,
+      metadata: { role: role.code },
+    });
+    refresh(locale, member.organizationId);
   },
 );
 

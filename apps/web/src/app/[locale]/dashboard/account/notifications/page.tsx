@@ -74,9 +74,11 @@ export default async function AccountNotificationsPage({
   searchParams: Promise<{ status?: string; error?: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const user = await requireEditor(locale);
-  const query = await searchParams;
-  const messages = await loadPageCatalog(locale, "dashboard-account");
+  const [user, query, messages] = await Promise.all([
+    requireEditor(locale),
+    searchParams,
+    loadPageCatalog(locale, "dashboard-account"),
+  ]);
   const [settings, selection] = await Promise.all([
     getAccountSettings(user.id),
     getNotificationSelection(user.id),

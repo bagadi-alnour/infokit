@@ -8,25 +8,17 @@ import {
   Button,
   Card,
   Chip,
-  ControlField,
-  Field,
-  FilterBar,
   Notice,
   PageHeader,
   Select,
-  Stat,
-  StatGrid,
   TextInput,
   WorkspacePage,
 } from "~/components/admin/workspace";
-import { DatePicker } from "~/components/ui/date-picker";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import {
   AUDIT_OUTCOMES,
-  AUDIT_SEVERITIES,
   AUDIT_VIEWS,
-  DELIVERY_CHANNELS,
   DELIVERY_STATUSES,
   EMPTY_AUDIT_QUERY,
   auditQueryString,
@@ -43,7 +35,6 @@ import {
   PLATFORM_OWNER_VALUE,
   auditActionFamilies,
   auditActionNames,
-  auditOrganizations,
   auditScope,
   auditStats,
   listAuditEvents,
@@ -138,7 +129,14 @@ export default async function AuditPage({
   ]);
   const user = await requireEditor(locale);
   const scope = await auditScope(user.id);
-  if (scope === null) {
+  // Platform scopes only, tested here as well as in the data.
+  //
+  // No organisation role grants `audit.read` any more (server/db/seed.ts), so
+  // this is belt and braces rather than the only barrier — but the trail spans
+  // organisations, and a future grant should not open it silently. Letting one
+  // organisation read its own slice is a separate feature with its own redaction
+  // question, not a side effect of holding a role.
+  if (!scope?.platform) {
     await denyPageAccess(AUDIT_PERMISSION, locale);
     // `denyPageAccess` redirects, which throws; this only tells the compiler so.
     return null;
@@ -146,10 +144,9 @@ export default async function AuditPage({
 
   // The ledger is fetched inside the same round as the filter's own lookups, and
   // tagged with which one it is so the union narrows below.
-  const [organizations, stats, actionNames, ledger] = await Promise.all([
-    auditOrganizations(scope),
+  const [stats, actionNames, ledger] = await Promise.all([
     auditStats(scope),
-    auditActionNames(scope),
+    query.view === "events" ? auditActionNames(scope) : Promise.resolve([]),
     query.view === "deliveries"
       ? listDeliveries(scope, query).then((page) => ({
           view: "deliveries" as const,
@@ -175,276 +172,277 @@ export default async function AuditPage({
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const shown = ledger.page.rows.length;
   const platformOwnerLabel = t["audit.owner.platform"];
-  // An organisation filter is only a question for a reader who can see more than
-  // one owner in the first place.
-  const showOrganizationFilter = scope.platform || organizations.length > 1;
+  const shortcutHref = (overrides: Partial<AuditQuery>) =>
+    `${basePath}${auditQueryString(EMPTY_AUDIT_QUERY, overrides)}`;
+  const summaryItems = [
+    {
+      label: t["audit.stat.events"],
+      value: stats.events,
+      href: shortcutHref({ view: "events" }),
+      signal: "bg-brand",
+    },
+    {
+      label: t["audit.stat.denied"],
+      value: stats.denied,
+      href: shortcutHref({ view: "events", outcome: "denied" }),
+      signal: "bg-danger",
+    },
+    {
+      label: t["audit.stat.failures"],
+      value: stats.failures,
+      href: shortcutHref({ view: "events", outcome: "failure" }),
+      signal: "bg-warn",
+    },
+    {
+      label: t["audit.stat.deliveries"],
+      value: stats.failedDeliveries,
+      href: shortcutHref({ view: "deliveries", status: "failed" }),
+      signal: "bg-danger",
+    },
+  ] as const;
+  const resultsTitle =
+    query.view === "deliveries"
+      ? t["audit.results.deliveries"]
+      : t["audit.results.events"];
 
   return (
     <WorkspacePage>
       <PageHeader
         title={t["audit.title"]}
-        sub={t["audit.description"]}
-        badges={
-          <Chip tone="accent">
-            {scope.platform
-              ? t["audit.scope.platform"]
-              : t["audit.scope.organizations"]}
-          </Chip>
-        }
+        // Not a choice any more: the gate above has already refused anything
+        // but a platform scope, so naming the other case here would be a branch
+        // that cannot be reached. `audit.scope.organizations` stays in the
+        // catalogues for whoever builds the per-organisation trail.
+        badges={<Chip tone="accent">{t["audit.scope.platform"]}</Chip>}
       />
 
-      <Notice tone="warn" title={t["audit.notice.privacyTitle"]}>
-        {t["audit.notice.privacyBody"]}
-      </Notice>
+      <Notice tone="warn" title={t["audit.notice.privacyCompact"]} />
 
-      <StatGrid>
-        <Stat
-          label={t["audit.stat.events"]}
-          value={stats.events}
-          hint={formatMessage(t["audit.stat.eventsHint"], {
-            days: String(stats.windowDays),
-          })}
-        />
-        <Stat
-          label={t["audit.stat.denied"]}
-          value={stats.denied}
-          hint={t["audit.stat.deniedHint"]}
-        />
-        <Stat
-          label={t["audit.stat.failures"]}
-          value={stats.failures}
-          hint={t["audit.stat.failuresHint"]}
-        />
-        <Stat
-          label={t["audit.stat.deliveries"]}
-          value={stats.failedDeliveries}
-          hint={t["audit.stat.deliveriesHint"]}
-        />
-      </StatGrid>
-
-      {/* The two ledgers of the same trail; the chosen one is in the URL. */}
-      <div
-        role="group"
-        aria-label={t["audit.view"]}
-        className="border-line bg-subtle mb-4 inline-flex items-center gap-1 rounded-full border p-1"
+      <section
+        aria-label={formatMessage(t["audit.overview.period"], {
+          days: String(stats.windowDays),
+        })}
+        className="mb-4"
       >
-        {AUDIT_VIEWS.map((view) => {
-          const active = view === query.view;
-          return (
+        <div className="border-line bg-surface rounded-card grid overflow-hidden border sm:grid-cols-2 xl:grid-cols-4">
+          {summaryItems.map((item, index) => (
             <Link
-              key={view}
-              href={href(view)}
-              aria-current={active ? "true" : undefined}
+              key={item.label}
+              href={item.href}
+              prefetch={false}
               className={cn(
-                "inline-flex min-h-8 items-center rounded-full px-3 text-sm font-medium",
-                active
-                  ? "bg-surface text-ink shadow-ring"
-                  : "text-copy-muted hover:text-ink",
+                "focus-visible:ring-brand/50 relative flex min-h-14 items-center gap-2.5 px-4 py-2.5 outline-none focus-visible:z-10 focus-visible:ring-2",
+                index > 0 && "border-line border-t sm:border-t-0",
+                index % 2 === 1 && "sm:border-s",
+                index > 1 && "sm:border-t xl:border-t-0",
+                index > 0 && "xl:border-s",
               )}
             >
-              {t[`audit.view.${view}`]}
-            </Link>
-          );
-        })}
-      </div>
-
-      <FilterBar
-        action={basePath}
-        submitLabel={console_["console.filter.apply"]}
-      >
-        {/* Which ledger travels with the filters; there is no `page` input, so
-         * narrowing the list always lands on its first page. */}
-        <input type="hidden" name="view" value={query.view} />
-
-        <div className="min-w-44">
-          <Field label={t["audit.filter.actor"]}>
-            <TextInput
-              name="actor"
-              defaultValue={query.actor}
-              placeholder={t["audit.filter.actorPlaceholder"]}
-              maxLength={120}
-            />
-          </Field>
-        </div>
-
-        <div className="min-w-44">
-          <Field
-            label={
-              query.view === "deliveries"
-                ? t["audit.delivery.column.template"]
-                : t["audit.filter.action"]
-            }
-          >
-            <Select name="action" defaultValue={query.action}>
-              <option value="">{t["audit.filter.anyAction"]}</option>
-              {/* A family first (`member.`), then the names inside it: eleven
-               * `member.*` rows are usually one question, not eleven. */}
-              {families.map((family) => (
-                <option key={family} value={family}>
-                  {family}
-                </option>
-              ))}
-              {actionNames.map((action) => (
-                <option key={action} value={action}>
-                  {action}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
-
-        {query.view === "events" ? (
-          <>
-            <div className="min-w-44">
-              <Field label={t["audit.filter.subject"]}>
-                <TextInput
-                  name="subject"
-                  defaultValue={query.subject}
-                  placeholder={t["audit.filter.subjectPlaceholder"]}
-                  maxLength={120}
-                />
-              </Field>
-            </div>
-            <div className="min-w-36">
-              <Field label={t["audit.filter.outcome"]}>
-                <Select name="outcome" defaultValue={query.outcome}>
-                  <option value="">{t["audit.filter.anyOutcome"]}</option>
-                  {AUDIT_OUTCOMES.map((outcome) => (
-                    <option key={outcome} value={outcome}>
-                      {t[`audit.outcome.${outcome}`]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            <div className="min-w-36">
-              <Field label={t["audit.filter.severity"]}>
-                <Select name="severity" defaultValue={query.severity}>
-                  <option value="">{t["audit.filter.anySeverity"]}</option>
-                  {AUDIT_SEVERITIES.map((severity) => (
-                    <option key={severity} value={severity}>
-                      {t[`audit.severity.${severity}`]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="min-w-36">
-              <Field label={t["audit.filter.channel"]}>
-                <Select name="channel" defaultValue={query.channel}>
-                  <option value="">{t["audit.filter.anyChannel"]}</option>
-                  {DELIVERY_CHANNELS.map((channel) => (
-                    <option key={channel} value={channel}>
-                      {t[`audit.channel.${channel}`]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            <div className="min-w-36">
-              <Field label={t["audit.filter.status"]}>
-                <Select name="status" defaultValue={query.status}>
-                  <option value="">
-                    {console_["console.filter.anyStatus"]}
-                  </option>
-                  {DELIVERY_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {t[`audit.status.${status}`]}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-            <div className="min-w-52">
-              {/* Typed in full, hashed, matched against the stored fingerprint:
-               * the address itself is never written down anywhere. */}
-              <Field
-                label={t["audit.filter.recipient"]}
-                hint={t["audit.filter.recipientHint"]}
-              >
-                <TextInput
-                  name="recipient"
-                  type="email"
-                  defaultValue={query.recipient}
-                  placeholder={t["audit.filter.recipientPlaceholder"]}
-                  maxLength={120}
-                />
-              </Field>
-            </div>
-          </>
-        )}
-
-        {showOrganizationFilter ? (
-          <div className="min-w-44">
-            <Field label={console_["table.organization"]}>
-              <Select name="org" defaultValue={query.organizationId}>
-                <option value="">{console_["console.filter.allOrgs"]}</option>
-                {scope.platform ? (
-                  <option value={PLATFORM_OWNER_VALUE}>
-                    {platformOwnerLabel}
-                  </option>
-                ) : null}
-                {organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-        ) : null}
-
-        <ControlField
-          label={t["audit.filter.from"]}
-          htmlFor="audit-from"
-          hint={t["audit.filter.timezoneHint"]}
-        >
-          <DatePicker
-            id="audit-from"
-            name="from"
-            locale={locale}
-            defaultValue={query.from}
-            placeholder={t["audit.filter.datePlaceholder"]}
-            clearLabel={console_["console.clearDate"]}
-          />
-        </ControlField>
-        <ControlField label={t["audit.filter.to"]} htmlFor="audit-to">
-          <DatePicker
-            id="audit-to"
-            name="to"
-            locale={locale}
-            defaultValue={query.to}
-            placeholder={t["audit.filter.datePlaceholder"]}
-            clearLabel={console_["console.clearDate"]}
-          />
-        </ControlField>
-
-        {hasAuditFilters(query) ? (
-          <Button
-            variant="ghost"
-            render={
-              <Link
-                href={`${basePath}${auditQueryString(EMPTY_AUDIT_QUERY, {
-                  view: query.view,
-                })}`}
+              <span
+                aria-hidden
+                className={cn("size-2 shrink-0 rounded-full", item.signal)}
               />
-            }
-          >
-            {t["audit.filter.clear"]}
-          </Button>
-        ) : null}
-      </FilterBar>
+              <span className="text-copy-muted min-w-0 flex-1 truncate text-xs font-semibold">
+                {item.label}
+              </span>
+              <span className="text-lg font-semibold tabular-nums">
+                {item.value}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
 
-      <Card
-        hint={
-          ledger.view === "deliveries"
-            ? t["audit.delivery.recipientHint"]
-            : undefined
-        }
+      <section
+        aria-label={t["audit.view"]}
+        className="border-line bg-surface rounded-card mb-4 overflow-hidden border"
       >
+        <div className="flex flex-col gap-3 p-3 md:flex-row md:items-center">
+          {/* The two ledgers of the same trail; the chosen one is in the URL. */}
+          <nav
+            aria-label={t["audit.view"]}
+            className="border-line bg-subtle grid shrink-0 grid-cols-2 rounded-lg border p-1"
+          >
+            {AUDIT_VIEWS.map((view) => {
+              const active = view === query.view;
+              return (
+                <Link
+                  key={view}
+                  href={href(view)}
+                  prefetch={false}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "focus-visible:ring-brand/50 inline-flex min-h-9 items-center justify-center rounded-md px-3 text-center text-sm font-medium outline-none focus-visible:ring-2",
+                    active
+                      ? "bg-surface text-ink shadow-ring"
+                      : "text-copy-muted hover:text-ink",
+                  )}
+                >
+                  {t[`audit.view.${view}`]}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <form action={basePath} method="get" className="min-w-0 flex-1">
+            {/* Which ledger travels with the filters; there is no `page` input,
+             * so narrowing the list always lands on its first page. */}
+            <input type="hidden" name="view" value={query.view} />
+
+            <fieldset>
+              <legend className="sr-only">{t["audit.filter.findGroup"]}</legend>
+              <div className="grid items-center gap-2 md:grid-cols-[repeat(3,minmax(0,1fr))_auto]">
+                {query.view === "events" ? (
+                  <>
+                    <div>
+                      <label htmlFor="audit-actor" className="sr-only">
+                        {t["audit.filter.actor"]}
+                      </label>
+                      <TextInput
+                        id="audit-actor"
+                        name="actor"
+                        defaultValue={query.actor}
+                        placeholder={t["audit.filter.actorPlaceholder"]}
+                        maxLength={120}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="audit-action" className="sr-only">
+                        {t["audit.filter.action"]}
+                      </label>
+                      <Select
+                        id="audit-action"
+                        name="action"
+                        defaultValue={query.action}
+                      >
+                        <option value="">{t["audit.filter.anyAction"]}</option>
+                        {/* A family first (`member.`), then the names inside it:
+                         * eleven `member.*` rows are usually one question. */}
+                        {families.map((family) => (
+                          <option key={family} value={family}>
+                            {family}
+                          </option>
+                        ))}
+                        {actionNames.map((action) => (
+                          <option key={action} value={action}>
+                            {action}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <div>
+                      <label htmlFor="audit-outcome" className="sr-only">
+                        {t["audit.filter.outcome"]}
+                      </label>
+                      <Select
+                        id="audit-outcome"
+                        name="outcome"
+                        defaultValue={query.outcome}
+                      >
+                        <option value="">{t["audit.filter.anyOutcome"]}</option>
+                        {AUDIT_OUTCOMES.map((outcome) => (
+                          <option key={outcome} value={outcome}>
+                            {t[`audit.outcome.${outcome}`]}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label htmlFor="audit-message" className="sr-only">
+                        {t["audit.delivery.column.template"]}
+                      </label>
+                      <TextInput
+                        id="audit-message"
+                        name="action"
+                        defaultValue={query.action}
+                        placeholder={t["audit.filter.messagePlaceholder"]}
+                        maxLength={120}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="audit-status" className="sr-only">
+                        {t["audit.filter.status"]}
+                      </label>
+                      <Select
+                        id="audit-status"
+                        name="status"
+                        defaultValue={query.status}
+                      >
+                        <option value="">
+                          {console_["console.filter.anyStatus"]}
+                        </option>
+                        {DELIVERY_STATUSES.map((status) => (
+                          <option key={status} value={status}>
+                            {t[`audit.status.${status}`]}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    {/* Typed in full, hashed, matched against the stored
+                     * fingerprint: the address itself is never written down. */}
+                    <div>
+                      <label htmlFor="audit-recipient" className="sr-only">
+                        {t["audit.filter.recipient"]}
+                      </label>
+                      <TextInput
+                        id="audit-recipient"
+                        name="recipient"
+                        type="email"
+                        defaultValue={query.recipient}
+                        placeholder={t["audit.filter.recipientPlaceholder"]}
+                        maxLength={120}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="flex min-h-9 items-center justify-end gap-2">
+                  {hasAuditFilters(query) ? (
+                    <Button
+                      variant="ghost"
+                      render={
+                        <Link
+                          href={`${basePath}${auditQueryString(
+                            EMPTY_AUDIT_QUERY,
+                            {
+                              view: query.view,
+                            },
+                          )}`}
+                          prefetch={false}
+                        />
+                      }
+                    >
+                      {t["audit.filter.clear"]}
+                    </Button>
+                  ) : null}
+                  <Button>{console_["console.filter.apply"]}</Button>
+                </div>
+              </div>
+            </fieldset>
+          </form>
+        </div>
+      </section>
+
+      <Card>
+        <h2 className="sr-only">{resultsTitle}</h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          {total > 0 ? (
+            <span className="text-copy-muted text-xs tabular-nums">
+              {formatMessage(console_["table.results"], {
+                shown: String(shown),
+                total: String(total),
+              })}
+            </span>
+          ) : null}
+          {ledger.view === "deliveries" ? (
+            <span className="text-copy-muted text-xs">
+              {t["audit.delivery.recipientHint"]}
+            </span>
+          ) : null}
+        </div>
         {ledger.view === "deliveries" ? (
           <AuditDeliveriesTable
             rows={ledger.page.rows}
@@ -467,11 +465,6 @@ export default async function AuditPage({
             className="border-line mt-3 flex flex-wrap items-center justify-between gap-3 border-t pt-3"
           >
             <p className="text-copy-muted text-xs">
-              {formatMessage(console_["table.results"], {
-                shown: String(shown),
-                total: String(total),
-              })}{" "}
-              ·{" "}
               {formatMessage(console_["table.page"], {
                 page: String(page),
                 pages: String(pages),

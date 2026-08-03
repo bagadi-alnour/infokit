@@ -137,6 +137,8 @@ export function actionsColumn<Row extends CatalogueRow>({
                 confirm: labels["catalogue.deleteConfirm"],
                 hint: labels["catalogue.deleteHint"],
                 cancel: labels["catalogue.cancel"],
+                completed: labels["catalogue.deleted"],
+                error: labels["catalogue.actionError"],
               }}
             />
           ) : null}

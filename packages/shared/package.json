@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     "./about": "./src/about/index.ts",
-    "./basics": "./src/basics/index.ts",
     "./i18n": "./src/i18n/index.ts",
     "./i18n/catalogs": "./src/i18n/catalogs.ts",
     "./i18n/taxonomy": "./src/i18n/taxonomy.ts",
@@ -13,12 +12,12 @@
     "./public-simulator": "./src/public-simulator.ts"
   },
   "scripts": {
-    "lint": "eslint . --cache --cache-location .cache/eslint",
+    "lint": "eslint . --cache --cache-strategy content --cache-location .cache/eslint",
     "typecheck": "tsc --noEmit"
   },
   "lint-staged": {
     "*.{ts,json}": [
-      "eslint --fix --cache --cache-location .cache/eslint",
+      "eslint --fix --cache --cache-strategy content --cache-location .cache/eslint",
       "prettier --write --cache"
     ]
   },

@@ -12,7 +12,6 @@ import { localeSchema } from "./auth";
 export const themePreferenceSchema = z.enum(["system", "light", "dark"]);
 export const workspaceDensitySchema = z.enum(["comfortable", "compact"]);
 export const signInMethodSchema = z.enum(["magic_link", "password"]);
-export const secondFactorMethodSchema = z.enum(["sms"]);
 export const digestFrequencySchema = z.enum(["off", "daily", "weekly"]);
 export const clockFormatSchema = z.enum(["h12", "h24"]);
 export const landingSectionSchema = z.enum([
@@ -83,7 +82,6 @@ export const accountPreferencesSchema = z.object({
     .transform((value) => (value === "" ? null : value)),
   theme: themePreferenceSchema,
   density: workspaceDensitySchema,
-  landingSection: landingSectionSchema,
   timeZone: timeZoneSchema,
   clockFormat: clockFormatSchema,
   /** ISO weekday: 1 Monday … 7 Sunday, matching `auth.user_settings`. */
@@ -93,10 +91,14 @@ export const accountPreferencesSchema = z.object({
   locale: localeSchema,
 });
 
+/**
+ * Only the preferred way in. Whether a second factor is armed is no longer a
+ * preference anybody submits: it is `auth.users.two_factor_enabled`, written by
+ * Better Auth when an enrolment is proven, and the enrolment forms are their own
+ * actions in `dashboard/account/two-factor-actions.ts`.
+ */
 export const accountSignInSchema = z.object({
   preferredSignInMethod: signInMethodSchema,
-  twoFactorEnabled: checkboxSchema,
-  twoFactorMethod: secondFactorMethodSchema,
   locale: localeSchema,
 });
 

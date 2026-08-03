@@ -9,6 +9,7 @@ import {
   Chip,
   EventDateBlock,
   MetaRow,
+  OnlineChip,
   SurfaceCard,
   inlineLinkClass,
 } from "~/components/public/primitives";
@@ -24,7 +25,12 @@ export interface PublicEventCard {
   whereLabel: string | null;
   /** A map for the location — absent when the place must not be pinned. */
   mapHref: string | null;
+  /** Empty for an event that happens online and in no city. */
   cityName: string;
+  /** Joinable from anywhere — said instead of a place, or beside one. */
+  isOnline: boolean;
+  /** The link people join on, when the organisers have published one. */
+  onlineUrl: string | null;
   hostName: string | null;
   /** The host's public page, when it has one. */
   hostHref: string | null;
@@ -41,6 +47,8 @@ export interface PublicEventCard {
 export interface PublicEventListLabels {
   empty: string;
   details: string;
+  /** What an online event says instead of a street. */
+  online: string;
   host: string;
   platform: string;
   contact: string;
@@ -73,108 +81,117 @@ export function PublicEventList({
 
   return (
     <ol className="grid gap-4">
-      {events.map((event) => (
-        <SurfaceCard as="li" key={event.id} className="grid gap-4 p-5 md:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            {/* Small and beside the text, not above it: the poster helps someone
-             * recognise the event they were told about, and the date is still
-             * the first thing the eye lands on. */}
-            {event.coverImage ? (
-              // eslint-disable-next-line @next/next/no-img-element -- signed remote media, no known intrinsic size
-              <img
-                src={event.coverImage.url}
-                alt={event.coverImage.decorative ? "" : event.coverImage.alt}
-                aria-hidden={event.coverImage.decorative || undefined}
-                className="bg-subtle rounded-control hidden size-28 shrink-0 object-cover sm:block"
-                loading="lazy"
-              />
-            ) : null}
-            <div className="grid min-w-0 flex-1 gap-3">
-              <h2 className="text-ink text-xl font-bold tracking-tight">
-                <Link href={event.href} className={inlineLinkClass}>
-                  {event.title}
-                </Link>
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                <EventDateBlock
-                  href={event.icsHref}
-                  dateLabel={event.dateLabel}
-                  timeLabel={event.timeLabel}
-                  ariaLabel={`${labels.addToCalendar} — ${event.dateLabel} ${event.timeLabel}`}
+      {events.map((event) => {
+        /** Empty on an event that is only online: there is no place to name. */
+        const where = event.whereLabel ?? event.cityName;
+        return (
+          <SurfaceCard as="li" key={event.id} className="grid gap-4 p-5 md:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              {/* Small and beside the text, not above it: the poster helps someone
+               * recognise the event they were told about, and the date is still
+               * the first thing the eye lands on. */}
+              {event.coverImage ? (
+                // eslint-disable-next-line @next/next/no-img-element -- signed remote media, no known intrinsic size
+                <img
+                  src={event.coverImage.url}
+                  alt={event.coverImage.decorative ? "" : event.coverImage.alt}
+                  aria-hidden={event.coverImage.decorative || undefined}
+                  className="bg-subtle rounded-control hidden size-28 shrink-0 object-cover sm:block"
+                  loading="lazy"
                 />
-                {event.mapHref ? (
-                  <a
-                    href={event.mapHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`${labels.openMap} — ${event.whereLabel ?? event.cityName}`}
-                    className="rounded-chip focus-visible:outline-brand focus-visible:outline-2 focus-visible:outline-offset-2"
-                  >
-                    <Chip
-                      icon={<MapPin className="size-4" aria-hidden />}
-                      className="hover:border-brand hover:text-brand-deep underline decoration-1 underline-offset-2"
-                    >
-                      {event.whereLabel ?? event.cityName}
-                    </Chip>
-                  </a>
-                ) : (
-                  <Chip icon={<MapPin className="size-4" aria-hidden />}>
-                    {event.whereLabel ?? event.cityName}
-                  </Chip>
-                )}
-              </div>
-              {event.description ? (
-                <p className="text-copy-muted text-[1.0625rem] leading-relaxed">
-                  {event.description}
-                </p>
               ) : null}
-              <dl className="grid gap-1.5">
-                <MetaRow label={labels.host}>
-                  {event.hostName === null ? (
-                    labels.platform
-                  ) : event.hostHref ? (
-                    <Link href={event.hostHref} className={inlineLinkClass}>
-                      {event.hostName}
-                    </Link>
+              <div className="grid min-w-0 flex-1 gap-3">
+                <h2 className="text-ink text-xl font-bold tracking-tight">
+                  <Link href={event.href} className={inlineLinkClass}>
+                    {event.title}
+                  </Link>
+                </h2>
+                <div className="flex flex-wrap gap-2">
+                  <EventDateBlock
+                    href={event.icsHref}
+                    dateLabel={event.dateLabel}
+                    timeLabel={event.timeLabel}
+                    ariaLabel={`${labels.addToCalendar} — ${event.dateLabel} ${event.timeLabel}`}
+                  />
+                  {/* Said before the place, because an event that is only
+                   * online has no place to say. */}
+                  {event.isOnline ? (
+                    <OnlineChip label={labels.online} url={event.onlineUrl} />
+                  ) : null}
+                  {where === "" ? null : event.mapHref ? (
+                    <a
+                      href={event.mapHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`${labels.openMap} — ${where}`}
+                      className="rounded-chip focus-visible:outline-brand focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      <Chip
+                        icon={<MapPin className="size-4" aria-hidden />}
+                        className="hover:border-brand hover:text-brand-deep underline decoration-1 underline-offset-2"
+                      >
+                        {where}
+                      </Chip>
+                    </a>
                   ) : (
-                    event.hostName
+                    <Chip icon={<MapPin className="size-4" aria-hidden />}>
+                      {where}
+                    </Chip>
                   )}
-                </MetaRow>
-                {event.contactValue ? (
-                  <MetaRow
-                    label={labels.contact}
-                    icon={contactIcon(event.contactValue)}
-                  >
-                    <ContactValue
-                      label={event.contactLabel}
-                      value={event.contactValue}
-                    />
-                  </MetaRow>
+                </div>
+                {event.description ? (
+                  <p className="text-copy-muted text-[1.0625rem] leading-relaxed">
+                    {event.description}
+                  </p>
                 ) : null}
-              </dl>
+                <dl className="grid gap-1.5">
+                  <MetaRow label={labels.host}>
+                    {event.hostName === null ? (
+                      labels.platform
+                    ) : event.hostHref ? (
+                      <Link href={event.hostHref} className={inlineLinkClass}>
+                        {event.hostName}
+                      </Link>
+                    ) : (
+                      event.hostName
+                    )}
+                  </MetaRow>
+                  {event.contactValue ? (
+                    <MetaRow
+                      label={labels.contact}
+                      icon={contactIcon(event.contactValue)}
+                    >
+                      <ContactValue
+                        label={event.contactLabel}
+                        value={event.contactValue}
+                      />
+                    </MetaRow>
+                  ) : null}
+                </dl>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <ActionAnchor href={event.icsHref} tone="soft" size="compact">
+                  <CalendarPlus className="size-5" aria-hidden />
+                  {labels.addToCalendar}
+                </ActionAnchor>
+                <ActionLink
+                  href={event.href}
+                  tone="outline"
+                  size="compact"
+                  className="text-event hover:text-event"
+                >
+                  {labels.details}
+                </ActionLink>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <ActionAnchor href={event.icsHref} tone="soft" size="compact">
-                <CalendarPlus className="size-5" aria-hidden />
-                {labels.addToCalendar}
-              </ActionAnchor>
-              <ActionLink
-                href={event.href}
-                tone="outline"
-                size="compact"
-                className="text-event hover:text-event"
-              >
-                {labels.details}
-              </ActionLink>
-            </div>
-          </div>
-          {event.cancelled ? (
-            <Callout tone="warning" title={labels.cancelled}>
-              {event.cancellationReason ?? labels.cancelledNoReason}
-            </Callout>
-          ) : null}
-        </SurfaceCard>
-      ))}
+            {event.cancelled ? (
+              <Callout tone="warning" title={labels.cancelled}>
+                {event.cancellationReason ?? labels.cancelledNoReason}
+              </Callout>
+            ) : null}
+          </SurfaceCard>
+        );
+      })}
     </ol>
   );
 }

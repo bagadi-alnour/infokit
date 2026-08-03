@@ -2,6 +2,7 @@
 
 import { Archive, Undo2 } from "lucide-react";
 
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { Button } from "~/components/admin/workspace";
 import { PendingButton } from "~/components/pending-button";
 import {
@@ -34,6 +35,9 @@ export function OrganizationArchiveAction({
     cancel: string;
     confirmTitle: string;
     confirmBody: string;
+    archived: string;
+    restored: string;
+    error: string;
   };
 }) {
   const fields = (
@@ -45,14 +49,18 @@ export function OrganizationArchiveAction({
 
   if (archived) {
     return (
-      <form action={action}>
+      <ActionFeedbackForm
+        action={action}
+        successMessage={labels.restored}
+        errorMessage={labels.error}
+      >
         {fields}
         <input type="hidden" name="archive" value="false" />
         <PendingButton variant="secondary">
           <Undo2 aria-hidden />
           {labels.restore}
         </PendingButton>
-      </form>
+      </ActionFeedbackForm>
     );
   }
 
@@ -69,14 +77,18 @@ export function OrganizationArchiveAction({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>{labels.cancel}</AlertDialogCancel>
-          <form action={action}>
+          <ActionFeedbackForm
+            action={action}
+            successMessage={labels.archived}
+            errorMessage={labels.error}
+          >
             {fields}
             <input type="hidden" name="archive" value="true" />
             <PendingButton variant="danger" className="w-full">
               <Archive aria-hidden />
               {labels.archive}
             </PendingButton>
-          </form>
+          </ActionFeedbackForm>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

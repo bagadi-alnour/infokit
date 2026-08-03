@@ -26,5 +26,18 @@
   "places.precision.exact": "الموقع الدقيق",
   "places.precision.areaOnly": "المنطقة فقط",
   "places.precision.contact": "التواصل لمعرفة الموقع",
-  "places.create": "إنشاء المكان"
+  "places.create": "إنشاء المكان",
+  "places.createSuccess": "تم إنشاء المكان.",
+  "places.createError": "تعذر إنشاء المكان. تحقّق من الحقول المطلوبة وحاول مرة أخرى.",
+  "places.nameColumn": "المكان",
+  "places.areaColumn": "المنطقة",
+  "places.addressColumn": "العنوان",
+  "places.precisionColumn": "الدقة",
+  "places.searchPlaceholder": "ابحث بالاسم أو المنظمة أو المنطقة أو العنوان",
+  "places.stat.total": "الأماكن",
+  "places.stat.exact": "منشورة بدقة",
+  "places.stat.protected": "الموقع محجوب",
+  "places.stat.protectedHint": "المنطقة فقط، أو التواصل لمعرفة الموقع.",
+  "places.newHint": "الدقة تحدّد ما يصل إلى الموقع العام. اخترها بعناية.",
+  "places.cancel": "إلغاء"
 }

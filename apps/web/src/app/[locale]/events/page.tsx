@@ -32,6 +32,7 @@ import {
 import { publicEventMedia } from "~/server/content/event-media";
 import {
   cityToday,
+  eventCity,
   eventDetailView,
   eventWhereLabel,
   formatEventRange,
@@ -87,7 +88,7 @@ export default async function PublicEventsPage({
   const cityById = new Map(cityList.map((city) => [city.id, city]));
   const labels = { allDay: messages["events.allDay"] };
   const toCard = (event: CoordinationEventRecord): PublicEventCard => {
-    const city: CityView | undefined = cityById.get(event.cityId);
+    const city: CityView | undefined = eventCity(cityById, event);
     const range = formatEventRange(event, city, locale, labels);
     return {
       id: event.id,
@@ -99,6 +100,8 @@ export default async function PublicEventsPage({
       whereLabel: eventWhereLabel(event),
       mapHref: eventMapHref(event, city?.name ?? null),
       cityName: city?.name ?? "",
+      isOnline: event.isOnline,
+      onlineUrl: event.onlineUrl,
       hostName: event.hostName,
       hostHref:
         event.hostPageSlug === null
@@ -116,7 +119,7 @@ export default async function PublicEventsPage({
   // last month would look like nothing ever happens here.
   const calendarItems: EventCalendarItem[] = [...upcoming, ...past].map(
     (event) => {
-      const city = cityById.get(event.cityId);
+      const city = eventCity(cityById, event);
       const range = formatEventRange(event, city, locale, labels);
       const href = localizedPath(`/events/${event.id}`, locale);
       return {
@@ -141,6 +144,7 @@ export default async function PublicEventsPage({
   const listLabels = {
     empty: messages["events.empty"],
     details: messages["events.details"],
+    online: messages["events.online"],
     host: messages["events.host"],
     platform: messages["public.platform"],
     contact: messages["events.contact"],
@@ -153,6 +157,7 @@ export default async function PublicEventsPage({
   const previewLabels = {
     where: messages["events.where"],
     city: messages["events.city"],
+    online: messages["events.online"],
     host: messages["events.host"],
     platform: messages["public.platform"],
     contact: messages["events.contact"],
@@ -185,9 +190,11 @@ export default async function PublicEventsPage({
             cancelled: event.status === "cancelled",
             hostName: event.hostName,
             placeName:
-              eventWhereLabel(event) ?? cityById.get(event.cityId)?.name,
+              eventWhereLabel(event) ?? eventCity(cityById, event)?.name,
             address: event.placeAddressLine,
             precision: event.placePrecision,
+            isOnline: event.isOnline,
+            onlineUrl: event.onlineUrl,
             image: media.get(event.id)?.cover?.url,
           }),
         )}

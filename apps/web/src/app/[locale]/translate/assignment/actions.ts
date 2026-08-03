@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { recordAudit } from "~/server/audit";
+import { sanitizeRichText } from "~/server/content/sanitize-rich-text";
 import { db } from "~/server/db";
 import {
   translationAssignmentEvents,
@@ -23,10 +24,17 @@ const intentSchema = z.object({
   intent: z.enum(["draft", "submit"]),
 });
 
+/**
+ * `body` is the plain box a body-less or sentence-long source is translated in;
+ * `bodyHtml` is what the rich-text field posts when the source was authored with
+ * one. Both optional: a record with no body at all sends neither, and a
+ * translator is not asked for text nobody wrote.
+ */
 const standardSchema = z.object({
   title: z.string().trim().max(200),
-  summary: z.string().trim().max(2000),
-  body: z.string().trim().max(40_000),
+  summary: z.string().trim().max(2000).default(""),
+  body: z.string().trim().max(40_000).default(""),
+  bodyHtml: z.string().max(200_000).default(""),
 });
 
 /** The organisation narrative: purpose is what the public profile needs. */
@@ -173,17 +181,25 @@ export async function saveExternalTranslation(formData: FormData) {
     } else {
       const parsed = standardSchema.parse({
         title: formData.get("title"),
-        summary: formData.get("summary"),
-        body: formData.get("body"),
+        summary: formData.get("summary") ?? "",
+        body: formData.get("body") ?? "",
+        bodyHtml: formData.get("bodyHtml") ?? "",
       });
       if (intent.intent === "submit" && !parsed.title) {
         throw new Error("A title is required before submission");
       }
+      /**
+       * Markup from a rich-text field is author input like any other, so it is
+       * sanitized down to the editorial vocabulary here and its plain-text
+       * rendering is derived from what survived — never read from a second form
+       * field, where only one of the two could be the content.
+       */
+      const rich = parsed.bodyHtml ? sanitizeRichText(parsed.bodyHtml) : null;
       content = {
         title: parsed.title,
         summary: parsed.summary || null,
-        bodyHtml: paragraphs(parsed.body),
-        plainText: parsed.body || null,
+        bodyHtml: rich ? rich.html : paragraphs(parsed.body),
+        plainText: rich ? rich.text : parsed.body || null,
       };
     }
 

@@ -1,0 +1,46 @@
+{
+  "invite.eyebrow": "Invitation",
+  "invite.title": "You have been invited",
+  "invite.description": "Review who invited you and what it gives you access to before you sign in.",
+  "invite.metaTitle": "Your invitation",
+  "invite.metaDescription": "Accept an invitation to the editor console.",
+  "invite.organizationLabel": "Organisation",
+  "invite.platformLabel": "Platform team",
+  "invite.translatorLabel": "Translator space",
+  "invite.invitedBy": "Invited by {inviter}",
+  "invite.sentTo": "Sent to {email}",
+  "invite.expiresOn": "This link stops working on {date}.",
+  "invite.rolesLabel": "Access granted on acceptance",
+  "invite.rolesNone": "Membership only — no additional roles.",
+  "invite.roleHint": "Roles are named by their code, as they are throughout the console.",
+
+  "invite.signInHeading": "Sign in to accept",
+  "invite.signInBody": "Accepting means signing in with {email}. That is the only address this invitation works for.",
+  "invite.signInAction": "Continue to sign in",
+
+  "invite.acceptHeading": "Accept this invitation",
+  "invite.acceptBody": "You are signed in as {email}. Accepting adds this to your account straight away.",
+  "invite.acceptAction": "Accept invitation",
+  "invite.acceptError": "We could not accept this invitation. Refresh the page and try again.",
+
+  "invite.wrongAccountTitle": "Signed in as somebody else",
+  "invite.wrongAccountBody": "This invitation was sent to {invited}, but you are signed in as {current}. Sign out and sign back in with the invited address to accept it.",
+  "invite.signOutAction": "Sign out",
+
+  "invite.acceptedTitle": "Invitation accepted",
+  "invite.acceptedBody": "This invitation has already been accepted. Sign in to reach your workspace.",
+  "invite.acceptedDoneBody": "You now have access. Open the console to get started.",
+  "invite.acceptedNoMembership": "This invitation was accepted, but the membership it reserved no longer exists. Ask the person who invited you to send a new one.",
+
+  "invite.expiredTitle": "This invitation has expired",
+  "invite.expiredBody": "Invitation links last {days} days. Ask the person who invited you to send a new one.",
+
+  "invite.revokedTitle": "This invitation was withdrawn",
+  "invite.revokedBody": "The link is no longer valid. Contact the person who invited you if you think this is a mistake.",
+
+  "invite.unknownTitle": "This link is not valid",
+  "invite.unknownBody": "Check that you copied the whole link from the email. If it keeps failing, ask for a new invitation.",
+
+  "invite.consoleAction": "Open the console",
+  "invite.privacy": "This page shows an invitation, not an account. Nothing is granted until you sign in with the invited address."
+}

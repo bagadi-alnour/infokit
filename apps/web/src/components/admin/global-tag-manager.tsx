@@ -6,6 +6,7 @@ import {
   setGlobalTagActive,
   updateGlobalTag,
 } from "~/app/[locale]/dashboard/articles/tag-actions";
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { PendingButton } from "~/components/pending-button";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -46,7 +47,12 @@ export function GlobalTagManager({
               key={tag.id}
               className="border-line grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto]"
             >
-              <form action={updateGlobalTag} className="flex min-w-0 gap-2">
+              <ActionFeedbackForm
+                action={updateGlobalTag}
+                successMessage={copy("tag.updated")}
+                errorMessage={copy("toast.actionError")}
+                className="flex min-w-0 gap-2"
+              >
                 <input type="hidden" name="locale" value={locale} />
                 <input type="hidden" name="tagId" value={tag.id} />
                 <Input
@@ -63,9 +69,13 @@ export function GlobalTagManager({
                     <span className="sr-only">{copy("tag.update")}</span>
                   </PendingButton>
                 ) : null}
-              </form>
-              <form
+              </ActionFeedbackForm>
+              <ActionFeedbackForm
                 action={setGlobalTagActive}
+                successMessage={copy(
+                  tag.active ? "tag.archiveDone" : "tag.restoreDone",
+                )}
+                errorMessage={copy("toast.actionError")}
                 className="flex items-center gap-2"
               >
                 <input type="hidden" name="locale" value={locale} />
@@ -86,7 +96,7 @@ export function GlobalTagManager({
                   )}
                   {copy(tag.active ? "tag.archive" : "tag.restore")}
                 </PendingButton>
-              </form>
+              </ActionFeedbackForm>
             </div>
           ))}
         </div>

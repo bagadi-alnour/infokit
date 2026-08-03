@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import type { PublicLocale } from "@infokit/shared/i18n";
-import { publicSupportedLocales } from "@infokit/shared/i18n";
+import {
+  brandName,
+  publicSupportedLocales,
+  type PublicLocale,
+} from "@infokit/shared/i18n";
 
 import { languageAlternates, localizedPath } from "~/i18n/routing";
 import { defaultShareCard, openGraphLocale, siteConfig } from "~/seo/site";
@@ -147,7 +150,7 @@ export function publicMetadata({
     },
     openGraph: {
       type,
-      siteName: siteConfig.name,
+      siteName: brandName(locale),
       title,
       description,
       url: canonical,

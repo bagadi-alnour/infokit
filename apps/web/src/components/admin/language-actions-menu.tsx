@@ -7,6 +7,7 @@ import {
   CalendarX,
   EyeOff,
   Globe,
+  MailCheck,
   MailPlus,
   MoreHorizontal,
   RotateCcw,
@@ -93,6 +94,14 @@ export interface LanguageMenuAbilities {
   canGiveAccess: boolean;
 }
 
+/** A translator request still waiting on the person it was sent to. */
+export interface TranslationRequestStatus {
+  /** When the link was sent, already formatted in the reader's locale. */
+  requestedAt: string;
+  translatorName: string | null;
+  translatorEmail: string;
+}
+
 /** How this one language stands, right now, on screen and in the database. */
 export interface LanguageMenuState {
   code: EditorialLanguage;
@@ -108,6 +117,8 @@ export interface LanguageMenuState {
   reviewStage: LanguageReviewStage;
   /** Shown to a translator being asked to quote for the work. */
   wordCount?: number;
+  /** Set while an outside translator holds this language and owes an answer. */
+  translationRequest?: TranslationRequestStatus | null;
 }
 
 export interface LanguageMenuActions {
@@ -154,6 +165,10 @@ export function LanguageActionsMenu({
   const copy = (key: string) => labels[key] ?? key;
 
   const saved = state.saved && Boolean(target.entityId);
+  /** There is a record to open, and this actor may send somebody to it. */
+  const mayHandOut = Boolean(
+    actions.requestTranslation && abilities.canInvite && saved,
+  );
   const live = state.published || state.scheduled;
   /** Nothing has been written here, so there is nothing to do to it yet. */
   const actionable = saved && state.hasText && !disabled;
@@ -249,15 +264,6 @@ export function LanguageActionsMenu({
     ((abilities.canTeamValidate && state.reviewStage === "team_requested") ||
       (abilities.canPlatformVerify &&
         state.reviewStage === "platform_requested"));
-  const waitingForReview =
-    state.reviewStage === "team_requested" ||
-    state.reviewStage === "platform_requested";
-  const showReviewAction =
-    !state.isSource &&
-    actionable &&
-    !state.dirty &&
-    !cleared &&
-    !waitingForReview;
   const showPublishAction =
     actionable &&
     abilities.canPublish &&
@@ -268,6 +274,11 @@ export function LanguageActionsMenu({
 
   return (
     <>
+      {/* Publishing is the only errand promoted out of the menu: it is the one
+       * that ends the language's journey, and it is offered only once every
+       * check behind it has passed. Everything else — asking for a read,
+       * handing the language to a translator — lives in the menu, so one
+       * language never carries two controls for the same decision. */}
       <div className="flex shrink-0 items-center gap-2">
         {showPublishAction ? (
           <Button
@@ -278,19 +289,6 @@ export function LanguageActionsMenu({
           >
             <Globe aria-hidden />
             {copy("publication.now")}
-          </Button>
-        ) : showReviewAction ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={pending}
-            onClick={() => {
-              setDialog({ kind: "review", stage: "platform" });
-            }}
-          >
-            <ShieldCheck aria-hidden />
-            {copy("review.sendToPlatform")}
           </Button>
         ) : null}
         <DropdownMenu>
@@ -331,30 +329,53 @@ export function LanguageActionsMenu({
                 {/* Handing a language to somebody needs a record for them to open,
                  * so on a form that has never been saved these are absent rather
                  * than offered and refused. */}
-                {actions.requestTranslation && abilities.canInvite && saved ? (
-                  <DropdownMenuItem
-                    disabled={disabled}
-                    onClick={() => {
-                      setDialog({ kind: "request" });
-                    }}
-                  >
-                    <MailPlus aria-hidden />
-                    {copy("translation.request")}
-                  </DropdownMenuItem>
-                ) : null}
-                {actions.requestTranslation &&
-                abilities.canInvite &&
-                abilities.canGiveAccess &&
-                saved ? (
-                  <DropdownMenuItem
-                    disabled={disabled}
-                    onClick={() => {
-                      setDialog({ kind: "access" });
-                    }}
-                  >
-                    <UserPlus aria-hidden />
-                    {copy("language.giveAccess")}
-                  </DropdownMenuItem>
+                {mayHandOut ? (
+                  /* Once a link is out this language is in one person's hands —
+                   * the server refuses a second live assignment — so the menu
+                   * reports the errand instead of offering to run it twice. */
+                  state.translationRequest ? (
+                    <div
+                      role="presentation"
+                      className="grid max-w-56 gap-0.5 px-1.5 py-1.5"
+                    >
+                      <span className="text-ink flex items-center gap-2 text-sm font-medium">
+                        <MailCheck className="size-4 shrink-0" aria-hidden />
+                        {copy("translation.requestedLabel")}
+                      </span>
+                      <span className="text-copy-muted ps-6 text-xs">
+                        {formatMessage(copy("translation.requestedOn"), {
+                          date: state.translationRequest.requestedAt,
+                        })}
+                      </span>
+                      <span className="text-copy-muted break-words ps-6 text-xs">
+                        {state.translationRequest.translatorName ??
+                          state.translationRequest.translatorEmail}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <DropdownMenuItem
+                        disabled={disabled}
+                        onClick={() => {
+                          setDialog({ kind: "request" });
+                        }}
+                      >
+                        <MailPlus aria-hidden />
+                        {copy("translation.request")}
+                      </DropdownMenuItem>
+                      {abilities.canGiveAccess ? (
+                        <DropdownMenuItem
+                          disabled={disabled}
+                          onClick={() => {
+                            setDialog({ kind: "access" });
+                          }}
+                        >
+                          <UserPlus aria-hidden />
+                          {copy("language.giveAccess")}
+                        </DropdownMenuItem>
+                      ) : null}
+                    </>
+                  )
                 ) : null}
               </DropdownMenuGroup>
             )}

@@ -1,0 +1,1 @@
+ALTER TABLE "auth"."sessions" ADD COLUMN "second_factor_verified_at" timestamp with time zone;

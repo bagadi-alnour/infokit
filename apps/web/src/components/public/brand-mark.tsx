@@ -1,6 +1,10 @@
-import { cn } from "~/lib/utils";
+import {
+  brandName,
+  localeMetadata,
+  type PublicLocale,
+} from "@infokit/shared/i18n";
 
-const BRAND_NAME = "InfoKit";
+import { cn } from "~/lib/utils";
 
 /**
  * The information mark: an "i" enclosed in a disc — the sign people already
@@ -56,17 +60,22 @@ export function BrandMark({
  *
  * Size it with a font-size class through `className`.
  */
-export function BrandWordmark({ className }: { className?: string }) {
+export function BrandWordmark({
+  locale,
+  className,
+}: {
+  locale: PublicLocale;
+  className?: string;
+}) {
   return (
     <span
-      // A name is never mirrored: an RTL page keeps these letters in order.
-      dir="ltr"
+      dir={localeMetadata[locale].direction}
       className={cn(
         "font-display inline-block whitespace-nowrap font-bold tracking-tight",
         className,
       )}
     >
-      {BRAND_NAME}
+      {brandName(locale)}
     </span>
   );
 }

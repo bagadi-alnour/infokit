@@ -4,7 +4,7 @@ import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-import { hashPassword } from "../auth/password";
+import { hashPassword } from "better-auth/crypto";
 import { catalogueScopeKey } from "../content/catalogue-scope";
 import { migratorUrl } from "./migrator-url";
 import {
@@ -1382,6 +1382,28 @@ const PERMISSIONS: { code: string; description: string }[] = [
     code: "content.article.review",
     description: "Review and approve submitted article translations",
   },
+  /**
+   * Basic information gets its own two grants rather than riding the article
+   * ones, because of what is behind it: the number someone dials from a sinking
+   * boat, and the sentence telling them when to dial it.
+   *
+   * `content.article.write` is held by `organization_author` — a grant an
+   * association hands to whoever writes its news. That is the right level of
+   * trust for an article and the wrong one for 112, so these codes go to the
+   * platform's own content role and to nobody else. An association correcting
+   * its own help line is a custody question (PRODUCT.md §14.5), not a reason to
+   * widen the grant that also covers the state's emergency numbers.
+   */
+  {
+    code: "content.basic_information.write",
+    description:
+      "Create, edit, and translate basic-information tiles and emergency numbers",
+  },
+  {
+    code: "content.basic_information.publish",
+    description:
+      "Publish, unpublish, and archive basic-information tiles and emergency numbers",
+  },
   {
     code: "content.joint_publication.approve",
     description:
@@ -1446,6 +1468,11 @@ const PERMISSIONS: { code: string; description: string }[] = [
     code: "platform.staff.manage",
     description:
       "Invite platform staff and grant or revoke platform-level roles",
+  },
+  {
+    code: "platform.staff.read",
+    description:
+      "Read the platform staff list and the roles each account holds, without changing any of it",
   },
   {
     code: "courses.manage",
@@ -1580,7 +1607,15 @@ const ROLES: {
      * invited separately, so day-to-day content work is not done from the
      * account that can enter any organisation's context.
      */
-    permissions: ["support.superadmin", "platform.staff.manage", "audit.read"],
+    permissions: [
+      "support.superadmin",
+      "platform.staff.manage",
+      // Held explicitly rather than inferred from `manage`: the page's read gate
+      // asks one question, and a role that may change the list can obviously see
+      // it. Spelling it out keeps the gate a single `has(read)` check.
+      "platform.staff.read",
+      "audit.read",
+    ],
     requiresSecondFactor: true,
   },
   {
@@ -1617,12 +1652,31 @@ const ROLES: {
       "content.article.write",
       "content.article.review",
       "content.article.publish",
+      // The only role that carries these: see the note on the two codes.
+      "content.basic_information.write",
+      "content.basic_information.publish",
       "content.activity.manage",
       "content.activity.verify",
       "content.simulator.review",
       "content.translation.request",
       "content.translation.review",
       "content.translation.verify",
+      /**
+       * The agenda is content. Coordination events are published to the same
+       * readers as activities and articles, and the role that writes those was
+       * the one role that could open `/dashboard/events` and find no way to add
+       * anything — the create button reads this grant, so its absence read as a
+       * broken page rather than as a boundary.
+       */
+      "coordination.event.manage",
+      /**
+       * Read-only over the staff list. Knowing who holds which platform role is
+       * part of maintaining the platform, and this grant is deliberately not
+       * `platform.staff.manage`: inviting staff and moving grants around stays
+       * with the superadmin, and every mutation on that page still asks for the
+       * manage code.
+       */
+      "platform.staff.read",
     ],
     requiresSecondFactor: true,
   },
@@ -1655,16 +1709,34 @@ const ROLES: {
   {
     code: "organization_admin",
     description:
-      "Maintains an organisation profile, memberships, roles, and audit access",
+      "Maintains an organisation profile, memberships, roles, and city teams",
+    /**
+     * `teams.manage` is held here as well as by `coordinator` and `team_lead`.
+     * Day-to-day team work is still a coordinator's job, but somebody has to be
+     * able to create the first city team and place the first member — and the
+     * account that admits people to the organisation is the only one that
+     * reliably exists before any coordinator has been appointed. Without it the
+     * administrator met a board of controls that could only fail.
+     *
+     * No `audit.read`, still. The trail is one cross-organisation record: it
+     * names the actors, refusals and delivery attempts of every organisation on
+     * the platform, so reading it is a platform operator's job. Giving an
+     * organisation its own slice is a feature with its own redaction question —
+     * which of its members' reads it may see, and whose addresses stay hidden —
+     * and not something a membership role should confer as a side effect.
+     *
+     * `requiresSecondFactor` stays: `members.read` still reaches colleagues'
+     * personal data (RISKS.md R10).
+     */
     permissions: [
       "organization.profile.manage",
       "members.read",
       "members.manage",
       "roles.manage",
+      "teams.manage",
       "translator.directory.manage",
       "courses.manage",
       "courses.qualification.verify",
-      "audit.read",
     ],
     requiresSecondFactor: true,
   },
@@ -1928,12 +2000,34 @@ async function seedBootstrapSuperadmin() {
     throw new Error(`Platform roles were not seeded: ${missing.join(", ")}`);
   }
 
+  /**
+   * `emailVerified: true`, and it is not a shortcut.
+   *
+   * Better Auth treats an `emailVerified: false` row as an account whose
+   * password nobody has proved belongs to the mailbox owner — so when a magic
+   * link resolves to one, `revokeUnprovenAccountAccess` deletes its credential
+   * and revokes its sessions before minting the owner's. That is right in
+   * general, and wrong here: this address comes from deployment configuration
+   * and every other account arrives by invitation, so the address is known good
+   * before anyone signs in. Left false, the first emailed link would silently
+   * delete the password this very function just set.
+   */
   const [createdUser] = existingUser
     ? []
-    : await db.insert(s.users).values({ email }).returning({ id: s.users.id });
+    : await db
+        .insert(s.users)
+        .values({ email, emailVerified: true })
+        .returning({ id: s.users.id });
   const user = existingUser ?? createdUser;
   if (!user)
     throw new Error("Bootstrap superadmin account could not be created");
+
+  if (existingUser) {
+    await db
+      .update(s.users)
+      .set({ emailVerified: true })
+      .where(eq(s.users.id, user.id));
+  }
 
   await db
     .insert(s.userPlatformRoles)
@@ -1951,13 +2045,26 @@ async function seedBootstrapSuperadmin() {
     if (password.length < 12 || password.length > 128) {
       throw new Error("Bootstrap password must contain 12 to 128 characters");
     }
+    /**
+     * The password lives on the `credential` row of `auth.accounts`, which is
+     * where Better Auth reads it — not on `auth.users`, which no longer has a
+     * column for one. `hashPassword` is Better Auth's own hasher, imported so
+     * that a seeded password and one set through the console are the same
+     * record and verify identically.
+     */
+    const passwordHash = await hashPassword(password);
     await db
-      .update(s.users)
-      .set({
-        passwordHash: await hashPassword(password),
-        passwordUpdatedAt: new Date(),
+      .insert(s.accounts)
+      .values({
+        userId: user.id,
+        providerId: "credential",
+        accountId: user.id,
+        password: passwordHash,
       })
-      .where(eq(s.users.id, user.id));
+      .onConflictDoUpdate({
+        target: [s.accounts.providerId, s.accounts.accountId],
+        set: { password: passwordHash, updatedAt: new Date() },
+      });
   }
   console.log(
     `bootstrap superadmin: ${existingUser ? "granted" : "account created and granted"}${password ? " and password updated" : ""}`,

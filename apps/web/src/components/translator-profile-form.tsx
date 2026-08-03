@@ -4,6 +4,7 @@ import { BadgeCheck, CalendarX, Clock3, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { saveTranslatorProfile } from "~/app/[locale]/translate/profile/actions";
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import {
   SearchableMultiSelect,
   type SearchableOption,
@@ -164,7 +165,12 @@ export function TranslatorProfileForm({
   );
 
   return (
-    <form action={saveTranslatorProfile} className="grid gap-6">
+    <ActionFeedbackForm
+      action={saveTranslatorProfile}
+      successMessage={labels["translator.profile.saved"] ?? ""}
+      errorMessage={labels["translator.profile.saveError"] ?? ""}
+      className="grid gap-6"
+    >
       <input type="hidden" name="locale" value={locale} />
 
       <Field>
@@ -289,6 +295,6 @@ export function TranslatorProfileForm({
       <div className="flex justify-end">
         <PendingButton>{labels["translator.profile.save"]}</PendingButton>
       </div>
-    </form>
+    </ActionFeedbackForm>
   );
 }

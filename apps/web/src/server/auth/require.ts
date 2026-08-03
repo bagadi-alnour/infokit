@@ -1,10 +1,11 @@
 import type { Locale } from "@infokit/shared/i18n";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 import { getActionLocale } from "~/i18n/request-locale";
 import { authPath } from "~/i18n/routing";
-import { secondFactorRequired } from "~/server/account/settings";
+import { secondFactorMandatory } from "~/server/account/settings";
 import { recordAccessDenied, withFailureAudit } from "~/server/audit";
 import { auth } from "~/server/auth";
 import { authorizationFor } from "~/server/auth/authorization";
@@ -43,27 +44,80 @@ async function permissionDeniedPath(locale: Locale) {
 }
 
 /**
- * Server-side auth gate — call it at the top of every protected layout and
- * server action (defense in depth, RISKS.md R10).
+ * A signed-in account, with no view on the second factor.
+ *
+ * This is the gate for the pages that *arm* the factor. `requireEditor` below
+ * sends an account whose role mandates a factor it has not armed to the security
+ * page — so that page, and the actions it submits to, cannot use the same gate
+ * without redirecting to themselves forever.
+ *
+ * Nothing else should reach for this: it is a weaker check, and the reason it is
+ * safe here is that the only thing it protects is the enrolment itself.
  */
-export async function requireEditor(candidateLocale?: Locale) {
+async function uncachedRequireAccountHolder(candidateLocale?: Locale) {
   const locale = await getActionLocale(candidateLocale);
   const session = await auth();
   if (!session?.user) redirect(authPath("login", locale));
-  // The step-up is on by default, and a role can make it mandatory whatever
-  // the account chose; `secondFactorRequired` re-reads both on the server, so
-  // the stored preference is a policy input, never a bypass. An account whose
-  // role mandates it and that has no number yet is sent to the same page to
-  // enrol one.
-  if (
-    !session.secondFactorVerified &&
-    (await secondFactorRequired(session.user.id))
-  ) {
-    const returnTo = await requestedReturnTo(locale);
-    redirect(authPath("verify", locale, { returnTo }));
+  return session.user;
+}
+
+export const requireAccountHolder = cache(uncachedRequireAccountHolder);
+
+/**
+ * Server-side auth gate — call it at the top of every protected layout and
+ * server action (defense in depth, RISKS.md R10).
+ */
+async function uncachedRequireEditor(candidateLocale?: Locale) {
+  const locale = await getActionLocale(candidateLocale);
+  const session = await auth();
+  if (!session?.user) redirect(authPath("login", locale));
+  /**
+   * The second-factor gate, and it is a *session* check rather than an account
+   * one on purpose.
+   *
+   * Better Auth applies the factor by interrupting sign-in, but it only
+   * interrupts `/sign-in/email`, `/sign-in/username` and `/sign-in/phone-number`.
+   * A magic link is none of those, so an account with a factor armed can arrive
+   * here holding a complete session that was never asked for a code. Trusting
+   * `user.twoFactorEnabled` would wave exactly that session through.
+   *
+   * So two different refusals, told apart by whether there is a factor to use:
+   *
+   * - Armed, but this session has not passed it → step up, and ask for a code.
+   * - Not armed, while a role demands one → enrol, because there is no code to
+   *   ask for yet.
+   */
+  if (!session.secondFactorVerified) {
+    const mustHoldFactor =
+      session.user.twoFactorEnabled ||
+      (await secondFactorMandatory(session.user.id));
+    if (mustHoldFactor) {
+      const returnTo = await requestedReturnTo(locale);
+      /**
+       * Both destinations are `/login/verify`, and that is the whole point: it
+       * sits outside `/dashboard`, where every layout runs this same gate. An
+       * enrolment page inside the console would be behind the gate it exists to
+       * escape, and the redirect would chase its own tail — appending `returnTo`
+       * to itself on every hop.
+       */
+      redirect(
+        authPath("verify", locale, {
+          returnTo,
+          enrol: session.user.twoFactorEnabled ? undefined : "required",
+        }),
+      );
+    }
   }
   return session.user;
 }
+
+/**
+ * A protected route can have several nested layouts, each of which must keep
+ * its own gate for defence in depth. React's request cache lets those gates
+ * share the same decision during one render instead of repeating the account
+ * policy queries as the user moves between nested sections.
+ */
+export const requireEditor = cache(uncachedRequireEditor);
 
 /** Permission gate for protected reads and mutations. */
 export async function requirePermission(

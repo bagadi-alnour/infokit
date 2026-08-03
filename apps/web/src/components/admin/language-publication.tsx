@@ -419,8 +419,17 @@ export function TranslationReviewDialog({
   const submitted = assignment.submittedContent as {
     title?: unknown;
     summary?: unknown;
+    bodyHtml?: unknown;
     plainText?: unknown;
   } | null;
+  /**
+   * Read as the translator wrote it. A rich-text submission is markup the server
+   * already sanitized down to the editorial vocabulary before storing it
+   * (`sanitizeRichText`), and a reviewer judging structure has to be able to see
+   * the structure.
+   */
+  const submittedHtml =
+    typeof submitted?.bodyHtml === "string" ? submitted.bodyHtml : null;
   return (
     <Dialog open={dialog.open} onOpenChange={dialog.setOpen}>
       <DialogTrigger render={<Button variant="secondary" size="sm" />}>
@@ -448,7 +457,12 @@ export function TranslationReviewDialog({
           {typeof submitted?.summary === "string" && submitted.summary ? (
             <p className="text-copy-muted">{submitted.summary}</p>
           ) : null}
-          {typeof submitted?.plainText === "string" ? (
+          {submittedHtml ? (
+            <div
+              className="[&_a]:text-brand leading-relaxed [&_a]:underline [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:font-semibold [&_ol]:list-decimal [&_ol]:ps-5 [&_p:not(:last-child)]:mb-3 [&_ul]:list-disc [&_ul]:ps-5"
+              dangerouslySetInnerHTML={{ __html: submittedHtml }}
+            />
+          ) : typeof submitted?.plainText === "string" ? (
             <p className="whitespace-pre-wrap leading-relaxed">
               {submitted.plainText}
             </p>

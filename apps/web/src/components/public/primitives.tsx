@@ -6,6 +6,7 @@ import {
   Info,
   ShieldCheck,
   TriangleAlert,
+  Video,
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
@@ -238,6 +239,48 @@ export function Chip({
       ) : null}
       {children}
     </span>
+  );
+}
+
+/**
+ * Where an online event happens, said the way a place is said — one chip, in
+ * the same row as the date.
+ *
+ * It is a link when the organisers have published one, opening in its own tab
+ * like the map link does: someone reading an agenda is still deciding, and
+ * losing the list to look at a meeting room is a bad trade. Without a link it
+ * is still worth saying: "online" answers "can I attend from here", which is
+ * the question, and the link often arrives later than the announcement.
+ */
+export function OnlineChip({
+  label,
+  url,
+}: {
+  label: string;
+  url: string | null;
+}) {
+  const chip = (
+    <Chip
+      icon={<Video className="size-4" aria-hidden />}
+      className={
+        url
+          ? "hover:border-brand hover:text-brand-deep underline decoration-1 underline-offset-2"
+          : undefined
+      }
+    >
+      {label}
+    </Chip>
+  );
+  if (url === null) return chip;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-chip focus-visible:outline-brand focus-visible:outline-2 focus-visible:outline-offset-2"
+    >
+      {chip}
+    </a>
   );
 }
 

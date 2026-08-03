@@ -47,6 +47,7 @@ export function AdminUserMenu({
   email,
   initials,
   context,
+  roles,
   accountHref,
   labels,
 }: {
@@ -56,9 +57,18 @@ export function AdminUserMenu({
   initials: string;
   /** Secondary identity line: the workspace this editor is acting in. */
   context: string;
+  /**
+   * What this account is, already localised and already ordered by the server.
+   * Several, because roles are additive here — somebody can hold platform
+   * content management and platform operations at once, and showing only one
+   * would misdescribe what they can reach.
+   */
+  roles: string[];
   accountHref: string;
   labels: {
     open: string;
+    role: string;
+    roleNone: string;
     account: string;
     language: string;
     theme: string;
@@ -112,6 +122,34 @@ export function AdminUserMenu({
               {context}
             </span>
           </span>
+        </div>
+        {/*
+          What this account *is*, under what it is called. Its own block rather
+          than a fourth line in the identity stack: the lines above are one
+          truncated line each, and a role list has to be allowed to wrap — a
+          person holding three of them would otherwise be shown one and an
+          ellipsis, which reads as "you have one role".
+        */}
+        <div className="px-1.5 pb-2">
+          <span className="text-copy-muted block text-[0.65rem] font-semibold uppercase tracking-wide">
+            {labels.role}
+          </span>
+          {roles.length === 0 ? (
+            <span className="text-copy-muted block text-xs">
+              {labels.roleNone}
+            </span>
+          ) : (
+            <span className="mt-1 flex flex-wrap gap-1">
+              {roles.map((role) => (
+                <span
+                  key={role}
+                  className="bg-brand-soft text-brand rounded px-1.5 py-0.5 text-[0.7rem] font-medium"
+                >
+                  {role}
+                </span>
+              ))}
+            </span>
+          )}
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>

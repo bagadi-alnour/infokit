@@ -1,3 +1,4 @@
+import { brandName } from "@infokit/shared/i18n";
 import type { PublicGuideDetailPayload } from "@infokit/shared/public-content";
 import type {
   PublicSimulatorLabels,
@@ -48,7 +49,7 @@ export default function GuideScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: title ?? "InfoKit" }} />
+      <Stack.Screen options={{ title: title ?? brandName(locale) }} />
       <PayloadScreen request={request} strings={strings}>
         {(payload) => (
           <GuideWalk key={payload.document.versionId} payload={payload} />

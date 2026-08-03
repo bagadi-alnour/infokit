@@ -3,8 +3,7 @@ import "~/styles/workspace.css";
 
 import { localeMetadata, type Locale } from "@infokit/shared/i18n";
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
-import { and, count, eq, ilike, inArray, isNull, ne, or } from "drizzle-orm";
-import { TriangleAlert } from "lucide-react";
+import { and, count, inArray, isNull } from "drizzle-orm";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
@@ -19,7 +18,7 @@ import {
 } from "~/components/admin/admin-notifications";
 import {
   AdminUIProvider,
-  PermissionDeniedNotice,
+  DashboardActionNotice,
 } from "~/components/admin/admin-ui-provider";
 import { AdminUserMenu } from "~/components/admin/admin-user-menu";
 import {
@@ -48,23 +47,26 @@ import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import { attentionKindOf, type AttentionKind } from "~/lib/freshness";
 import { auditScope } from "~/server/audit/query";
+import { getAccountSettings } from "~/server/account/settings";
+import { heldRoles } from "~/server/auth/held-roles";
 import { requireEditor } from "~/server/auth/require";
 import {
   activityWorkspacePermissions,
   articleWorkspacePermissions,
+  basicInformationWorkspacePermissions,
   hasActualPlatformPermission,
   isPlatformAdmin,
+  organizationMembershipChoices,
   ownedWithin,
   permissionScopeAny,
   platformPermissionsForUser,
-  platformStaffPermission,
+  platformStaffReadPermission,
 } from "~/server/auth/authorization";
 import { COORDINATION_MANAGE_PERMISSION } from "~/server/content/coordination-events";
 import { db } from "~/server/db";
 import {
   activities,
   activityTranslations,
-  organizationMembers,
   organizations,
   scheduleRules,
 } from "~/server/db/schema";
@@ -145,20 +147,24 @@ export default async function DashboardLayout({
    * One read of the platform set answers the four write questions; asking
    * `hasActualPlatformPermission` four times would run the same join four times.
    */
-  const [activityScope, articleScope, platformGrants] = await Promise.all([
-    permissionScopeAny(user.id, activityWorkspacePermissions),
-    permissionScopeAny(user.id, articleWorkspacePermissions),
-    platformPermissionsForUser(user.id),
-  ]);
+  const [activityScope, articleScope, basicsScope, platformGrants] =
+    await Promise.all([
+      permissionScopeAny(user.id, activityWorkspacePermissions),
+      permissionScopeAny(user.id, articleWorkspacePermissions),
+      permissionScopeAny(user.id, basicInformationWorkspacePermissions),
+      platformPermissionsForUser(user.id),
+    ]);
   const canCreateActivity = platformGrants.has("content.activity.manage");
   const canCreateArticle = platformGrants.has("content.article.write");
+  const canCreateBasicInformation = platformGrants.has(
+    "content.basic_information.write",
+  );
   const canCreateEvent = platformGrants.has(COORDINATION_MANAGE_PERMISSION);
   const simulatorAccess = platformGrants.has("content.simulator.review");
 
   const [
     organizationCountRows,
     membershipRows,
-    demoOrganizationRows,
     activityRows,
     scheduledActivityRows,
     platformAdmin,
@@ -174,35 +180,7 @@ export default async function DashboardLayout({
     // become a link to their own record and the user menu can name the space
     // they are working in. Offboarded rows stay in the table as history and
     // must not count as a membership.
-    db
-      .select({
-        id: organizationMembers.organizationId,
-        name: organizations.displayName,
-      })
-      .from(organizationMembers)
-      .innerJoin(
-        organizations,
-        eq(organizations.id, organizationMembers.organizationId),
-      )
-      .where(
-        and(
-          eq(organizationMembers.userId, user.id),
-          ne(organizationMembers.status, "offboarded"),
-        ),
-      ),
-    // The demo tripwire, asked as an existence check so it does not need every
-    // name to find one. Both spellings, because `ilike` folds case but not
-    // accents and the demo seed writes "démo" as well as "demo".
-    db
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(
-        or(
-          ilike(organizations.displayName, "%demo%"),
-          ilike(organizations.displayName, "%démo%"),
-        ),
-      )
-      .limit(1),
+    organizationMembershipChoices(user.id).then(({ choices }) => choices),
     // The same rows answer two questions: how many activities the sidebar
     // badge shows, and which of them are waiting on a confirmation. Both are
     // statements about rows, so both are scoped: a badge reading 40 when this
@@ -235,7 +213,9 @@ export default async function DashboardLayout({
     // denied" teaches nothing except that the sidebar is not to be trusted.
     auditScope(user.id),
     memberDirectoryScope(user.id),
-    hasActualPlatformPermission(user.id, platformStaffPermission),
+    // The sidebar entry follows the page's own read gate, not the staffing
+    // grant: a content manager may open the roster read-only.
+    hasActualPlatformPermission(user.id, platformStaffReadPermission),
   ]);
 
   const organizationCount = organizationCountRows[0]?.value ?? 0;
@@ -249,15 +229,25 @@ export default async function DashboardLayout({
    * memberships there is no "mine", so those editors keep the list — it is the
    * only place that disambiguates.
    */
-  const ownOrganization = directoryAccess
-    ? null
-    : membershipRows.length === 1
-      ? (membershipRows[0] ?? null)
-      : null;
-  const ownOrganizationId = ownOrganization?.id ?? null;
-  const organizationHref = ownOrganizationId
-    ? localizedPath(`/dashboard/organizations/${ownOrganizationId}`, locale)
-    : localizedPath("/dashboard/organizations", locale);
+  const ownOrganization =
+    membershipRows.length === 1 ? (membershipRows[0] ?? null) : null;
+  /** Shown in the profile menu, never gated on — see `heldRoles`. */
+  const heldRoleList = await heldRoles(user.id);
+  /** Density, motion and contrast: read once, applied to the shell below. */
+  const preferences = await getAccountSettings(user.id);
+  /**
+   * No `?org=`. It only ever carried the id of the single organisation the
+   * reader belongs to, which the page resolves from the roster on its own — so
+   * the parameter bought nothing and put a UUID in front of the person reading
+   * the address bar. Somebody with several memberships never had it either
+   * (`ownOrganization` is null unless there is exactly one), and they get the
+   * chooser, which is the one place naming an organisation still means
+   * something.
+   */
+  const myOrganizationHref = localizedPath(
+    "/dashboard/my-organization",
+    locale,
+  );
 
   /**
    * The freshness queue, classified by the one shared function the runbook also
@@ -338,6 +328,7 @@ export default async function DashboardLayout({
           {
             href: localizedPath("/dashboard/activities", locale),
             label: messages["nav.activities"],
+            family: "activity" as const,
             icon: "calendar" as const,
             count: activityRows.length,
           },
@@ -348,7 +339,20 @@ export default async function DashboardLayout({
           {
             href: localizedPath("/dashboard/articles", locale),
             label: messages["nav.articles"],
+            family: "article" as const,
             icon: "article" as const,
+          },
+        ]
+      : []),
+    // The numbers the home page's urgent block reads. Beside the articles
+    // rather than under the directory: they are authored and translated like any
+    // other editorial text, and the digits are the part that goes stale.
+    ...(basicsScope
+      ? [
+          {
+            href: localizedPath("/dashboard/basics", locale),
+            label: messages["nav.basics"],
+            icon: "contact" as const,
           },
         ]
       : []),
@@ -357,6 +361,7 @@ export default async function DashboardLayout({
           {
             href: localizedPath("/dashboard/simulator", locale),
             label: messages["nav.simulator"],
+            family: "guide" as const,
             icon: "simulator" as const,
           },
         ]
@@ -383,6 +388,7 @@ export default async function DashboardLayout({
         {
           href: localizedPath("/dashboard/events", locale),
           label: messages["nav.events"],
+          family: "event" as const,
           icon: "event",
         },
       ],
@@ -393,72 +399,94 @@ export default async function DashboardLayout({
     {
       label: messages["nav.group.directory"],
       items: [
-        // One entry, two meanings. An operator gets the directory; a member of
-        // a single association gets their own record, named as theirs and
-        // linked straight to it — the list would only redirect them there.
-        {
-          href: organizationHref,
-          label: ownOrganizationId
-            ? messages["nav.myOrganization"]
-            : messages["nav.organizations"],
-          icon: "organization",
-          // How many organisations exist is directory knowledge; a member of
-          // one association goes to their own record from here, so the total
-          // would be a number they cannot act on.
-          count: directoryAccess ? organizationCount : undefined,
-          children: [
-            {
-              href: organizationHref,
-              label: messages["nav.organizationProfile"],
-              icon: "organization",
-              exact: ownOrganizationId !== null,
-            },
-            ...(ownOrganizationId
-              ? [
+        ...(directoryAccess
+          ? [
+              {
+                href: localizedPath("/dashboard/organizations", locale),
+                label: messages["nav.organizations"],
+                icon: "organization" as const,
+                count: organizationCount,
+              },
+            ]
+          : []),
+        ...(membershipRows.length > 0
+          ? [
+              {
+                href: myOrganizationHref,
+                label: messages["nav.myOrganization"],
+                icon: "organization" as const,
+                children: [
                   {
-                    href: `${organizationHref}#organization-members`,
+                    href: myOrganizationHref,
+                    label: messages["nav.organizationProfile"],
+                    icon: "organization" as const,
+                    exact: true,
+                  },
+                  {
+                    // A page now, not an anchor partway down the record.
+                    href: localizedPath(
+                      "/dashboard/my-organization/members",
+                      locale,
+                    ),
                     label: messages["nav.members"],
                     icon: "team" as const,
                     exact: true,
                   },
-                ]
-              : []),
-            // The teams and the vocabulary they are described with appear
-            // together: a member's declarations are only worth filling in once
-            // there are catalogue rows to point at. The board itself is a
-            // roster, so its entry needs the grant that opens one; the
-            // vocabulary is about skills, not people.
-            ...(env.ENABLE_PHASE3_MEMBER_ASSIGNMENTS
-              ? [
-                  ...(memberDirectoryAccess
+                  ...(env.ENABLE_PHASE3_MEMBER_ASSIGNMENTS &&
+                  memberDirectoryAccess
                     ? [
                         {
-                          href: localizedPath("/dashboard/team", locale),
+                          // Same rule as the rest of the workspace: the page
+                          // resolves the reader's own organisation, and only
+                          // somebody who administers several needs to name one.
+                          href: localizedPath(
+                            "/dashboard/my-organization/city-team",
+                            locale,
+                          ),
                           label: messages["nav.team"],
                           icon: "team" as const,
                         },
                       ]
                     : []),
+                  ...(env.ENABLE_PHASE3_MEMBER_ASSIGNMENTS
+                    ? [
+                        {
+                          href: localizedPath(
+                            "/dashboard/my-organization/skills",
+                            locale,
+                          ),
+                          label: messages["nav.skills"],
+                          icon: "skills" as const,
+                        },
+                      ]
+                    : []),
                   {
-                    href: localizedPath("/dashboard/skills", locale),
-                    label: messages["nav.skills"],
-                    icon: "skills" as const,
+                    // No `?org=` here either: the page falls back to the
+                    // reader's own membership, and only somebody administering
+                    // several organisations ever needs to name one — which the
+                    // switcher on the page does.
+                    href: localizedPath(
+                      "/dashboard/my-organization/roles",
+                      locale,
+                    ),
+                    label: messages["nav.roles"],
+                    icon: "settings" as const,
                   },
-                ]
-              : []),
-            // Places are where activities happen, and maintaining them asks for
-            // the same grant as maintaining an activity (places/actions.ts).
-            ...(canCreateActivity
-              ? [
-                  {
-                    href: localizedPath("/dashboard/places", locale),
-                    label: messages["nav.places"],
-                    icon: "place" as const,
-                  },
-                ]
-              : []),
-          ],
-        },
+                ],
+              },
+            ]
+          : []),
+        // Places are where activities happen, and maintaining them asks for
+        // the same grant as maintaining an activity (places/actions.ts).
+        ...(canCreateActivity
+          ? [
+              {
+                href: localizedPath("/dashboard/places", locale),
+                label: messages["nav.places"],
+                icon: "place" as const,
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -478,7 +506,12 @@ export default async function DashboardLayout({
               },
             ]
           : []),
-        ...(auditAccess
+        // Platform scopes only. The trail is a cross-organisation record — it
+        // names actors, refusals and delivery attempts belonging to everybody —
+        // so it is read by the people who run the platform, not by each
+        // organisation about itself. The page enforces the same test; this only
+        // keeps the sidebar from drawing a link that would refuse.
+        ...(auditAccess?.platform
           ? [
               {
                 href: localizedPath("/dashboard/audit", locale),
@@ -528,6 +561,16 @@ export default async function DashboardLayout({
             label: messages["action.newArticle"],
             icon: "article" as const,
             hint: messages["nav.articles"],
+          },
+        ]
+      : []),
+    ...(canCreateBasicInformation
+      ? [
+          {
+            href: localizedPath("/dashboard/basics/new", locale),
+            label: messages["action.newBasicInformation"],
+            icon: "contact" as const,
+            hint: messages["nav.basics"],
           },
         ]
       : []),
@@ -595,7 +638,6 @@ export default async function DashboardLayout({
       ],
     },
   ];
-  const isDemo = demoOrganizationRows.length > 0;
   const defaultSidebarOpen =
     (await cookies()).get("sidebar_state")?.value !== "false";
 
@@ -605,9 +647,63 @@ export default async function DashboardLayout({
       permissionDenied={messages["access.permissionDenied"]}
     >
       <Toaster position="top-center" closeButton />
-      <PermissionDeniedNotice message={messages["access.permissionDenied"]} />
+      <DashboardActionNotice
+        notices={{
+          "permission-denied": {
+            message: messages["access.permissionDenied"],
+            tone: "error",
+          },
+          "activity-created": {
+            message: messages["feedback.activityCreated"],
+            tone: "success",
+          },
+          "article-created": {
+            message: messages["feedback.articleCreated"],
+            tone: "success",
+          },
+          "basic-information-created": {
+            message: messages["feedback.basicInformationCreated"],
+            tone: "success",
+          },
+          "event-created": {
+            message: messages["feedback.eventCreated"],
+            tone: "success",
+          },
+          "event-archived": {
+            message: messages["feedback.eventArchived"],
+            tone: "success",
+          },
+          "organization-created": {
+            message: messages["feedback.organizationCreated"],
+            tone: "success",
+          },
+          "place-created": {
+            message: messages["feedback.placeCreated"],
+            tone: "success",
+          },
+          "service-created": {
+            message: messages["feedback.serviceCreated"],
+            tone: "success",
+          },
+          "simulator-created": {
+            message: messages["feedback.simulatorCreated"],
+            tone: "success",
+          },
+        }}
+      />
+      {/*
+        The three display preferences, applied as data attributes on the console
+        root so CSS can answer them without a class on every element. They are
+        set here, on the server, from the saved row — which is what makes them
+        preferences rather than local toggles: a person who turns contrast up on
+        one machine finds it up on the next.
+        `src/styles/workspace.css` holds the rules that read them.
+      */}
       <SidebarProvider
         defaultOpen={defaultSidebarOpen}
+        data-density={preferences.density}
+        data-reduced-motion={preferences.reducedMotion ? "" : undefined}
+        data-high-contrast={preferences.highContrast ? "" : undefined}
         className="bg-canvas text-ink"
         style={
           {
@@ -639,7 +735,10 @@ export default async function DashboardLayout({
                 className="hidden group-data-[collapsible=icon]:block"
               />
               <span className="grid min-w-0 group-data-[collapsible=icon]:hidden">
-                <BrandWordmark className="text-[1.0625rem] leading-tight" />
+                <BrandWordmark
+                  locale={locale}
+                  className="text-[1.0625rem] leading-tight"
+                />
                 <span className="text-copy-muted truncate text-[11px] font-medium leading-tight">
                   {messages["auth.dashboard.console"]}
                 </span>
@@ -656,20 +755,6 @@ export default async function DashboardLayout({
               ariaLabel={messages["auth.dashboard.console"]}
               groups={navigation}
             />
-            {/* The one banner that scrolls with the navigation rather than
-             * sitting in the footer: on a short window a fixed footer squeezed
-             * the nav down to a sliver. */}
-            {isDemo ? (
-              <div className="mt-auto px-3 pb-3 group-data-[collapsible=icon]:hidden">
-                <div className="border-warn/50 bg-warn-soft text-warn flex gap-2.5 rounded-lg border p-3 text-sm font-medium">
-                  <TriangleAlert
-                    className="mt-0.5 size-4 shrink-0"
-                    aria-hidden
-                  />
-                  <span>{messages["demo.warning"]}</span>
-                </div>
-              </div>
-            ) : null}
           </SidebarContent>
           {/* One short row, always visible: the console edits what the public
            * site shows, so the way to go look at it should not scroll away. */}
@@ -694,7 +779,17 @@ export default async function DashboardLayout({
           <SidebarRail label={messages["sidebar.toggle"]} />
         </Sidebar>
 
-        <SidebarInset className="bg-canvas min-w-0 overflow-x-hidden">
+        {/*
+          `overflow-x-clip`, never `overflow-x-hidden`. Both stop a wide table
+          from pushing the page sideways, but `hidden` computes the *other* axis
+          to `auto`, which quietly turns this element into the nearest scrolling
+          ancestor. Every `position: sticky` inside the console then measures
+          itself against a box that never scrolls — the page scrolls in the
+          window — so it simply never sticks. That is what kept the account
+          section rail (`account/settings-nav.tsx`, already `lg:sticky`) moving
+          with the page. `clip` clips without creating a scroll container.
+        */}
+        <SidebarInset className="bg-canvas min-w-0 overflow-x-clip">
           {/* Three things an editor needs from every page: a way back to the
            * navigation, a way to reach any page or action by typing, and the
            * queue of records waiting on them. Scope now lives with the
@@ -743,17 +838,40 @@ export default async function DashboardLayout({
               />
               <AdminUserMenu
                 locale={locale}
-                name={user.name ?? messages["auth.dashboard.role.editor"]}
-                email={user.email ?? null}
-                initials={initialsOf(user.name ?? user.email ?? "")}
+                // Better Auth always returns both fields, so the only gap left
+                // to cover is an account that was created without a name.
+                name={user.name || messages["auth.dashboard.role.editor"]}
+                email={user.email}
+                initials={initialsOf(user.name || user.email)}
                 // Which space these edits land in: the association whose
                 // member this account is, or the platform itself. Read from the
                 // account's own memberships, so it states a fact rather than a
                 // selection someone could change.
                 context={ownOrganization?.name ?? messages["scope.platform"]}
+                /**
+                 * Localised here rather than in the menu: the codes are rows in
+                 * `core.roles`, so a role added to the database without a
+                 * catalogue entry must still render as something. It falls back
+                 * to its own code, which is what the staff page already shows
+                 * and is more useful than a blank chip. An organisation role
+                 * names its association, since it reaches no further.
+                 */
+                roles={heldRoleList.map((role) => {
+                  // Read through a string index rather than the catalogue's own
+                  // type: the key is only known at runtime, and the typed lookup
+                  // would promise a string for a code nobody has translated.
+                  const catalogue: Record<string, string | undefined> =
+                    messages;
+                  const label = catalogue[`role.${role.code}`] ?? role.code;
+                  return role.organizationName
+                    ? `${label} · ${role.organizationName}`
+                    : label;
+                })}
                 accountHref={localizedPath("/dashboard/account", locale)}
                 labels={{
                   open: messages["profile.open"],
+                  role: messages["profile.role"],
+                  roleNone: messages["profile.role.none"],
                   account: messages["auth.dashboard.accountSecurity"],
                   language: messages["auth.language"],
                   theme: messages["ui.theme"],

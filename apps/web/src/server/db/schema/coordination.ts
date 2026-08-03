@@ -50,9 +50,17 @@ export const coordinationEvents = operations.table(
     hostOrganizationId: uuid("host_organization_id").references(
       () => organizations.id,
     ),
-    cityId: uuid("city_id")
-      .notNull()
-      .references(() => cities.id),
+    /**
+     * Where it happens, when it happens somewhere. Null only for an event that
+     * happens online and nowhere else: those belong to no city's agenda, and
+     * asking for one would put a meeting anybody can join on the map of a town
+     * half its participants are not in.
+     */
+    cityId: uuid("city_id").references(() => cities.id),
+    /** Joinable from anywhere. May still carry a city, for a hybrid event. */
+    isOnline: boolean("is_online").notNull().default(false),
+    /** The link people join on, when the organisers have it yet. */
+    onlineUrl: varchar("online_url", { length: 500 }),
     visibility: coordinationEventVisibility("visibility")
       .notNull()
       .default("organization"),
@@ -79,6 +87,12 @@ export const coordinationEvents = operations.table(
   },
   (t) => [
     check("coordination_events_range_check", sql`${t.endsAt} >= ${t.startsAt}`),
+    // An event happens somewhere: in a city, or online. A row that says neither
+    // is one nobody can attend.
+    check(
+      "coordination_events_where_check",
+      sql`${t.cityId} is not null or ${t.isOnline}`,
+    ),
     // The agenda is always read as "this city, this window".
     index("coordination_events_city_starts_idx").on(t.cityId, t.startsAt),
     index("coordination_events_host_starts_idx").on(

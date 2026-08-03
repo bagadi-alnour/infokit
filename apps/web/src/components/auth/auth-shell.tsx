@@ -46,7 +46,7 @@ export function AuthShell({
       <div className="flex w-full max-w-4xl flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <BrandWordmark className="text-ink text-xl" />
+            <BrandWordmark locale={locale} className="text-ink text-xl" />
             <span className="text-copy-muted hidden text-sm font-semibold sm:inline">
               {messages["auth.privateInstrument"]}
             </span>

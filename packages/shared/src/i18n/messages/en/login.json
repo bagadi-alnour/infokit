@@ -64,5 +64,8 @@
   "auth.account.passwordConfirmationLabel": "Confirm new password",
   "auth.account.passwordSubmit": "Save password",
   "auth.account.updated": "Your password was updated.",
-  "auth.account.error": "The passwords must match and contain at least 12 characters."
+  "auth.account.error": "The passwords must match and contain at least 12 characters.",
+  "auth.account.currentPasswordLabel": "Current password",
+  "auth.account.currentPasswordHint": "Needed to replace an existing password.",
+  "auth.account.currentPasswordError": "The current password is incorrect."
 }

@@ -1,0 +1,46 @@
+{
+  "invite.eyebrow": "دعوة",
+  "invite.title": "لقد تمت دعوتك",
+  "invite.description": "راجع من دعاك وما الذي تمنحه هذه الدعوة من صلاحيات قبل تسجيل الدخول.",
+  "invite.metaTitle": "دعوتك",
+  "invite.metaDescription": "قبول دعوة إلى لوحة التحرير.",
+  "invite.organizationLabel": "المنظمة",
+  "invite.platformLabel": "فريق المنصة",
+  "invite.translatorLabel": "مساحة المترجم",
+  "invite.invitedBy": "دعاك {inviter}",
+  "invite.sentTo": "أُرسلت إلى {email}",
+  "invite.expiresOn": "يتوقف هذا الرابط عن العمل في {date}.",
+  "invite.rolesLabel": "الصلاحيات الممنوحة عند القبول",
+  "invite.rolesNone": "عضوية فقط — بدون أدوار إضافية.",
+  "invite.roleHint": "تُسمّى الأدوار برمزها، كما هو الحال في كل أنحاء اللوحة.",
+
+  "invite.signInHeading": "سجّل الدخول للقبول",
+  "invite.signInBody": "القبول يعني تسجيل الدخول باستخدام {email}. هذا هو العنوان الوحيد الذي تعمل معه هذه الدعوة.",
+  "invite.signInAction": "المتابعة إلى تسجيل الدخول",
+
+  "invite.acceptHeading": "قبول هذه الدعوة",
+  "invite.acceptBody": "أنت مسجّل الدخول باسم {email}. القبول يضيف هذه الصلاحية إلى حسابك فوراً.",
+  "invite.acceptAction": "قبول الدعوة",
+  "invite.acceptError": "تعذّر قبول هذه الدعوة. حدّث الصفحة وحاول مرة أخرى.",
+
+  "invite.wrongAccountTitle": "مسجّل الدخول بحساب آخر",
+  "invite.wrongAccountBody": "أُرسلت هذه الدعوة إلى {invited}، لكنك مسجّل الدخول باسم {current}. سجّل الخروج ثم ادخل بالعنوان المدعو لقبولها.",
+  "invite.signOutAction": "تسجيل الخروج",
+
+  "invite.acceptedTitle": "تم قبول الدعوة",
+  "invite.acceptedBody": "سبق قبول هذه الدعوة. سجّل الدخول للوصول إلى مساحة عملك.",
+  "invite.acceptedDoneBody": "أصبح لديك الآن حق الوصول. افتح اللوحة للبدء.",
+  "invite.acceptedNoMembership": "قُبلت هذه الدعوة، لكن العضوية التي حجزتها لم تعد موجودة. اطلب دعوة جديدة ممن دعاك.",
+
+  "invite.expiredTitle": "انتهت صلاحية هذه الدعوة",
+  "invite.expiredBody": "تدوم روابط الدعوة {days} يوماً. اطلب رابطاً جديداً ممن دعاك.",
+
+  "invite.revokedTitle": "تم سحب هذه الدعوة",
+  "invite.revokedBody": "لم يعد الرابط صالحاً. تواصل مع من دعاك إذا كنت ترى أن هذا خطأ.",
+
+  "invite.unknownTitle": "هذا الرابط غير صالح",
+  "invite.unknownBody": "تأكد من نسخ الرابط كاملاً من البريد الإلكتروني. إذا استمر الخطأ، اطلب دعوة جديدة.",
+
+  "invite.consoleAction": "فتح اللوحة",
+  "invite.privacy": "تعرض هذه الصفحة دعوة، لا حساباً. لا يُمنح شيء قبل تسجيل الدخول بالعنوان المدعو."
+}

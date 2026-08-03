@@ -13,6 +13,7 @@ import {
   coordinationViewer,
   hostChoicesFor,
 } from "~/server/content/coordination-events";
+import { loadStewardCandidatesByOrganization } from "~/server/content/steward-candidates";
 import { db } from "~/server/db";
 import { organizations, placeTranslations, places } from "~/server/db/schema";
 
@@ -25,10 +26,25 @@ export default async function NewEventPage({
   params: Promise<{ locale: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const [t, consoleLabels] = await Promise.all([
+  const [t, consoleLabels, publicLabels] = await Promise.all([
     loadPageCatalog(locale, "dashboard-events"),
     loadPageCatalog(locale, "dashboard-console"),
+    // The card beside the form is the public one, so it is worded from the
+    // public catalogue: a preview that paraphrases is not a preview.
+    loadPageCatalog(locale, "public-content"),
   ]);
+  const previewLabels = {
+    empty: publicLabels["events.empty"],
+    details: publicLabels["events.details"],
+    online: publicLabels["events.online"],
+    host: publicLabels["events.host"],
+    platform: publicLabels["public.platform"],
+    contact: publicLabels["events.contact"],
+    cancelled: publicLabels["events.cancelled"],
+    cancelledNoReason: publicLabels["events.cancelledNoReason"],
+    addToCalendar: publicLabels["events.addToCalendar"],
+    openMap: publicLabels["events.openMap"],
+  };
   const user = await requireEditor(locale);
   const agendaPath = localizedPath("/dashboard/events", locale);
   const [viewer, canManage] = await Promise.all([
@@ -48,6 +64,12 @@ export default async function NewEventPage({
         id: places.id,
         cityId: places.cityId,
         name: placeTranslations.name,
+        // The preview beside the form answers "can this be pinned" the way the
+        // public page will (RISKS.md R5), so it needs the same facts.
+        addressLine: places.addressLine,
+        lat: places.lat,
+        lng: places.lng,
+        precision: places.precision,
       })
       .from(places)
       .leftJoin(
@@ -62,6 +84,12 @@ export default async function NewEventPage({
   ]);
 
   const hosts = hostChoicesFor(viewer, organizationRows);
+  // Every host this editor may pick, because the choice is made on the form:
+  // the contact dropdown has to change with it without another round trip.
+  const stewardCandidates = await loadStewardCandidatesByOrganization({
+    organizationIds: hosts.map((host) => host.id),
+    authorId: user.id,
+  });
   const city = cityList[0];
   const { todayKey } = cityToday(city?.timezone ?? "Europe/Paris", new Date());
 
@@ -70,6 +98,8 @@ export default async function NewEventPage({
     // from the platform itself and picks a host if the event belongs to one.
     hostOrganizationId: viewer.isPlatformSteward ? "" : (hosts[0]?.id ?? ""),
     cityId: city?.id ?? "",
+    isOnline: false,
+    onlineUrl: "",
     visibility: "organization",
     placeId: "",
     locationLabel: "",
@@ -108,7 +138,13 @@ export default async function NewEventPage({
           id: place.id,
           name: place.name ?? place.id.slice(0, 8),
           cityId: place.cityId,
+          addressLine: place.addressLine,
+          lat: place.lat,
+          lng: place.lng,
+          precision: place.precision,
         }))}
+        stewardCandidates={stewardCandidates}
+        previewLabels={previewLabels}
         canHostAsPlatform={viewer.isPlatformSteward}
         labels={t}
         consoleLabels={consoleLabels}

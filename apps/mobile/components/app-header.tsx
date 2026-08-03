@@ -1,4 +1,4 @@
-import { localeMetadata } from "@infokit/shared/i18n";
+import { brandName, localeMetadata } from "@infokit/shared/i18n";
 import { Text, useInfoKitTheme } from "@infokit/ui";
 import Feather from "@expo/vector-icons/Feather";
 import { useRouter } from "expo-router";
@@ -47,7 +47,7 @@ export function AppHeader() {
             className="min-h-touch rounded-control active:bg-subtle -ml-2 flex-row items-center gap-1.5 px-2"
           >
             <Text className="font-display text-ink text-lg font-bold">
-              InfoKit
+              {brandName(locale)}
             </Text>
             {/* A full circled i, at the size of the other header glyphs: at 14pt
                 it read as a speck of punctuation rather than something to press. */}

@@ -5,7 +5,7 @@ import {
   translatedInterfaceLocales,
   type PublicLocale,
 } from "@infokit/shared/i18n";
-import { Info, LogIn } from "lucide-react";
+import { Download, Info, LogIn } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -19,6 +19,7 @@ import {
   PublicThemeToggle,
 } from "~/components/public/public-preferences";
 import {
+  ActionAnchor,
   Callout,
   Eyebrow,
   type ContentFamily,
@@ -34,6 +35,11 @@ export const publicSections = [
   "/articles",
   "/about",
 ] as const;
+
+const MOBILE_APP_LINKS = {
+  android: "https://play.google.com/store/apps/details?id=org.infokit.app",
+  ios: "https://apps.apple.com/app/id6795952455",
+} as const;
 
 function sectionLabel(
   path: string,
@@ -110,9 +116,12 @@ export function PublicSiteShell({
     href: authPath("login", isLocale(locale) ? locale : "fr"),
     label: messages["public.signIn"] ?? "",
   };
-  // The footer's three ways on: the public information itself, the door the
-  // associations publish through, and the page that explains what this is. The
-  // door is the same `signIn` the bar and the menu carry, written out in full.
+  // The footer's ways on: the public information itself, the door the
+  // associations publish through, the page that explains what this is, and the
+  // two legal pages. The door is the same `signIn` the bar and the menu carry,
+  // written out in full. The legal pages are here and nowhere else — a reader
+  // looking for who publishes this looks at the bottom of the page, and the bar
+  // belongs to the answer they came for (docs/DESIGN-SYSTEM.md §1).
   const footerLinks = [
     {
       href: localizedPath("/", locale),
@@ -122,6 +131,14 @@ export function PublicSiteShell({
     {
       href: localizedPath("/about", locale),
       label: aboutStrings(locale).title,
+    },
+    {
+      href: localizedPath("/legal", locale),
+      label: messages["public.footer.legal"] ?? "",
+    },
+    {
+      href: localizedPath("/privacy", locale),
+      label: messages["public.footer.privacy"] ?? "",
     },
   ];
 
@@ -155,7 +172,10 @@ export function PublicSiteShell({
             href={localizedPath("/", locale)}
             className="rounded-control focus-visible:outline-brand -mx-2 flex min-h-12 shrink-0 items-center px-2 focus-visible:outline-2 focus-visible:outline-offset-2"
           >
-            <BrandWordmark className="text-ink text-xl sm:text-2xl" />
+            <BrandWordmark
+              locale={locale}
+              className="text-ink text-xl sm:text-2xl"
+            />
           </Link>
 
           <nav
@@ -241,46 +261,83 @@ export function PublicSiteShell({
         {children}
       </main>
 
-      {/* The mark and what the platform is, three ways on, and the sentence that
-       *  qualifies every answer above them. Three links rather than the section
-       *  list: the bar already carries the sections, and a reader who reached the
-       *  bottom is choosing between reading, publishing, and understanding what
-       *  this is. The tagline is the one line of the shell translated in all
-       *  eleven languages, and the notice is the last thing on the page because
-       *  it is the limit of everything before it. */}
+      {/* The mark and what the platform is, three ways on, the two mobile-app
+       *  stores, and the sentence that qualifies every answer above them. Three
+       *  links rather than the section list: the bar already carries the
+       *  sections, and a reader who reached the bottom is choosing between
+       *  reading, publishing, and understanding what this is. The tagline is
+       *  the one line of the shell translated in all eleven languages, and the
+       *  notice is the last thing on the page because it is the limit of
+       *  everything before it. */}
       <footer className="border-line bg-surface mt-12 border-t print:mt-6">
         <div className="max-w-300 mx-auto w-full px-4 py-8 md:px-6 md:py-12 lg:px-8 print:max-w-none print:px-0 print:py-4">
           {/* On paper the notice below survives and this does not: a printed
            *  sheet cannot be navigated, and the disclaimer is the one part of
            *  the footer that qualifies what the reader is holding. */}
-          <div className="flex flex-col gap-8 md:flex-row md:justify-between md:gap-16 print:hidden">
+          <div className="flex flex-col gap-8 md:flex-row md:justify-between md:gap-12 print:hidden">
             <div className="flex max-w-prose flex-col items-start gap-3">
               <Link
                 href={localizedPath("/", locale)}
                 className="rounded-control focus-visible:outline-brand -mx-1 flex items-center gap-2.5 px-1 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 <BrandMark size={28} />
-                <BrandWordmark className="text-ink text-2xl" />
+                <BrandWordmark locale={locale} className="text-ink text-2xl" />
               </Link>
               <p className="text-copy-muted text-[0.95rem] leading-relaxed">
                 {aboutStrings(locale).tagline}
               </p>
             </div>
 
-            <nav aria-label={messages["public.nav.label"]}>
-              <ul className="flex flex-col md:items-end">
-                {footerLinks.map((item) => (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className="text-copy-muted hover:text-brand-deep rounded-control focus-visible:outline-brand -mx-2 flex min-h-12 items-center px-2 text-[0.95rem] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      {item.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </nav>
+            <div className="flex flex-col gap-8 sm:flex-row sm:gap-12 md:justify-end">
+              <section
+                aria-labelledby="mobile-app-download-title"
+                className="flex flex-col items-start md:items-end"
+              >
+                <h2
+                  id="mobile-app-download-title"
+                  className="text-ink text-[0.95rem] font-semibold"
+                >
+                  {messages["public.footer.downloadApp"]}
+                </h2>
+                <div className="mt-3 flex flex-col items-start gap-2 md:items-end">
+                  <ActionAnchor
+                    href={MOBILE_APP_LINKS.android}
+                    target="_blank"
+                    rel="noreferrer"
+                    tone="outline"
+                    size="compact"
+                  >
+                    <Download className="size-4" aria-hidden />
+                    {messages["public.footer.downloadAndroid"]}
+                  </ActionAnchor>
+                  <ActionAnchor
+                    href={MOBILE_APP_LINKS.ios}
+                    target="_blank"
+                    rel="noreferrer"
+                    tone="outline"
+                    size="compact"
+                  >
+                    <Download className="size-4" aria-hidden />
+                    {messages["public.footer.downloadIos"]}
+                  </ActionAnchor>
+                </div>
+              </section>
+
+              <nav aria-label={messages["public.nav.label"]}>
+                <ul className="flex flex-col md:items-end">
+                  {footerLinks.map((item) => (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className="text-copy-muted hover:text-brand-deep rounded-control focus-visible:outline-brand -mx-2 flex min-h-12 items-center px-2 text-[0.95rem] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+                      >
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            </div>
           </div>
 
           {/* Bold summary then detail, in the one notice component the public

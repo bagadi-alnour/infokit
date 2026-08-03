@@ -8,10 +8,14 @@
   "audit.view": "ما تقرأه",
   "audit.view.events": "الإجراءات",
   "audit.view.deliveries": "الرسائل المُرسلة",
+  "audit.view.eventsHint": "راجع الإجراءات والمحاولات المرفوضة والإخفاقات والتغييرات على مستوى الحقول.",
+  "audit.view.deliveriesHint": "تتبّع وصول البريد والرسائل النصية والتنبيهات من المنصة إلى مزوّديها.",
 
   "audit.notice.privacyTitle": "تحتوي هذه الصفحة على بيانات شخصية",
+  "audit.notice.privacyCompact": "بيانات شخصية — الوصول للمراجعة الأمنية فقط.",
   "audit.notice.privacyBody": "تُحفظ العناوين وعناوين IP وبصمات المتصفح لأجل المراجعة الأمنية وحدها، وللمدة التي تسمح بها سياسة الحفظ. اقرأ ما يلزم للسؤال الذي تجيب عنه، لا أكثر.",
 
+  "audit.overview.period": "مؤشرات آخر {days} أيام",
   "audit.stat.events": "إجراءات مسجّلة",
   "audit.stat.eventsHint": "خلال الأيام {days} الماضية.",
   "audit.stat.denied": "محاولات مرفوضة",
@@ -21,6 +25,7 @@
   "audit.stat.deliveries": "رسائل لم تُسلَّم",
   "audit.stat.deliveriesHint": "بريد أو رسائل نصية رفضها المزوّد.",
 
+  "audit.filter.findGroup": "العثور على سجل",
   "audit.filter.actor": "الشخص",
   "audit.filter.actorPlaceholder": "الاسم أو العنوان أو معرّف الحساب",
   "audit.filter.action": "الإجراء",
@@ -37,6 +42,7 @@
   "audit.filter.channel": "القناة",
   "audit.filter.anyChannel": "كل القنوات",
   "audit.filter.status": "التسليم",
+  "audit.filter.messagePlaceholder": "اسم الرسالة",
   "audit.filter.recipient": "المستلم",
   "audit.filter.recipientPlaceholder": "name@example.org",
   "audit.filter.recipientHint": "العنوان كاملًا. تُطابق بصمته ولا يُحفظ أبدًا.",
@@ -86,6 +92,8 @@
   "audit.detail.actorId": "الحساب",
 
   "audit.empty": "لم يُسجَّل شيء بعد.",
+  "audit.results.events": "الإجراءات المسجّلة",
+  "audit.results.deliveries": "محاولات التسليم",
 
   "audit.delivery.column.when": "الوقت",
   "audit.delivery.column.channel": "القناة",

@@ -1,0 +1,46 @@
+{
+  "invite.eyebrow": "Invitation",
+  "invite.title": "Vous avez été invité",
+  "invite.description": "Vérifiez qui vous a invité et à quoi cela donne accès avant de vous connecter.",
+  "invite.metaTitle": "Votre invitation",
+  "invite.metaDescription": "Accepter une invitation à la console éditoriale.",
+  "invite.organizationLabel": "Organisation",
+  "invite.platformLabel": "Équipe de la plateforme",
+  "invite.translatorLabel": "Espace traducteur",
+  "invite.invitedBy": "Invité par {inviter}",
+  "invite.sentTo": "Envoyée à {email}",
+  "invite.expiresOn": "Ce lien cesse de fonctionner le {date}.",
+  "invite.rolesLabel": "Accès accordé à l'acceptation",
+  "invite.rolesNone": "Adhésion seule — aucun rôle supplémentaire.",
+  "invite.roleHint": "Les rôles sont désignés par leur code, comme partout dans la console.",
+
+  "invite.signInHeading": "Connectez-vous pour accepter",
+  "invite.signInBody": "Accepter suppose de vous connecter avec {email}. C'est la seule adresse pour laquelle cette invitation fonctionne.",
+  "invite.signInAction": "Continuer vers la connexion",
+
+  "invite.acceptHeading": "Accepter cette invitation",
+  "invite.acceptBody": "Vous êtes connecté en tant que {email}. L'acceptation ajoute cet accès à votre compte immédiatement.",
+  "invite.acceptAction": "Accepter l'invitation",
+  "invite.acceptError": "Nous n'avons pas pu accepter cette invitation. Actualisez la page et réessayez.",
+
+  "invite.wrongAccountTitle": "Connecté avec un autre compte",
+  "invite.wrongAccountBody": "Cette invitation a été envoyée à {invited}, mais vous êtes connecté en tant que {current}. Déconnectez-vous et reconnectez-vous avec l'adresse invitée pour l'accepter.",
+  "invite.signOutAction": "Se déconnecter",
+
+  "invite.acceptedTitle": "Invitation acceptée",
+  "invite.acceptedBody": "Cette invitation a déjà été acceptée. Connectez-vous pour accéder à votre espace de travail.",
+  "invite.acceptedDoneBody": "Vous avez désormais accès. Ouvrez la console pour commencer.",
+  "invite.acceptedNoMembership": "Cette invitation a été acceptée, mais l'adhésion qu'elle réservait n'existe plus. Demandez une nouvelle invitation à la personne qui vous a invité.",
+
+  "invite.expiredTitle": "Cette invitation a expiré",
+  "invite.expiredBody": "Les liens d'invitation durent {days} jours. Demandez-en un nouveau à la personne qui vous a invité.",
+
+  "invite.revokedTitle": "Cette invitation a été retirée",
+  "invite.revokedBody": "Le lien n'est plus valable. Contactez la personne qui vous a invité si vous pensez qu'il s'agit d'une erreur.",
+
+  "invite.unknownTitle": "Ce lien n'est pas valable",
+  "invite.unknownBody": "Vérifiez que vous avez copié le lien entier depuis l'e-mail. Si l'erreur persiste, demandez une nouvelle invitation.",
+
+  "invite.consoleAction": "Ouvrir la console",
+  "invite.privacy": "Cette page affiche une invitation, pas un compte. Rien n'est accordé tant que vous ne vous connectez pas avec l'adresse invitée."
+}

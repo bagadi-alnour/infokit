@@ -10,6 +10,7 @@ import {
   CircleDashed,
   Globe,
   LoaderCircle,
+  MailCheck,
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
@@ -24,17 +25,13 @@ import {
   LanguageActionsMenu,
   type LanguageMenuAbilities,
   type LanguageMenuActions,
+  type TranslationRequestStatus,
 } from "~/components/admin/language-actions-menu";
 import {
-  LanguageStatusChip,
-  type LanguageChipStatus,
-} from "~/components/admin/language-status-chip";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "~/components/ui/accordion";
+  LanguageAccordion,
+  LanguageAccordionItem,
+} from "~/components/admin/language-accordion";
+import type { LanguageChipStatus } from "~/components/admin/language-status-chip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -161,6 +158,12 @@ export interface WorkspaceLanguageWorkflow {
    * exists for: somebody else wrote these words.
    */
   submitted?: boolean;
+  /**
+   * A translator request still waiting on its translator. Present, this language
+   * is in somebody's hands: the menu says who has it and since when instead of
+   * offering to send it to a second person.
+   */
+  translationRequest?: TranslationRequestStatus | null;
 }
 
 /**
@@ -230,6 +233,19 @@ function countWords(text: string): number {
   return words[0] === "" ? 0 : words.length;
 }
 
+/**
+ * Wrap a plain sentence as the one paragraph the generator expects, for an
+ * entity with no rich-text body. Escaped because an editor's own words are
+ * untrusted markup: the server sanitizes what comes back, and a stray `<` on the
+ * way out should stay a `<` rather than open a tag.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 export function TranslationWorkspace({
   entityKind,
   entityId,
@@ -267,8 +283,16 @@ export function TranslationWorkspace({
   aiEnabled?: boolean;
   /** Present when the entity carries a cover image whose alt text translates. */
   imageAlt?: WorkspaceImageAlt;
-  /** Which optional fields this entity has in every language. */
-  fields?: { summary?: boolean };
+  /**
+   * Which fields this entity has in every language.
+   *
+   * `body: false` is for an entity whose whole text is a label and a sentence —
+   * a basic-information tile, where the sentence saying when to dial a number is
+   * the content and there is no article behind it. The rich-text editor is then
+   * not rendered at all rather than rendered and ignored: an editor offered a
+   * formatting toolbar reasonably assumes what they write in it is kept.
+   */
+  fields?: { summary?: boolean; body?: boolean };
   /** What each language posts as; activities by default. */
   names?: (language: EditorialLanguage) => WorkspaceFieldNames;
   /** Per-language publication and review, folded into each language's menu. */
@@ -309,6 +333,7 @@ export function TranslationWorkspace({
 
   const source = values[sourceLanguage];
   const hasSummary = fields?.summary ?? false;
+  const hasBody = fields?.body ?? true;
   const reviewKind = reviewKindOf(entityKind);
   const sourceWordCount = useMemo(
     () => countWords(`${source.title} ${source.summary} ${source.text}`),
@@ -319,7 +344,15 @@ export function TranslationWorkspace({
     (language: EditorialLanguage): LanguageChipStatus => {
       if (language === sourceLanguage) return "source";
       const value = values[language];
-      if (!value.title.trim()) return "empty";
+      /**
+       * A body-less entity needs both halves before the language counts as
+       * started: its save path stores a language only when it has the label
+       * *and* the sentence, so a chip reading "draft" over half a tile would be
+       * describing work that is not going to be written down.
+       */
+      if (!value.title.trim() || (!hasBody && !value.summary.trim())) {
+        return "empty";
+      }
       if (value.dirty) return value.signature ? "generated" : "edited";
       if (value.stale) return "stale";
       switch (value.savedState) {
@@ -335,7 +368,7 @@ export function TranslationWorkspace({
           return "draft";
       }
     },
-    [sourceLanguage, values],
+    [hasBody, sourceLanguage, values],
   );
 
   const patch = useCallback(
@@ -364,7 +397,17 @@ export function TranslationWorkspace({
         request.set("targetLanguageCode", language);
         request.set("sourceLanguageCode", sourceLanguage);
         request.set("sourceTitle", source.title);
-        request.set("sourceBodyHtml", source.html);
+        /**
+         * A body-less entity sends its summary as the payload to translate,
+         * because that sentence *is* its text — a basic-information tile's
+         * "when to use this number". The generator only ever translates a title
+         * and a body, so the sentence travels as the body and comes back as one;
+         * `applyProposal` below puts it back where it belongs.
+         */
+        request.set(
+          "sourceBodyHtml",
+          hasBody ? source.html : `<p>${escapeHtml(source.summary)}</p>`,
+        );
         // Alt text travels with the payload it describes, so one request
         // returns a caption written by whoever wrote the surrounding text.
         if (imageAlt?.source.trim()) {
@@ -375,6 +418,10 @@ export function TranslationWorkspace({
           title: proposal.title,
           html: proposal.html,
           text: proposal.text,
+          // The translated sentence lands in the field the editor actually
+          // reads. `html` still travels on save as the witness the signature
+          // was taken over (see the basics action's `provenancePayload`).
+          ...(hasBody ? {} : { summary: proposal.text }),
           altText: proposal.altText ?? "",
           signature: proposal.signature,
           savedState: proposal.saved ? "machine_generated" : null,
@@ -404,7 +451,9 @@ export function TranslationWorkspace({
       organizationId,
       patch,
       showActionError,
+      hasBody,
       source.html,
+      source.summary,
       source.title,
       sourceLanguage,
     ],
@@ -415,8 +464,10 @@ export function TranslationWorkspace({
    * returns, so a ten-language sweep reads as progress rather than one freeze.
    */
   const generateMissing = useCallback(async () => {
+    // "Missing" is the same question the chip asks, so a tile whose label was
+    // filled in but whose sentence was not is still waiting to be written.
     const pending = targetLanguages.filter(
-      (language) => !values[language].title.trim(),
+      (language) => statusOf(language) === "empty",
     );
     if (pending.length === 0) {
       toast.info(label("ai.nothingMissing"));
@@ -430,7 +481,7 @@ export function TranslationWorkspace({
       setBatchRemaining((remaining) => remaining - 1);
     }
     if (failed === 0) toast.success(label("ai.batchDone"));
-  }, [generate, label, targetLanguages, values]);
+  }, [generate, label, statusOf, targetLanguages]);
 
   const verify = useCallback(
     async (language: EditorialLanguage) => {
@@ -630,6 +681,7 @@ export function TranslationWorkspace({
           scheduled: server?.scheduled ?? false,
           reviewStage: server?.reviewStage ?? "none",
           wordCount: sourceWordCount,
+          translationRequest: server?.translationRequest ?? null,
         }}
         actions={{
           ...workflow?.actions,
@@ -705,31 +757,37 @@ export function TranslationWorkspace({
                     dirty: true,
                   });
                 }}
-                rows={2}
+                rows={hasBody ? 2 : 3}
                 maxLength={2000}
+                /* Where there is no body, this sentence is the content: an
+                 * entry with a label and nothing else says nothing. */
+                required={!hasBody}
               />
               <FieldDescription>{label("summaryHint")}</FieldDescription>
             </Field>
           ) : null}
-          <Field>
-            <FieldLabel>{label("description")}</FieldLabel>
-            {renderEditor(
-              sourceLanguage,
-              source,
-              label("descriptionPlaceholder"),
-            )}
-            <FieldDescription>{label("descriptionHint")}</FieldDescription>
-          </Field>
+          {hasBody ? (
+            <Field>
+              <FieldLabel>{label("description")}</FieldLabel>
+              {renderEditor(
+                sourceLanguage,
+                source,
+                label("descriptionPlaceholder"),
+              )}
+              <FieldDescription>{label("descriptionHint")}</FieldDescription>
+            </Field>
+          ) : null}
           {children}
         </div>
 
         {/* The record's own media follows the translation work: it belongs to
          * the record as a whole and is the next decision in this column. */}
         <div className="grid min-w-0 content-start gap-5">
-          <section
-            aria-label={label("rail.heading")}
-            className="border-line bg-subtle/40 min-w-0 rounded-xl border p-4"
-          >
+          {/* A heading over a list, not a panel around one. Each language is
+           * already a card of its own, and wrapping eleven cards in a twelfth
+           * put a border inside a border with nothing between them to
+           * separate. */}
+          <section aria-label={label("rail.heading")} className="min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">{label("rail.heading")}</h3>
               <AlertDialog
@@ -810,7 +868,7 @@ export function TranslationWorkspace({
             editor — the text of the other ten travels in hidden inputs below,
             so nothing typed is ever lost to a collapsed row.
           */}
-            <Accordion
+            <LanguageAccordion
               value={open}
               onValueChange={(next) => {
                 setOpen(next as EditorialLanguage[]);
@@ -839,18 +897,23 @@ export function TranslationWorkspace({
                   value.savedMethod === "ai_then_human_review" ||
                   (server?.submitted ?? false);
                 return (
-                  <AccordionItem key={language} value={language}>
-                    <AccordionTrigger className="gap-2">
-                      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                        <LanguageStatusChip
-                          status={status}
-                          code={language}
-                          busy={busy === language}
-                        />
-                        <span className="min-w-0 truncate">{languageName}</span>
-                        <span className="text-copy-muted truncate text-xs font-normal">
-                          {label(`status.${status}`)}
-                        </span>
+                  <LanguageAccordionItem
+                    key={language}
+                    code={language}
+                    name={languageName}
+                    status={status}
+                    statusLabel={label(`status.${status}`)}
+                    busy={busy === language}
+                    note={
+                      isSource
+                        ? label("source.inPane")
+                        : status === "verified" && value.verifiedByName
+                          ? `${label("verify.by")} ${value.verifiedByName}`
+                          : ""
+                    }
+                    actions={renderMenu(language)}
+                    notes={
+                      <>
                         {server?.published ? (
                           <span className="text-ok inline-flex shrink-0 items-center gap-1 text-xs font-normal">
                             <Globe className="size-3" aria-hidden />
@@ -880,169 +943,161 @@ export function TranslationWorkspace({
                             {label("workflow.changesRequested")}
                           </span>
                         ) : null}
-                      </span>
-                    </AccordionTrigger>
-                    {/* `h-auto` overrides the panel's measured height: base-ui
-                     * measures once, at open, and an editor grows as it is typed
-                     * into — the fixed height would cut the text off. */}
-                    <AccordionContent className="h-auto">
-                      <div className="grid gap-3">
-                        {/* The language's own actions, top-right of its panel. */}
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-copy-muted min-w-0 text-xs">
-                            {isSource
-                              ? label("source.inPane")
-                              : status === "verified" && value.verifiedByName
-                                ? `${label("verify.by")} ${value.verifiedByName}`
-                                : ""}
+                        {/* The row says the errand is out; the menu behind it
+                         * says to whom and since when. */}
+                        {server?.translationRequest ? (
+                          <span className="text-copy-muted inline-flex shrink-0 items-center gap-1 text-xs font-normal">
+                            <MailCheck className="size-3" aria-hidden />
+                            {label("translation.requestedLabel")}
+                          </span>
+                        ) : null}
+                      </>
+                    }
+                  >
+                    {isSource ? null : (
+                      <>
+                        {/* Why this language is or is not trustworthy. */}
+                        {status === "stale" ? (
+                          <p className="border-warn/40 bg-warn-soft text-warn flex gap-2 rounded-lg border p-2.5 text-xs">
+                            <TriangleAlert
+                              className="mt-0.5 size-3.5 shrink-0"
+                              aria-hidden
+                            />
+                            <span>{label("status.staleHint")}</span>
                           </p>
-                          {renderMenu(language)}
-                        </div>
+                        ) : null}
+                        {status === "generated" || status === "ai" ? (
+                          <p className="border-brand/30 bg-brand-soft/60 text-brand flex gap-2 rounded-lg border p-2.5 text-xs">
+                            <CircleDashed
+                              className="mt-0.5 size-3.5 shrink-0"
+                              aria-hidden
+                            />
+                            <span>{label("status.aiHint")}</span>
+                          </p>
+                        ) : null}
 
-                        {isSource ? null : (
-                          <>
-                            {/* Why this language is or is not trustworthy. */}
-                            {status === "stale" ? (
-                              <p className="border-warn/40 bg-warn-soft text-warn flex gap-2 rounded-lg border p-2.5 text-xs">
-                                <TriangleAlert
-                                  className="mt-0.5 size-3.5 shrink-0"
-                                  aria-hidden
-                                />
-                                <span>{label("status.staleHint")}</span>
-                              </p>
-                            ) : null}
-                            {status === "generated" || status === "ai" ? (
-                              <p className="border-brand/30 bg-brand-soft/60 text-brand flex gap-2 rounded-lg border p-2.5 text-xs">
-                                <CircleDashed
-                                  className="mt-0.5 size-3.5 shrink-0"
-                                  aria-hidden
-                                />
-                                <span>{label("status.aiHint")}</span>
-                              </p>
-                            ) : null}
+                        <Field>
+                          <FieldLabel htmlFor={`title-${language}`}>
+                            {label("title")}
+                          </FieldLabel>
+                          <Input
+                            id={`title-${language}`}
+                            dir={editorialTextDirection(language)}
+                            value={value.title}
+                            onChange={(event) => {
+                              patch(language, {
+                                title: event.target.value,
+                                dirty: true,
+                              });
+                            }}
+                            maxLength={200}
+                          />
+                          <FieldDescription>
+                            {label("optional")}
+                          </FieldDescription>
+                        </Field>
+                        {hasSummary ? (
+                          <Field>
+                            <FieldLabel htmlFor={`summary-${language}`}>
+                              {label("summary")}
+                            </FieldLabel>
+                            <Textarea
+                              id={`summary-${language}`}
+                              dir={editorialTextDirection(language)}
+                              value={value.summary}
+                              onChange={(event) => {
+                                patch(language, {
+                                  summary: event.target.value,
+                                  dirty: true,
+                                });
+                              }}
+                              rows={2}
+                              maxLength={2000}
+                            />
+                          </Field>
+                        ) : null}
+                        {hasBody ? (
+                          <Field>
+                            <FieldLabel>{label("description")}</FieldLabel>
+                            {renderEditor(
+                              language,
+                              value,
+                              label("descriptionPlaceholder"),
+                            )}
+                          </Field>
+                        ) : null}
+                        {/* Alt text is worth translating once the source
+                         * image has one. */}
+                        {imageAlt?.source.trim() && fieldNames.altText ? (
+                          <Field>
+                            <FieldLabel htmlFor={`image-alt-${language}`}>
+                              {label("imageAlt")}
+                            </FieldLabel>
+                            <Input
+                              id={`image-alt-${language}`}
+                              dir={editorialTextDirection(language)}
+                              value={value.altText}
+                              onChange={(event) => {
+                                patch(language, {
+                                  altText: event.target.value,
+                                  dirty: true,
+                                });
+                              }}
+                              maxLength={500}
+                            />
+                            <FieldDescription>
+                              {label("imageAltSource")}: {imageAlt.source}
+                            </FieldDescription>
+                          </Field>
+                        ) : null}
 
-                            <Field>
-                              <FieldLabel htmlFor={`title-${language}`}>
-                                {label("title")}
-                              </FieldLabel>
-                              <Input
-                                id={`title-${language}`}
-                                dir={editorialTextDirection(language)}
-                                value={value.title}
-                                onChange={(event) => {
-                                  patch(language, {
-                                    title: event.target.value,
-                                    dirty: true,
-                                  });
-                                }}
-                                maxLength={200}
-                              />
-                              <FieldDescription>
-                                {label("optional")}
-                              </FieldDescription>
-                            </Field>
-                            {hasSummary ? (
-                              <Field>
-                                <FieldLabel htmlFor={`summary-${language}`}>
-                                  {label("summary")}
-                                </FieldLabel>
-                                <Textarea
-                                  id={`summary-${language}`}
-                                  dir={editorialTextDirection(language)}
-                                  value={value.summary}
-                                  onChange={(event) => {
-                                    patch(language, {
-                                      summary: event.target.value,
-                                      dirty: true,
-                                    });
-                                  }}
-                                  rows={2}
-                                  maxLength={2000}
-                                />
-                              </Field>
-                            ) : null}
-                            <Field>
-                              <FieldLabel>{label("description")}</FieldLabel>
-                              {renderEditor(
-                                language,
-                                value,
-                                label("descriptionPlaceholder"),
-                              )}
-                            </Field>
-                            {/* Alt text is worth translating once the source
-                             * image has one. */}
-                            {imageAlt?.source.trim() && fieldNames.altText ? (
-                              <Field>
-                                <FieldLabel htmlFor={`image-alt-${language}`}>
-                                  {label("imageAlt")}
-                                </FieldLabel>
-                                <Input
-                                  id={`image-alt-${language}`}
-                                  dir={editorialTextDirection(language)}
-                                  value={value.altText}
-                                  onChange={(event) => {
-                                    patch(language, {
-                                      altText: event.target.value,
-                                      dirty: true,
-                                    });
-                                  }}
-                                  maxLength={500}
-                                />
-                                <FieldDescription>
-                                  {label("imageAltSource")}: {imageAlt.source}
-                                </FieldDescription>
-                              </Field>
-                            ) : null}
-
-                            {canVerify &&
-                            (writtenElsewhere || status === "verified") ? (
-                              <Button
-                                type="button"
-                                variant={
-                                  status === "verified" ? "outline" : "default"
-                                }
-                                size="sm"
-                                className="w-fit"
-                                disabled={
-                                  !entityId ||
-                                  busy !== null ||
-                                  batching ||
-                                  value.dirty ||
-                                  !value.title.trim() ||
-                                  status === "verified"
-                                }
-                                title={
-                                  value.dirty
-                                    ? label("verify.saveFirst")
-                                    : undefined
-                                }
-                                onClick={() => {
-                                  void verify(language);
-                                }}
-                              >
-                                {status === "verified" ? (
-                                  <BadgeCheck aria-hidden />
-                                ) : (
-                                  <Check aria-hidden />
-                                )}
-                                {status === "verified"
-                                  ? label("verify.already")
-                                  : label("verify.action")}
-                              </Button>
-                            ) : null}
-                            {value.dirty && status !== "verified" ? (
-                              <p className="text-copy-muted text-xs">
-                                {label("verify.saveFirst")}
-                              </p>
-                            ) : null}
-                          </>
-                        )}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                        {canVerify &&
+                        (writtenElsewhere || status === "verified") ? (
+                          <Button
+                            type="button"
+                            variant={
+                              status === "verified" ? "outline" : "default"
+                            }
+                            size="sm"
+                            className="w-fit"
+                            disabled={
+                              !entityId ||
+                              busy !== null ||
+                              batching ||
+                              value.dirty ||
+                              !value.title.trim() ||
+                              status === "verified"
+                            }
+                            title={
+                              value.dirty
+                                ? label("verify.saveFirst")
+                                : undefined
+                            }
+                            onClick={() => {
+                              void verify(language);
+                            }}
+                          >
+                            {status === "verified" ? (
+                              <BadgeCheck aria-hidden />
+                            ) : (
+                              <Check aria-hidden />
+                            )}
+                            {status === "verified"
+                              ? label("verify.already")
+                              : label("verify.action")}
+                          </Button>
+                        ) : null}
+                        {value.dirty && status !== "verified" ? (
+                          <p className="text-copy-muted text-xs">
+                            {label("verify.saveFirst")}
+                          </p>
+                        ) : null}
+                      </>
+                    )}
+                  </LanguageAccordionItem>
                 );
               })}
-            </Accordion>
+            </LanguageAccordion>
           </section>
           {media ? <div className="min-w-0">{media}</div> : null}
         </div>

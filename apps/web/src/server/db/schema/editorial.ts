@@ -22,6 +22,8 @@ import { contacts, organizations } from "./organizations";
 import {
   archival,
   attributionRole,
+  basicInformationOperator,
+  basicInformationReach,
   content,
   custodianKind,
   custodyTransferState,
@@ -313,6 +315,22 @@ export const fixedInformationDetails = content.table(
   },
 );
 
+/**
+ * One tile or number in the basic-information block: the shortest route to
+ * urgent or frequently needed help (docs/PHASE-1-PUBLIC-INFORMATION.md §5).
+ *
+ * The words are not here. A tile's label and the sentence saying when to use it
+ * are authored, translated and reviewed like any other editorial text, in
+ * `editorial_revision_translations` — `title` is the label, `summary` is the
+ * context. That is the whole reason this kind exists: an emergency number whose
+ * explanation is a hardcoded interface string cannot be corrected by the people
+ * who answer the phone, and cannot carry a review date.
+ *
+ * What *is* here is the part a translator must never touch. `dial` holds the
+ * digits exactly as they are dialled, and `dialInstead` says whether the number
+ * printed on the tile is the one to press — Alarm Phone is a second step after
+ * 112, so its own card dials 112 and names the association in the text.
+ */
 export const basicInformationDetails = content.table(
   "basic_information_details",
   {
@@ -321,9 +339,74 @@ export const basicInformationDetails = content.table(
       .references(() => editorialEntries.id, { onDelete: "cascade" }),
     icon: varchar("icon", { length: 50 }).notNull(),
     priority: integer("priority").notNull().default(0),
+    /**
+     * The one number for danger, drawn loudest. At most one tile carries it: a
+     * second would mean neither is the loudest thing on the page. This is a
+     * question about emphasis, *not* about which block the tile belongs to —
+     * `operator` answers that.
+     */
     emergency: boolean("emergency").notNull().default(false),
+    /**
+     * Whose phone rings — the country's service, or an association. It is what
+     * splits the public page's two blocks, and it is recorded rather than
+     * inferred; see the enum in `./schemas` for why `answered_by_organization_id`
+     * cannot stand in for it.
+     */
+    operator: basicInformationOperator("operator").notNull().default("state"),
     categoryId: uuid("category_id").references(() => serviceCategories.id),
+    /**
+     * The digits, spaced as whoever published them prints them, or null for a
+     * tile that opens a page instead of placing a call. Never reformatted:
+     * regrouping digits nobody can verify is how a transcription error enters a
+     * number that is dialled from a sinking boat.
+     */
+    dial: varchar("dial", { length: 40 }),
+    /**
+     * How to reach it. `voice` is a call, `sms` is written to — 114 is texted,
+     * not called — and `whatsapp` marks the line that is also reachable there,
+     * which on a data-only phone is often the only route.
+     */
+    reach: basicInformationReach("reach"),
+    /**
+     * The number this tile actually presses, when that is not the number it is
+     * about. Null means press `dial`.
+     *
+     * Sea rescue is why this column exists. The guide's instruction is to call
+     * 112 and ask for the coastguard, and to try the association line only if
+     * that fails — so the tile dials 112 while its text names the association.
+     * Leading with a volunteer phone would put it between a sinking boat and the
+     * service that can launch to it.
+     */
+    dialInstead: varchar("dial_instead", { length: 40 }),
+    /**
+     * Whose number it is, for a line that belongs to a named association rather
+     * than to the country. Null is a state number: 112 is 112 until France
+     * changes it, and no association owns it.
+     *
+     * This is not custody — `editorial_custodianships` says who maintains the
+     * record. This says whose phone rings, which is what a reader needs in order
+     * to judge who they are about to speak to.
+     */
+    // Named explicitly below: the generated name overruns 63 bytes
+    // (./schemas.ts).
+    answeredByOrganizationId: uuid("answered_by_organization_id"),
   },
+  (t) => [
+    foreignKey({
+      name: "basic_information_details_answered_by_organization_id_fk",
+      columns: [t.answeredByOrganizationId],
+      foreignColumns: [organizations.id],
+    }),
+    /**
+     * A tile that says how to reach a number has to have one, and a tile that
+     * redirects the call has to be reachable — a `dial_instead` with nothing to
+     * dial is a card that looks like a phone number and presses nothing.
+     */
+    check(
+      "basic_information_details_dial_check",
+      sql`(${t.dial} is null) = (${t.reach} is null) and (${t.dialInstead} is null or ${t.dial} is not null)`,
+    ),
+  ],
 );
 
 /**

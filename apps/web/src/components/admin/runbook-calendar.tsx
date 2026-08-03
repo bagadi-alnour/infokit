@@ -69,12 +69,20 @@ export function RunbookCalendar({
   selectedCount,
   labels,
   localeCode,
+  weekStartsOn,
 }: {
   selectedDate: string;
   month: string;
   eventDates: Record<string, CalendarEventState[]>;
   selectedDateLabel: string;
   selectedCount: number;
+  /**
+   * The account's own answer, from `core.user_settings`. Not a constant: this
+   * column was already being saved by the preferences form and read by nothing,
+   * so a person who set Sunday was told it had been saved and then shown a
+   * Monday calendar for the rest of the year.
+   */
+  weekStartsOn: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   labels: {
     activities: string;
     scheduled: string;
@@ -101,7 +109,7 @@ export function RunbookCalendar({
     <section aria-label={selectedDateLabel} aria-busy={isPending}>
       <Calendar
         mode="single"
-        weekStartsOn={1}
+        weekStartsOn={weekStartsOn}
         locale={calendarLocales[localeCode]}
         selected={fromIso(selectedDate)}
         month={fromIso(`${month}-01`)}

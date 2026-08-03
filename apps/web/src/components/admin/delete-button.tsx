@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { Button } from "~/components/admin/workspace";
 import { Popover, PopoverContent } from "~/components/ui/popover";
 
@@ -13,6 +14,8 @@ export type DeleteLabels = {
   confirm: string;
   hint: string;
   cancel: string;
+  completed: string;
+  error: string;
 };
 
 /**
@@ -52,11 +55,18 @@ export function DeleteButton({
           >
             {labels.cancel}
           </Button>
-          <form action={action}>
+          <ActionFeedbackForm
+            action={action}
+            successMessage={labels.completed}
+            errorMessage={labels.error}
+            onSuccess={() => {
+              setOpen(false);
+            }}
+          >
             <RowScopeFields locale={locale} organizationId={organizationId} />
             <input type="hidden" name={idName} value={id} />
             <Button variant="danger">{labels.delete}</Button>
-          </form>
+          </ActionFeedbackForm>
         </div>
       </PopoverContent>
     </Popover>

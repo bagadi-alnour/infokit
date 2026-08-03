@@ -158,6 +158,8 @@
   "status.archived": "Archived",
   "create.eyebrow": "New information journey",
   "create.intro": "Define the path’s responsibility and first question. The remaining branches are built after creation.",
+  "create.success": "Simulator path created.",
+  "create.error": "The simulator path could not be created. Check the required fields and try again.",
   "create.back": "Back to simulator paths",
   "create.ownership": "Responsibility and scope",
   "create.ownershipHint": "Identify who is responsible for the facts and where this journey applies.",

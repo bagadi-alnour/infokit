@@ -7,6 +7,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import { DirectionProvider } from "~/components/ui/direction";
@@ -43,18 +44,33 @@ export function useActionErrorToast() {
   );
 }
 
-export function PermissionDeniedNotice({ message }: { message: string }) {
+export function DashboardActionNotice({
+  notices,
+}: {
+  notices: Record<
+    string,
+    { message: string; tone: "success" | "error" | "info" | "warning" }
+  >;
+}) {
+  const searchParams = useSearchParams();
+  const notice = searchParams.get("notice");
+  const feedback = notice ? notices[notice] : undefined;
+
   useEffect(() => {
+    if (!feedback) return;
     const url = new URL(window.location.href);
-    if (url.searchParams.get("notice") !== "permission-denied") return;
-    toast.error(message);
+    // React's development Strict Mode replays effects. Reading the live URL
+    // keeps a redirect result from being announced twice after we consume it.
+    if (url.searchParams.get("notice") !== notice) return;
+    toast[feedback.tone](feedback.message);
+
     url.searchParams.delete("notice");
     window.history.replaceState(
       window.history.state,
       "",
       `${url.pathname}${url.search}${url.hash}`,
     );
-  }, [message]);
+  }, [feedback]);
 
   return null;
 }

@@ -2,6 +2,7 @@ import type {
   MemberAgendaPayload,
   PublicEventListPayload,
 } from "@infokit/shared/public-content";
+import { brandName } from "@infokit/shared/i18n";
 import { MemberSignedOutError } from "@infokit/api-client";
 import { Callout, Text, useInfoKitTheme } from "@infokit/ui";
 import Feather from "@expo/vector-icons/Feather";
@@ -75,7 +76,7 @@ export default function EventsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: headerTitle ?? "InfoKit" }} />
+      <Stack.Screen options={{ title: headerTitle ?? brandName(locale) }} />
       <PayloadScreen request={request} strings={strings}>
         {(payload) => (
           <>

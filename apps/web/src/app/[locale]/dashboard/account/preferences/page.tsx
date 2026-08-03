@@ -46,9 +46,11 @@ export default async function AccountPreferencesPage({
   searchParams: Promise<{ status?: string; error?: string }>;
 }) {
   const locale = requireRouteLocale((await params).locale);
-  const user = await requireEditor(locale);
-  const query = await searchParams;
-  const messages = await loadPageCatalog(locale, "dashboard-account");
+  const [user, query, messages] = await Promise.all([
+    requireEditor(locale),
+    searchParams,
+    loadPageCatalog(locale, "dashboard-account"),
+  ]);
   const settings = await getAccountSettings(user.id);
 
   return (
@@ -112,28 +114,13 @@ export default async function AccountPreferencesPage({
                 </option>
               </Select>
             </Field>
-            <Field
-              label={messages["preferences.landing"]}
-              hint={messages["preferences.landingHint"]}
-            >
-              <Select
-                name="landingSection"
-                defaultValue={settings.landingSection}
-              >
-                <option value="runbook">
-                  {messages["preferences.landing.runbook"]}
-                </option>
-                <option value="activities">
-                  {messages["preferences.landing.activities"]}
-                </option>
-                <option value="articles">
-                  {messages["preferences.landing.articles"]}
-                </option>
-                <option value="simulator">
-                  {messages["preferences.landing.simulator"]}
-                </option>
-              </Select>
-            </Field>
+            {/*
+              No "open the console on" control here either. Honouring it would
+              mean every sign-in completion path resolving a stored section, and
+              a reader who then clicked "Today's runbook" would be redirected
+              away from the page they asked for. Not worth that for one saved
+              click, so the field is gone rather than left pretending.
+            */}
           </div>
         </Card>
 

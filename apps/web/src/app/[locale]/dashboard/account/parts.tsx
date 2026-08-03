@@ -10,12 +10,20 @@ export function AccountStatus({
   error,
   savedLabel,
   errorLabels,
+  statusLabels,
 }: {
   status?: string;
   error?: string;
   savedLabel: string;
   /** Keyed by the action's error code; `invalid` is the fallback. */
   errorLabels: Record<string, string> & { invalid: string };
+  /**
+   * For sections whose actions report more than "saved" — arming a second
+   * factor, sending a code, proving a number. Keyed by the action's status code;
+   * `saved` still falls back to `savedLabel`, so the pages that only ever save
+   * need not pass this at all.
+   */
+  statusLabels?: Record<string, string>;
 }) {
   if (error) {
     return (
@@ -26,12 +34,16 @@ export function AccountStatus({
       </Alert>
     );
   }
-  if (status === "saved") {
-    return (
-      <Alert>
-        <AlertDescription>{savedLabel}</AlertDescription>
-      </Alert>
-    );
+  if (status) {
+    const message =
+      statusLabels?.[status] ?? (status === "saved" ? savedLabel : null);
+    if (message) {
+      return (
+        <Alert>
+          <AlertDescription>{message}</AlertDescription>
+        </Alert>
+      );
+    }
   }
   return null;
 }

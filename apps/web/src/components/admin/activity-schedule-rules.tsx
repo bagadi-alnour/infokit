@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 
 import { deleteActivitySchedule } from "~/app/[locale]/dashboard/activities/actions";
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { TooltipHint } from "~/components/admin/tooltip-hint";
 import { PendingButton } from "~/components/pending-button";
 import {
@@ -44,6 +45,8 @@ export function ActivityScheduleRules({
     confirmDescription: string;
     confirm: string;
     cancel: string;
+    removed: string;
+    error: string;
     weekdays: Record<number, string>;
     oneOff: string;
     recurring: string;
@@ -112,14 +115,18 @@ export function ActivityScheduleRules({
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>{labels.cancel}</AlertDialogCancel>
-                <form action={deleteActivitySchedule}>
+                <ActionFeedbackForm
+                  action={deleteActivitySchedule}
+                  successMessage={labels.removed}
+                  errorMessage={labels.error}
+                >
                   <input type="hidden" name="locale" value={locale} />
                   <input type="hidden" name="activityId" value={activityId} />
                   <input type="hidden" name="scheduleRuleId" value={rule.id} />
                   <PendingButton variant="danger" className="w-full">
                     {labels.confirm}
                   </PendingButton>
-                </form>
+                </ActionFeedbackForm>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

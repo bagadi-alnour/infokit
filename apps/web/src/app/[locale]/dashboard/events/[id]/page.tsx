@@ -2,6 +2,7 @@ import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { EventForm, type EventFormValues } from "~/components/admin/event-form";
 import { EventMediaManager } from "~/components/admin/event-media-manager";
 import { TransitLinkSummary } from "~/components/admin/transit-links";
@@ -29,8 +30,14 @@ import {
   hostChoicesFor,
 } from "~/server/content/coordination-events";
 import { workspaceEventMedia } from "~/server/content/event-media";
+import { loadStewardCandidatesByOrganization } from "~/server/content/steward-candidates";
 import { db } from "~/server/db";
-import { organizations, placeTranslations, places } from "~/server/db/schema";
+import {
+  coordinationEvents,
+  organizations,
+  placeTranslations,
+  places,
+} from "~/server/db/schema";
 
 import {
   archiveCoordinationEvent,
@@ -57,10 +64,26 @@ export default async function EventPage({
 }) {
   const { locale: rawLocale, id } = await params;
   const locale = requireRouteLocale(rawLocale);
-  const [t, consoleLabels] = await Promise.all([
+  const [t, consoleLabels, publicLabels] = await Promise.all([
     loadPageCatalog(locale, "dashboard-events"),
     loadPageCatalog(locale, "dashboard-console"),
+    // The card beside the form is the public one, so it is worded from the
+    // public catalogue: a preview that paraphrases is not a preview.
+    loadPageCatalog(locale, "public-content"),
   ]);
+  /** Same panel the create form shows, so editing is judged the same way. */
+  const previewLabels = {
+    empty: publicLabels["events.empty"],
+    details: publicLabels["events.details"],
+    online: publicLabels["events.online"],
+    host: publicLabels["events.host"],
+    platform: publicLabels["public.platform"],
+    contact: publicLabels["events.contact"],
+    cancelled: publicLabels["events.cancelled"],
+    cancelledNoReason: publicLabels["events.cancelledNoReason"],
+    addToCalendar: publicLabels["events.addToCalendar"],
+    openMap: publicLabels["events.openMap"],
+  };
   const user = await requireEditor(locale);
   const agendaPath = localizedPath("/dashboard/events", locale);
   const viewer = await coordinationViewer(user.id);
@@ -87,30 +110,48 @@ export default async function EventPage({
     notFound();
   }
 
-  const [cityList, organizationRows, placeRows, media] = await Promise.all([
-    listCityViews(locale),
-    db
-      .select({ id: organizations.id, name: organizations.displayName })
-      .from(organizations)
-      .orderBy(asc(organizations.displayName)),
-    db
-      .select({
-        id: places.id,
-        cityId: places.cityId,
-        name: placeTranslations.name,
-      })
-      .from(places)
-      .leftJoin(
-        placeTranslations,
-        and(
-          eq(placeTranslations.placeId, places.id),
-          eq(placeTranslations.languageCode, locale),
-        ),
-      )
-      .where(and(isNull(places.archivedAt), eq(places.active, true)))
-      .orderBy(asc(placeTranslations.name)),
-    workspaceEventMedia({ eventId: id, locale }),
-  ]);
+  const [cityList, organizationRows, placeRows, media, [creator]] =
+    await Promise.all([
+      listCityViews(locale),
+      db
+        .select({ id: organizations.id, name: organizations.displayName })
+        .from(organizations)
+        .orderBy(asc(organizations.displayName)),
+      db
+        .select({
+          id: places.id,
+          cityId: places.cityId,
+          name: placeTranslations.name,
+          addressLine: places.addressLine,
+          lat: places.lat,
+          lng: places.lng,
+          precision: places.precision,
+        })
+        .from(places)
+        .leftJoin(
+          placeTranslations,
+          and(
+            eq(placeTranslations.placeId, places.id),
+            eq(placeTranslations.languageCode, locale),
+          ),
+        )
+        .where(and(isNull(places.archivedAt), eq(places.active, true)))
+        .orderBy(asc(placeTranslations.name)),
+      workspaceEventMedia({ eventId: id, locale }),
+      // Who entered the event: the one person always worth offering as the
+      // contact, and the whole list on an event the platform holds itself.
+      db
+        .select({ id: coordinationEvents.createdById })
+        .from(coordinationEvents)
+        .where(eq(coordinationEvents.id, id))
+        .limit(1),
+    ]);
+
+  const hosts = hostChoicesFor(viewer, organizationRows);
+  const stewardCandidates = await loadStewardCandidatesByOrganization({
+    organizationIds: hosts.map((host) => host.id),
+    authorId: creator?.id ?? null,
+  });
 
   const city = cityList.find((candidate) => candidate.id === event.cityId);
   const when = eventWhen({
@@ -135,7 +176,9 @@ export default async function EventPage({
 
   const values: EventFormValues = {
     hostOrganizationId: event.hostOrganizationId ?? "",
-    cityId: event.cityId,
+    cityId: event.cityId ?? "",
+    isOnline: event.isOnline,
+    onlineUrl: event.onlineUrl ?? "",
     visibility: event.visibility,
     placeId: event.placeId ?? "",
     locationLabel: event.locationLabel ?? "",
@@ -244,20 +287,28 @@ export default async function EventPage({
               locale={locale}
               eventId={event.id}
               values={values}
-              organizations={hostChoicesFor(viewer, organizationRows)}
+              organizations={hosts}
               cities={cityList}
               places={placeRows.map((place) => ({
                 id: place.id,
                 name: place.name ?? place.id.slice(0, 8),
                 cityId: place.cityId,
+                addressLine: place.addressLine,
+                lat: place.lat,
+                lng: place.lng,
+                precision: place.precision,
               }))}
+              stewardCandidates={stewardCandidates}
               canHostAsPlatform={viewer.isPlatformSteward}
               labels={t}
               consoleLabels={consoleLabels}
+              previewLabels={previewLabels}
               cancelHref={agendaPath}
             />
           </div>
 
+          {/* Its own panel, outside the editor: attaching or removing a file
+           * here is its own action, and a form cannot nest inside another. */}
           <div className="mb-6">
             <Card title={t["events.media.title"]} hint={t["events.media.hint"]}>
               <EventMediaManager
@@ -302,17 +353,26 @@ export default async function EventPage({
               title={t["events.reinstate"]}
               hint={t["events.reinstateHint"]}
             >
-              <form action={reinstateCoordinationEvent}>
+              <ActionFeedbackForm
+                action={reinstateCoordinationEvent}
+                successMessage={t["events.reinstatedSuccess"]}
+                errorMessage={t["events.actionError"]}
+              >
                 <input type="hidden" name="locale" value={locale} />
                 <input type="hidden" name="eventId" value={event.id} />
                 <PendingButton variant="secondary">
                   {t["events.reinstateAction"]}
                 </PendingButton>
-              </form>
+              </ActionFeedbackForm>
             </Card>
           ) : (
             <Card title={t["events.cancel"]} hint={t["events.cancelHint"]}>
-              <form action={cancelCoordinationEvent} className="grid gap-3">
+              <ActionFeedbackForm
+                action={cancelCoordinationEvent}
+                successMessage={t["events.cancelledSuccess"]}
+                errorMessage={t["events.actionError"]}
+                className="grid gap-3"
+              >
                 <input type="hidden" name="locale" value={locale} />
                 <input type="hidden" name="eventId" value={event.id} />
                 <Field
@@ -326,7 +386,7 @@ export default async function EventPage({
                     {t["events.cancelAction"]}
                   </PendingButton>
                 </div>
-              </form>
+              </ActionFeedbackForm>
             </Card>
           )}
 
@@ -335,7 +395,15 @@ export default async function EventPage({
               <p className="text-copy-muted text-sm">
                 {archived ? t["events.restoreBody"] : t["events.archiveBody"]}
               </p>
-              <form action={archiveCoordinationEvent}>
+              <ActionFeedbackForm
+                action={archiveCoordinationEvent}
+                successMessage={
+                  archived
+                    ? t["events.restoredSuccess"]
+                    : t["events.archivedSuccess"]
+                }
+                errorMessage={t["events.actionError"]}
+              >
                 <input type="hidden" name="locale" value={locale} />
                 <input type="hidden" name="eventId" value={event.id} />
                 <input
@@ -348,7 +416,7 @@ export default async function EventPage({
                     ? t["events.restoreAction"]
                     : t["events.archiveAction"]}
                 </PendingButton>
-              </form>
+              </ActionFeedbackForm>
             </DangerZone>
           </div>
         </>

@@ -8,7 +8,7 @@ import {
   createRequirementSet,
   deleteRequirementSet,
   removeRequirementItem,
-} from "~/app/[locale]/dashboard/skills/actions";
+} from "~/app/[locale]/dashboard/my-organization/skills/actions";
 import {
   Card,
   Chip,
@@ -254,6 +254,8 @@ export function SkillsRequirementsPanel({
                         confirm: labels["catalogue.deleteConfirm"],
                         hint: labels["catalogue.deleteHint"],
                         cancel: labels["catalogue.cancel"],
+                        completed: labels["skills.requirements.setDeleted"],
+                        error: labels["catalogue.actionError"],
                       }}
                     />
                   </span>
@@ -317,6 +319,9 @@ export function SkillsRequirementsPanel({
                                   confirm: labels["catalogue.deleteConfirm"],
                                   hint: labels["catalogue.deleteHint"],
                                   cancel: labels["catalogue.cancel"],
+                                  completed:
+                                    labels["skills.requirements.itemRemoved"],
+                                  error: labels["catalogue.actionError"],
                                 }}
                               />
                             ) : null}

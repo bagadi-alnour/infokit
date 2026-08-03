@@ -8,10 +8,14 @@
   "audit.view": "What to read",
   "audit.view.events": "Actions",
   "audit.view.deliveries": "Messages sent",
+  "audit.view.eventsHint": "Investigate actions, refusals, failures, and field-level changes.",
+  "audit.view.deliveriesHint": "Trace whether platform email, SMS, and notifications reached their providers.",
 
   "audit.notice.privacyTitle": "This page holds personal data",
+  "audit.notice.privacyCompact": "Personal data — access only for security review.",
   "audit.notice.privacyBody": "Addresses, IP addresses and browser signatures are kept for security review only, for as long as the retention policy allows. Read what you need for the question you are answering, and nothing more.",
 
+  "audit.overview.period": "Signals from the last {days} days",
   "audit.stat.events": "Recorded actions",
   "audit.stat.eventsHint": "Over the last {days} days.",
   "audit.stat.denied": "Refused attempts",
@@ -21,6 +25,7 @@
   "audit.stat.deliveries": "Undelivered messages",
   "audit.stat.deliveriesHint": "Emails or texts the provider refused.",
 
+  "audit.filter.findGroup": "Find a record",
   "audit.filter.actor": "Person",
   "audit.filter.actorPlaceholder": "Name, address or account id",
   "audit.filter.action": "Action",
@@ -37,6 +42,7 @@
   "audit.filter.channel": "Channel",
   "audit.filter.anyChannel": "Any channel",
   "audit.filter.status": "Delivery",
+  "audit.filter.messagePlaceholder": "Message name",
   "audit.filter.recipient": "Recipient",
   "audit.filter.recipientPlaceholder": "name@example.org",
   "audit.filter.recipientHint": "The whole address. It is matched by fingerprint, never stored.",
@@ -86,6 +92,8 @@
   "audit.detail.actorId": "Account",
 
   "audit.empty": "Nothing has been recorded yet.",
+  "audit.results.events": "Recorded actions",
+  "audit.results.deliveries": "Delivery attempts",
 
   "audit.delivery.column.when": "When",
   "audit.delivery.column.channel": "Channel",

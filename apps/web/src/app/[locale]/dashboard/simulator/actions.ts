@@ -187,7 +187,9 @@ export const createSimulatorFlow = protectedPermissionAction(
       },
     });
     refresh(locale, created.flowId);
-    redirect(localizedPath(`/dashboard/simulator/${created.flowId}`, locale));
+    redirect(
+      `${localizedPath(`/dashboard/simulator/${created.flowId}`, locale)}?notice=simulator-created`,
+    );
   },
 );
 

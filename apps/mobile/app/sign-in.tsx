@@ -6,22 +6,40 @@ import { ScrollView, View } from "react-native";
 import { LoadingState } from "~/components/request-states";
 import { closeSheet } from "~/lib/close-sheet";
 import { usePreferences } from "~/lib/preferences";
-import { noticeText, useSession } from "~/lib/session";
+import { noticeText, useSession, type SecondFactorKind } from "~/lib/session";
 
 /**
  * The members' door.
  *
- * There is no sign-in form here, and there never will be: the button opens the
- * site's own sign-in in the system browser, which already holds the allowlist,
- * the email link and the SMS step-up. What comes back is a nine-digit code — by
- * deep link when the link fires, typed by hand when it does not, which is the
- * ordinary case on a phone with no default browser set.
+ * It used to be a button that opened the website in the system browser, plus a
+ * field for the nine digits that came back. The app signs in for itself now —
+ * password or emailed link, with the second factor in place if the account holds
+ * one — so this is a real sign-in rather than a hand-off.
+ *
+ * What has not changed is who may pass: the platform is invitation-only, and the
+ * refusal for an address nobody recorded is the same one a wrong password gets.
+ * This screen never says which it was.
  */
 export default function SignInScreen() {
   const router = useRouter();
   const { strings } = usePreferences();
-  const { state, busy, signIn, submitCode } = useSession();
+  const {
+    state,
+    busy,
+    pendingSecondFactor,
+    signIn,
+    sendMagicLink,
+    sendSmsCode,
+    submitSecondFactor,
+    cancelSecondFactor,
+  } = useSession();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [kind, setKind] = useState<SecondFactorKind>("totp");
+  const [linkSent, setLinkSent] = useState(false);
+  const [smsSent, setSmsSent] = useState(false);
 
   // Signing in is the whole purpose of this sheet: once it worked, it closes.
   if (state.status === "signedIn") return <Redirect href="/account" />;
@@ -35,7 +53,117 @@ export default function SignInScreen() {
   }
 
   const { door } = state;
-  const notice = noticeText(state.notice, door, strings.codeInvalid);
+  const notice = noticeText(state.notice, door, {
+    invalidCredentials: strings.invalidCredentials,
+    offline: strings.offlineBody,
+  });
+
+  /**
+   * The second factor, asked for after the password was accepted and before any
+   * session exists. It replaces the whole screen rather than appearing under the
+   * form: there is nothing left to do with those fields, and leaving them on
+   * screen invites a second attempt that would start the whole thing over.
+   */
+  if (pendingSecondFactor) {
+    const digits = kind === "backup" ? null : 6;
+    return (
+      <ScrollView
+        className="bg-canvas flex-1"
+        contentContainerClassName="gap-5 p-4 pb-16"
+        keyboardShouldPersistTaps="handled"
+      >
+        {notice ? <Callout tone="warning">{notice}</Callout> : null}
+
+        <View className="gap-2">
+          <Text variant="title">{strings.twoFactorTitle}</Text>
+          <Text className="text-copy-muted">{strings.twoFactorBody}</Text>
+        </View>
+
+        <Card>
+          <Input
+            label={
+              kind === "backup"
+                ? strings.twoFactorBackupLabel
+                : kind === "otp"
+                  ? strings.twoFactorSmsLabel
+                  : strings.twoFactorTotpLabel
+            }
+            value={code}
+            onChangeText={setCode}
+            keyboardType={kind === "backup" ? "default" : "number-pad"}
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
+            autoCapitalize="none"
+            {...(digits ? { maxLength: digits } : {})}
+            // A code reads the same in every language, so it is never mirrored.
+            style={{ writingDirection: "ltr" }}
+          />
+          <Button
+            disabled={
+              busy ||
+              (digits
+                ? code.replace(/\D/g, "").length !== digits
+                : code.trim().length === 0)
+            }
+            onPress={() => {
+              void submitSecondFactor(kind, code).then((accepted) => {
+                if (accepted) setCode("");
+              });
+            }}
+          >
+            <Text>{strings.twoFactorSubmit}</Text>
+          </Button>
+        </Card>
+
+        {/* Offered only when the account can actually receive one, so the button
+            is never a dead end. */}
+        {pendingSecondFactor.otp && kind !== "backup" ? (
+          <Button
+            tone="outline"
+            disabled={busy}
+            onPress={() => {
+              setKind("otp");
+              setCode("");
+              void sendSmsCode().then(setSmsSent);
+            }}
+          >
+            <Text>{strings.twoFactorSendSms}</Text>
+          </Button>
+        ) : null}
+        {smsSent ? (
+          <Callout tone="info">{strings.twoFactorSmsLabel}</Callout>
+        ) : null}
+
+        <Button
+          tone="quiet"
+          disabled={busy}
+          onPress={() => {
+            setKind(kind === "backup" ? "totp" : "backup");
+            setCode("");
+          }}
+        >
+          <Text>
+            {kind === "backup"
+              ? strings.twoFactorUseCode
+              : strings.twoFactorUseBackup}
+          </Text>
+        </Button>
+
+        <Button
+          tone="quiet"
+          disabled={busy}
+          onPress={() => {
+            setCode("");
+            setKind("totp");
+            setSmsSent(false);
+            cancelSecondFactor();
+          }}
+        >
+          <Text>{strings.twoFactorCancel}</Text>
+        </Button>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
@@ -44,6 +172,7 @@ export default function SignInScreen() {
       keyboardShouldPersistTaps="handled"
     >
       {notice ? <Callout tone="warning">{notice}</Callout> : null}
+      {linkSent ? <Callout tone="info">{strings.magicLinkSent}</Callout> : null}
 
       {door ? (
         <>
@@ -52,47 +181,56 @@ export default function SignInScreen() {
             <Text className="text-copy-muted">{door.signInBody}</Text>
           </View>
 
-          <Button
-            disabled={busy}
-            onPress={() => {
-              void signIn();
-            }}
-          >
-            <Text>{door.signInButton}</Text>
-          </Button>
-
-          {/* Said before the browser opens, not after: someone handing their
-              phone around deserves to know what is kept on it. */}
-          <Text variant="muted">{door.signInPrivacy}</Text>
-
           <Card>
-            {/* The field's own label is the card's heading: saying it twice
-                would read as two different things to answer. */}
             <Input
-              label={strings.codeLabel}
-              hint={strings.codeHint}
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
-              autoComplete="one-time-code"
-              textContentType="oneTimeCode"
-              maxLength={11}
-              // The code is nine digits in three groups: it reads the same in
-              // every language, so it is never mirrored.
+              label={strings.emailLabel}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoComplete="email"
+              textContentType="emailAddress"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={{ writingDirection: "ltr" }}
+            />
+            <Input
+              label={strings.passwordLabel}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="current-password"
+              textContentType="password"
+              autoCapitalize="none"
               style={{ writingDirection: "ltr" }}
             />
             <Button
-              tone="outline"
-              disabled={busy || code.replace(/\D/g, "").length !== 9}
+              disabled={busy || !email.trim() || !password}
               onPress={() => {
-                void submitCode(code).then((accepted) => {
-                  if (accepted) setCode("");
+                setLinkSent(false);
+                void signIn({ email, password }).then((outcome) => {
+                  if (outcome !== "failed") setPassword("");
                 });
               }}
             >
-              <Text>{strings.codeSubmit}</Text>
+              <Text>{strings.signInSubmit}</Text>
             </Button>
           </Card>
+
+          {/* The way in most people here use, and the one that needs no password
+              at all — so it is a peer of the form, not a footnote under it. */}
+          <Button
+            tone="outline"
+            disabled={busy || !email.trim()}
+            onPress={() => {
+              void sendMagicLink(email).then(setLinkSent);
+            }}
+          >
+            <Text>{strings.magicLinkSubmit}</Text>
+          </Button>
+
+          {/* Said before anything is sent, not after: someone handing their
+              phone around deserves to know what is kept on it. */}
+          <Text variant="muted">{door.signInPrivacy}</Text>
         </>
       ) : (
         // The door's words live on the server, so an unreachable service means

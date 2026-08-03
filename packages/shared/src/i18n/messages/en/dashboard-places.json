@@ -26,5 +26,18 @@
   "places.precision.exact": "Exact location",
   "places.precision.areaOnly": "Area only",
   "places.precision.contact": "Contact to learn",
-  "places.create": "Create place"
+  "places.create": "Create place",
+  "places.createSuccess": "Place created.",
+  "places.createError": "The place could not be created. Check the required fields and try again.",
+  "places.nameColumn": "Place",
+  "places.areaColumn": "Area",
+  "places.addressColumn": "Address",
+  "places.precisionColumn": "Precision",
+  "places.searchPlaceholder": "Search by name, organisation, area or address",
+  "places.stat.total": "Places",
+  "places.stat.exact": "Published exactly",
+  "places.stat.protected": "Location withheld",
+  "places.stat.protectedHint": "Area only, or contact to learn.",
+  "places.newHint": "The precision decides what reaches the public site. Choose it deliberately.",
+  "places.cancel": "Cancel"
 }

@@ -1,4 +1,3 @@
-import { aboutStrings } from "@infokit/shared/about";
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import type { Metadata } from "next";
 
@@ -17,12 +16,14 @@ import {
 import {
   associationRoutes,
   basicInformationRoutes,
+  helpLineContacts,
   serviceRoutes,
   urgentRoutes,
 } from "~/server/content/public-basics-payload";
 import {
   listPublishedActivities,
   listPublishedArticles,
+  listPublishedBasicInformation,
   listPublishedOrganizations,
 } from "~/server/content/public-content";
 import { searchSuggestions } from "~/server/content/public-search-suggestions";
@@ -76,6 +77,7 @@ export default async function HomePage({ params }: HomePageProps) {
     simulators,
     organizations,
     events,
+    basics,
   ] = await Promise.all([
     loadPageCatalog(locale, "home"),
     loadPageCatalog(locale, "public-content"),
@@ -86,6 +88,9 @@ export default async function HomePage({ params }: HomePageProps) {
     // The count of what is still to come, not the agenda payload: this page
     // only needs to know whether the route is worth offering.
     listPublicCoordinationEvents({ locale, from: new Date() }),
+    // The urgent row and the association lines below it: both are published
+    // editorial tiles now, read in one query and split on `operator`.
+    listPublishedBasicInformation(locale),
   ]);
 
   // Same presenter the activity list and the app's endpoint read, so an activity
@@ -130,13 +135,16 @@ export default async function HomePage({ params }: HomePageProps) {
           articlesDescription: messages["home.articlesDescription"],
           trust: messages["home.trust"],
           trustBody: messages["home.trustBody"],
-          trustOffline: messages["home.trustOffline"],
-          trustOfflineBody: messages["home.trustOfflineBody"],
-          trustLanguagesBody: messages["home.trustLanguagesBody"],
-          trustAnonymous: messages["home.trustAnonymous"],
-          trustAnonymousBody: messages["home.trustAnonymousBody"],
-          reliability: messages["home.reliability"],
-          reliabilityDescription: messages["home.reliabilityDescription"],
+          valueDignity: messages["home.valueDignity"],
+          valueDignityBody: messages["home.valueDignityBody"],
+          valueReliability: messages["home.valueReliability"],
+          valueReliabilityBody: messages["home.valueReliabilityBody"],
+          valueAccessibility: messages["home.valueAccessibility"],
+          valueAccessibilityBody: messages["home.valueAccessibilityBody"],
+          valueCollaboration: messages["home.valueCollaboration"],
+          valueCollaborationBody: messages["home.valueCollaborationBody"],
+          valueResponsibility: messages["home.valueResponsibility"],
+          valueResponsibilityBody: messages["home.valueResponsibilityBody"],
           published: messages["home.open"],
           // Translated in all eleven languages, next to the content these words
           // introduce, rather than in the home catalogue's three.
@@ -152,9 +160,12 @@ export default async function HomePage({ params }: HomePageProps) {
           newHereAction: publicMessages["basics.newHereAction"],
           agenda: publicMessages["events.title"],
           agendaDescription: publicMessages["events.description"],
-          // "Eleven languages" is the platform describing itself, and the About
-          // page already says it in all eleven of them.
-          trustLanguages: aboutStrings(locale).languages.title,
+          // The association lines under the urgent row, translated beside the
+          // emergency numbers they sit below rather than in the home catalogue.
+          help: publicMessages["basics.help"],
+          helpBody: publicMessages["basics.helpBody"],
+          helpSource: publicMessages["basics.helpSource"],
+          whatsapp: publicMessages["basics.whatsapp"],
         }}
         links={{
           activities: localizedPath("/activities", locale),
@@ -177,7 +188,13 @@ export default async function HomePage({ params }: HomePageProps) {
           messages: publicMessages,
           publishedSlugs,
         })}
-        urgent={urgentRoutes({ activities, locale, messages: publicMessages })}
+        urgent={urgentRoutes({
+          basics,
+          activities,
+          locale,
+          messages: publicMessages,
+        })}
+        helpLines={helpLineContacts(basics, publicMessages)}
         basics={basicInformationRoutes({ activities, locale }).slice(
           0,
           NEEDS_ON_THE_HERO,

@@ -7,6 +7,10 @@ import "./src/env.js";
 /** @type {import("next").NextConfig} */
 const config = {
   experimental: {
+    // The root layout starts with a dynamic locale segment, so unmatched URLs
+    // outside that segment cannot inherit it. A global fallback gives those
+    // requests the same branded, accessible 404 as localized public routes.
+    globalNotFound: true,
     // Stylesheets travel inside the document instead of as a second request, so
     // the first paint waits on no round trip beyond the HTML: on a throttled
     // phone connection the public pages paint a full second sooner. It is worth

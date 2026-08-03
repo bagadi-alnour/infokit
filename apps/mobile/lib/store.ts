@@ -4,15 +4,15 @@ import { Platform } from "react-native";
 /**
  * The one place this app keeps anything between launches.
  *
- * On a device it is the platform keychain, because one of the values is a
- * session token; the preferences ride along rather than adding a second
- * store. On web (Expo's dev build) the keychain does not exist, so the same
- * keys fall back to `localStorage` — which is also why nothing sensitive
- * is ever assumed to be secret here: the token is short-lived and revocable
- * server-side either way.
+ * Preferences only. The session used to live here too, under a `token` key the
+ * app wrote by hand; Better Auth keeps it in the same keychain now, under its own
+ * entries, and nothing outside `./auth-client` should touch those.
+ *
+ * On web (Expo's dev build) the keychain does not exist, so these keys fall back
+ * to `localStorage`. Nothing stored here is sensitive, which is what makes that
+ * fallback acceptable.
  */
 const keys = {
-  token: "infokit.member.token",
   locale: "infokit.locale",
   theme: "infokit.theme",
   welcome: "infokit.welcome.seen",

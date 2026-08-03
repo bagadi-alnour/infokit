@@ -64,5 +64,8 @@
   "auth.account.passwordConfirmationLabel": "Confirmer le nouveau mot de passe",
   "auth.account.passwordSubmit": "Enregistrer le mot de passe",
   "auth.account.updated": "Votre mot de passe a été mis à jour.",
-  "auth.account.error": "Les mots de passe doivent correspondre et contenir au moins 12 caractères."
+  "auth.account.error": "Les mots de passe doivent correspondre et contenir au moins 12 caractères.",
+  "auth.account.currentPasswordLabel": "Mot de passe actuel",
+  "auth.account.currentPasswordHint": "Nécessaire pour remplacer un mot de passe existant.",
+  "auth.account.currentPasswordError": "Le mot de passe actuel est incorrect."
 }

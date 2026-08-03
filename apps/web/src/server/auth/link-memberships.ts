@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 
 import { env } from "~/env";
 import { recordAudit } from "~/server/audit";
@@ -311,4 +311,136 @@ export async function linkPendingMemberships({
     });
     await claimOrganizationIfSteward(member.id, member.organizationId);
   }
+}
+
+/** Why an accept-in-place attempt did not become access. */
+export type AcceptInvitationResult =
+  | { ok: true; organizationId: string | null }
+  | { ok: false; reason: "not_open" | "wrong_address" | "no_membership" };
+
+/**
+ * Accept one invitation on behalf of an account that is **already** signed in.
+ *
+ * The session hook covers the person who signs in *because* of the link; this
+ * covers the one who was already signed in when it arrived — a colleague
+ * invited to a second organisation, or anyone who opened the link in a browser
+ * that still had a session. Without it their invitation sits pending until they
+ * happen to sign out and back in.
+ *
+ * The proof is the same one the session hook relies on, checked here rather
+ * than assumed: the session's address must be the invited address. Holding the
+ * link is not enough — it is what lets someone *see* the invitation, never what
+ * grants it.
+ */
+export async function acceptInvitationForUser({
+  invitationId,
+  userId,
+  email,
+}: {
+  invitationId: string;
+  userId: string;
+  email: string;
+}): Promise<AcceptInvitationResult> {
+  const now = new Date();
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const [invitation] = await db
+    .select({
+      id: invitations.id,
+      email: invitations.email,
+      kind: invitations.kind,
+      organizationId: invitations.organizationId,
+    })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.id, invitationId),
+        isNull(invitations.acceptedAt),
+        isNull(invitations.revokedAt),
+        gt(invitations.expiresAt, now),
+      ),
+    )
+    .limit(1);
+  if (!invitation) return { ok: false, reason: "not_open" };
+  if (invitation.email.trim().toLowerCase() !== normalizedEmail) {
+    return { ok: false, reason: "wrong_address" };
+  }
+
+  /**
+   * The two kinds that hang off no membership are already keyed by address
+   * alone, and their handlers are idempotent, so the sign-in path is also the
+   * accept-in-place path for them.
+   */
+  if (
+    invitation.kind === "platform_admin" ||
+    invitation.kind === "translator"
+  ) {
+    await linkPendingMemberships({ userId, email });
+    return { ok: true, organizationId: null };
+  }
+
+  const organizationId = invitation.organizationId;
+  if (!organizationId) return { ok: false, reason: "not_open" };
+
+  /**
+   * The reserved row, whether it is still waiting for an account or already
+   * belongs to this one. Both are acceptances: somebody invited again into an
+   * organisation they are already on the roster of is being granted the roles
+   * this invitation carries, not being made a member twice.
+   */
+  const [member] = await db
+    .select({ id: organizationMembers.id, userId: organizationMembers.userId })
+    .from(organizationMembers)
+    .where(
+      and(
+        eq(organizationMembers.organizationId, organizationId),
+        sql`lower(${organizationMembers.contactEmail}) = ${normalizedEmail}`,
+        or(
+          isNull(organizationMembers.userId),
+          eq(organizationMembers.userId, userId),
+        ),
+      ),
+    )
+    .limit(1);
+  if (!member) return { ok: false, reason: "no_membership" };
+
+  if (!member.userId) {
+    await db
+      .update(organizationMembers)
+      .set({ userId, status: "active" })
+      .where(
+        and(
+          eq(organizationMembers.id, member.id),
+          isNull(organizationMembers.userId),
+        ),
+      );
+  }
+
+  // Conditional on still being open, so two tabs pressing accept grant the
+  // roles once and audit it once.
+  const accepted = await db
+    .update(invitations)
+    .set({ acceptedAt: now, acceptedMemberId: member.id })
+    .where(
+      and(
+        eq(invitations.id, invitation.id),
+        isNull(invitations.acceptedAt),
+        isNull(invitations.revokedAt),
+      ),
+    )
+    .returning({ id: invitations.id });
+  if (accepted.length === 0) return { ok: false, reason: "not_open" };
+
+  const rolesGranted = await grantInvitedRoles(member.id, [invitation.id]);
+  await recordAudit({
+    action: "member.invitation_accepted",
+    subjectType: "member",
+    subjectId: member.id,
+    organizationId,
+    actorUserId: userId,
+    severity: "critical",
+    metadata: { invitations: 1, rolesGranted, acceptedInSession: true },
+  });
+  await claimOrganizationIfSteward(member.id, organizationId);
+  return { ok: true, organizationId };
 }

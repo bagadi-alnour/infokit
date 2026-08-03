@@ -5,7 +5,7 @@
 | Field            | Value                                                                                                      |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
 | Status           | Canonical product requirements; stakeholder decisions marked `TBD` remain open                             |
-| Last updated     | 19 July 2026                                                                                               |
+| Last updated     | 30 July 2026                                                                                               |
 | Initial release  | Phase 1 — Public information                                                                               |
 | Primary surfaces | Responsive web application built with React; Android and iOS applications built with React Native and Expo |
 | Primary location | Calais, France                                                                                             |
@@ -20,11 +20,11 @@ A reader should be able to understand the product and delivery boundaries withou
 
 ## 2. Executive summary
 
-InfoKit is a multilingual public-information and association-coordination platform for Calais. It addresses information and operational work fragmented across messages, spreadsheets, websites, email, and paper.
+InfoKit is a multilingual public-information and association-coordination platform for Calais. It connects two needs: people need reliable information when seeking support with essential needs, and associations need shared tools to publish that information and coordinate changes. Today, this information and operational work is fragmented across messages, spreadsheets, websites, email, and paper.
 
 The long-term ambition is global: the platform is designed so it can later be deployed for other territories. Calais is the first and only committed deployment; territory-specific facts (places, languages, holiday calendars, emergency numbers, taxonomies) are configuration and content, never hardcoded, and no multi-territory feature is committed in Phases 1–4.
 
-The product begins with a public service that helps anyone answer five questions quickly:
+The product begins with a public service that helps anyone seeking support with an essential need answer five questions quickly:
 
 1. What help or reviewed information is available?
 2. Where is it?
@@ -61,6 +61,18 @@ Create one trustworthy public information layer and isolated association workspa
 A person using a basic phone can find a relevant activity/service or reviewed information path, identify the responsible association, and understand the information's freshness in under two minutes without creating an account.
 
 ## 4. Product principles
+
+Five values govern product, content, and operational decisions:
+
+| Value              | Product commitment                                                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Dignity**        | A person can use public information without an account or a profile of the help they view or receive. The platform collects the minimum information needed for its work. |
+| **Reliability**    | Published information names its source or responsible owner, shows when someone checked it, and identifies uncertainty instead of presenting it as fact.                 |
+| **Accessibility**  | Essential information works across supported devices, connection conditions, languages, reading directions, and literacy levels.                                         |
+| **Collaboration**  | Associations can publish and coordinate through shared tools while keeping factual ownership, permissions, and private operational data clear.                           |
+| **Responsibility** | Publication, approval, correction, and access decisions remain attributable and auditable.                                                                               |
+
+These values are implemented through the following product principles:
 
 1. **Current before comprehensive.** Reliability, status, and verification are more important than maximum content volume.
 2. **Essential information without an account.** Public services, basic information, fixed information, articles, associations, and the simulator remain anonymously accessible.
@@ -111,6 +123,7 @@ People may use more than one role, but permissions remain explicit and organisat
 | Article                     | Dated editorial information that may change and has revision/freshness metadata                                                                                                                                                                                                                                                                                                                                 |
 | Fixed information           | Relatively stable reference content that still has an owner and review interval                                                                                                                                                                                                                                                                                                                                 |
 | Basic information           | The shortest route to urgent or frequently needed information and matching services                                                                                                                                                                                                                                                                                                                             |
+| Essential need              | A practical need whose absence or delay can materially affect safety, wellbeing, or access to help, including food and water, hygiene, shelter or day access, healthcare, phone charging, legal information, and orientation                                                                                                                                                                                    |
 | Information simulator       | An anonymous branching information-navigation flow using optional session-only answers                                                                                                                                                                                                                                                                                                                          |
 | Priority information        | Launch content whose absence or misunderstanding could materially prevent access to an essential service; the approved list and required audio languages are set during Phase 0                                                                                                                                                                                                                                 |
 | Speciality                  | A verified controlled classification of what an organisation does; an organisation may have many and at most one marked primary                                                                                                                                                                                                                                                                                 |

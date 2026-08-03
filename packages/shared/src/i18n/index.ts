@@ -18,6 +18,41 @@ export const publicSupportedLocales = [
 ] as const;
 export type PublicLocale = (typeof publicSupportedLocales)[number];
 
+/**
+ * The public wordmark in the script the reader selected. Latin-script
+ * languages keep the registered spelling; the other scripts transliterate the
+ * name so the brand never becomes the only untranslated word on the page.
+ */
+export const brandNames = {
+  fr: "InfoKit",
+  en: "InfoKit",
+  ar: "إنفوكت",
+  fa: "اینفوکیت",
+  prs: "اینفوکیت",
+  ps: "انفوکېټ",
+  ckb: "ئینفۆکیت",
+  ti: "ኢንፎኪት",
+  am: "ኢንፎኪት",
+  om: "InfoKit",
+  so: "InfoKit",
+} as const satisfies Record<PublicLocale, string>;
+
+export function brandName(locale: PublicLocale): string {
+  return brandNames[locale];
+}
+
+/**
+ * Catalogues use the registered Latin spelling as their authoring placeholder.
+ * Replace it at the boundary so every mention, not just a dedicated brand key,
+ * follows the selected language.
+ */
+export function localizeBrandName(value: string, locale: PublicLocale): string {
+  const localized = brandName(locale);
+  return value
+    .replaceAll("InfoKit", localized)
+    .replaceAll("إنفوكيت", localized);
+}
+
 export const translatedInterfaceLocales = ["fr", "en", "ar"] as const;
 export type TranslatedInterfaceLocale =
   (typeof translatedInterfaceLocales)[number];

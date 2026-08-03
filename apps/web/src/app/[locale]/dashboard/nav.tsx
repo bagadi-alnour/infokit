@@ -18,6 +18,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "~/components/ui/sidebar";
+import { familyStyles, type ContentFamily } from "~/lib/content-families";
 import { cn } from "~/lib/utils";
 
 export interface DashboardNavSubItem {
@@ -32,6 +33,19 @@ export interface DashboardNavItem {
   href: string;
   label: string;
   icon: IconName;
+  /**
+   * The content family this entry opens, where it opens one.
+   *
+   * Only the icon takes the hue, and only the four families have one — the
+   * platform's own sections stay neutral. The label never changes colour, so the
+   * hue is an aid to finding a row you already know, never the thing that says
+   * what the row is (docs/DESIGN-SYSTEM.md §5, `~/lib/content-families`).
+   *
+   * It is the same hue the section's own page header carries, which is the
+   * point: the sidebar and the page agree, so moving between eight table pages
+   * that share a layout still feels like moving somewhere.
+   */
+  family?: ContentFamily;
   count?: number;
   /** Matched with startsWith unless the item is the section root. */
   exact?: boolean;
@@ -42,6 +56,20 @@ export interface DashboardNavGroup {
   /** Omitted for the first group: a single entry needs no heading. */
   label?: string;
   items: readonly DashboardNavItem[];
+}
+
+/**
+ * What colour an entry's icon is.
+ *
+ * A family entry keeps its hue whether or not it is the active row, because the
+ * hue is how the row is recognised at a glance; an entry with no family behaves
+ * as the sidebar always has — muted until hovered, brand when active. The
+ * active row is still marked by its background and weight, so nothing depends
+ * on colour alone.
+ */
+function iconTone(item: DashboardNavItem, active: boolean): string {
+  if (item.family) return familyStyles[item.family].text;
+  return active ? "text-brand" : "text-copy-muted group-hover/nav:text-ink";
 }
 
 function hrefParts(href: string) {
@@ -176,12 +204,7 @@ function DashboardNavEntry({
           <Icon
             name={item.icon}
             size={18}
-            className={cn(
-              "shrink-0 transition-colors",
-              active
-                ? "text-brand"
-                : "text-copy-muted group-hover/nav:text-ink",
-            )}
+            className={cn("shrink-0 transition-colors", iconTone(item, active))}
           />
           <span className="truncate">{item.label}</span>
         </SidebarMenuButton>
@@ -223,10 +246,7 @@ function DashboardNavEntry({
         <Icon
           name={item.icon}
           size={18}
-          className={cn(
-            "shrink-0 transition-colors",
-            active ? "text-brand" : "text-copy-muted group-hover/nav:text-ink",
-          )}
+          className={cn("shrink-0 transition-colors", iconTone(item, active))}
         />
         <span className="truncate">{item.label}</span>
         <ChevronDown

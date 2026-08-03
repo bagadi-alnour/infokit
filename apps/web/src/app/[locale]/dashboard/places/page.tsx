@@ -1,22 +1,15 @@
-import { formatMessage } from "@infokit/shared/i18n";
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import { and, desc, eq } from "drizzle-orm";
 
-import { PlaceAddressFields } from "~/components/address/place-address-fields";
-import { StewardContactFields } from "~/components/admin/steward-contact";
+import { CreatePlaceDialog } from "~/components/admin/create-place-dialog";
+import { PlacesTable } from "~/components/admin/places-table";
 import {
-  Button,
-  Card,
-  Chip,
-  EmptyState,
-  Field,
   PageHeader,
-  Select,
-  TextInput,
+  Stat,
+  StatGrid,
   WorkspacePage,
 } from "~/components/admin/workspace";
 import { requireRouteLocale } from "~/i18n/route-locale";
-import { EMPTY_STEWARD_CONTACT } from "~/lib/steward-contact";
 import { denyPageAccess, hasPermission } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
@@ -26,7 +19,6 @@ import {
   places,
   placeTranslations,
 } from "~/server/db/schema";
-import { createPlace } from "./actions";
 
 export default async function PlacesPage({
   params,
@@ -98,123 +90,65 @@ export default async function PlacesPage({
         title={messages["places.title"]}
         sub={messages["places.description"]}
       />
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <Card
-          title={formatMessage(messages["places.all"], {
-            count: String(rows.length),
-          })}
-        >
-          {rows.length === 0 ? (
-            <EmptyState>{messages["places.empty"]}</EmptyState>
-          ) : (
-            <ul className="divide-line divide-y">
-              {rows.map((place) => (
-                <li
-                  key={place.id}
-                  className="flex items-center justify-between gap-3 py-2.5"
-                >
-                  <div>
-                    <p className="text-sm font-medium">
-                      {place.name ?? messages["places.noName"]}
-                    </p>
-                    <p className="text-copy-muted text-xs">
-                      {[place.org, place.areaCode, place.addressLine]
-                        .filter(Boolean)
-                        .join(" · ") || "—"}
-                    </p>
-                  </div>
-                  <Chip tone={place.precision === "exact" ? "ok" : "warn"}>
-                    {precisionLabel[place.precision]}
-                  </Chip>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-        <Card title={messages["places.new"]}>
-          <form action={createPlace} className="grid gap-3">
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="cityId" value={calais.id} />
-            <Field label={messages["places.nameFr"]}>
-              <TextInput name="nameFr" required minLength={2} />
-            </Field>
-            <Field
-              label={messages["places.nameEn"]}
-              hint={messages["places.optional"]}
-            >
-              <TextInput name="nameEn" />
-            </Field>
-            <Field
-              label={messages["places.nameAr"]}
-              hint={messages["places.optional"]}
-            >
-              <TextInput name="nameAr" dir="rtl" />
-            </Field>
-            <Field
-              label={messages["places.organization"]}
-              hint={messages["places.organizationHint"]}
-            >
-              <Select name="organizationId" defaultValue="">
-                <option value="">—</option>
-                {orgs.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field
-              label={messages["places.cityArea"]}
-              hint={messages["places.cityAreaHint"]}
-            >
-              <Select name="cityAreaId" defaultValue="">
-                <option value="">—</option>
-                {areas.map((area) => (
-                  <option key={area.id} value={area.id}>
-                    {area.code}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <PlaceAddressFields
-              labels={{
-                label: messages["places.address.label"],
-                placeholder: messages["places.address.placeholder"],
-                help: messages["places.address.help"],
-                loading: messages["places.address.loading"],
-                empty: messages["places.address.empty"],
-                error: messages["places.address.error"],
-                attribution: messages["places.address.attribution"],
-              }}
-              selectedLabel={messages["places.address.selected"]}
-            />
-            {/* Who to ask when this place turns out to be wrong — workspace
-             * only, on every content type. */}
-            <StewardContactFields
-              values={EMPTY_STEWARD_CONTACT}
-              labels={shared}
-              columns={false}
-            />
-            <Field
-              label={messages["places.precision"]}
-              hint={messages["places.precisionHint"]}
-            >
-              <Select name="precision" defaultValue="exact">
-                <option value="exact">
-                  {messages["places.precision.exact"]}
-                </option>
-                <option value="area_only">
-                  {messages["places.precision.areaOnly"]}
-                </option>
-                <option value="contact_to_learn">
-                  {messages["places.precision.contact"]}
-                </option>
-              </Select>
-            </Field>
-            <Button>{messages["places.create"]}</Button>
-          </form>
-        </Card>
-      </div>
+      {/* Two figures, and the second is the one that matters: how many locations
+       * are deliberately not published exactly. That is the decision this page
+       * exists to record, so it is counted rather than left to be inferred by
+       * scrolling the precision column. */}
+      <StatGrid>
+        <Stat label={messages["places.stat.total"]} value={rows.length} />
+        <Stat
+          label={messages["places.stat.exact"]}
+          value={rows.filter((place) => place.precision === "exact").length}
+        />
+        <Stat
+          label={messages["places.stat.protected"]}
+          value={rows.filter((place) => place.precision !== "exact").length}
+          hint={messages["places.stat.protectedHint"]}
+        />
+      </StatGrid>
+
+      <PlacesTable
+        rows={rows.map((place) => ({
+          id: place.id,
+          name: place.name ?? messages["places.noName"],
+          organization: place.org,
+          area: place.areaCode,
+          address: place.addressLine,
+          precision: place.precision,
+          precisionLabel: precisionLabel[place.precision],
+        }))}
+        labels={{
+          search: shared["console.search"],
+          searchPlaceholder: messages["places.searchPlaceholder"],
+          columns: shared["table.columns"],
+          clear: shared["table.clearSearch"],
+          filterBy: shared["table.filterBy"],
+          noMatch: messages["places.empty"],
+          rowsPerPage: shared["table.rowsPerPage"],
+          results: shared["table.results"],
+          page: shared["table.page"],
+          previous: shared["table.previousPage"],
+          next: shared["table.nextPage"],
+          place: messages["places.nameColumn"],
+          organization: messages["places.organization"],
+          area: messages["places.areaColumn"],
+          address: messages["places.addressColumn"],
+          precision: messages["places.precisionColumn"],
+        }}
+        createAction={
+          <CreatePlaceDialog
+            locale={locale}
+            cityId={calais.id}
+            organizations={orgs.map((org) => ({
+              id: org.id,
+              label: org.name,
+            }))}
+            areas={areas.map((area) => ({ id: area.id, label: area.code }))}
+            labels={messages}
+            stewardLabels={shared}
+          />
+        }
+      />
     </WorkspacePage>
   );
 }

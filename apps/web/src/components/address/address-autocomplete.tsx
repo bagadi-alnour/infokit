@@ -28,6 +28,8 @@ export interface AddressAutocompleteProps {
   labels: AddressAutocompleteLabels;
   filters?: AddressAutocompleteFilters;
   inputName?: string;
+  /** Associates the typed address with a form rendered elsewhere on the page. */
+  form?: string;
   defaultValue?: string;
   minimumQueryLength?: number;
   debounceMs?: number;
@@ -47,6 +49,7 @@ export function AddressAutocomplete({
   labels,
   filters,
   inputName,
+  form,
   defaultValue = "",
   minimumQueryLength = 3,
   debounceMs = 350,
@@ -165,6 +168,7 @@ export function AddressAutocomplete({
         <input
           id={inputId}
           name={inputName}
+          form={form}
           value={value}
           onChange={(event) => {
             setValue(event.target.value);

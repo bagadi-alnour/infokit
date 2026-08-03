@@ -11,6 +11,12 @@ const statuses = {
   rate_limited: "warning",
   send_error: "danger",
   phone: "danger",
+  /** The second factor locked the account after too many wrong codes. */
+  locked: "danger",
+  /** An SMS code was asked for on an account that has enrolled no number. */
+  no_phone: "warning",
+  /** A wrong code during enrolment, as opposed to during a sign-in. */
+  invalidCode: "danger",
   reset: "info",
   reset_error: "danger",
 } as const satisfies Record<string, "info" | "warning" | "danger">;

@@ -1,6 +1,7 @@
 import { Languages, LockKeyhole } from "lucide-react";
 
 import { saveExternalTranslation } from "~/app/[locale]/translate/assignment/actions";
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { PendingButton } from "~/components/pending-button";
 import { TranslatorProfileInvitation } from "~/components/translator-profile-invitation";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -104,7 +105,17 @@ export function SimulatorTranslationAssignment({
       ) : null}
 
       {editable ? (
-        <form action={saveExternalTranslation} className="grid gap-5">
+        <ActionFeedbackForm
+          action={saveExternalTranslation}
+          successMessage={labels["translator.draftSaved"] ?? ""}
+          successMessageField="intent"
+          successMessages={{
+            draft: labels["translator.draftSaved"] ?? "",
+            submit: labels["translator.submittedSuccess"] ?? "",
+          }}
+          errorMessage={labels["translator.saveError"] ?? ""}
+          className="grid gap-5"
+        >
           <input type="hidden" name="locale" value={locale} />
           <input type="hidden" name="entityKind" value="simulator_flow" />
           {sourceNodes.map((sourceNode, nodeIndex) => {
@@ -259,7 +270,7 @@ export function SimulatorTranslationAssignment({
               {labels["translator.submit"]}
             </PendingButton>
           </div>
-        </form>
+        </ActionFeedbackForm>
       ) : (
         <Card>
           <CardContent className="text-copy-muted py-8 text-sm">

@@ -26,5 +26,18 @@
   "places.precision.exact": "Lieu exact",
   "places.precision.areaOnly": "Secteur uniquement",
   "places.precision.contact": "Contacter pour connaître le lieu",
-  "places.create": "Créer le lieu"
+  "places.create": "Créer le lieu",
+  "places.createSuccess": "Lieu créé.",
+  "places.createError": "Le lieu n’a pas pu être créé. Vérifiez les champs obligatoires et réessayez.",
+  "places.nameColumn": "Lieu",
+  "places.areaColumn": "Secteur",
+  "places.addressColumn": "Adresse",
+  "places.precisionColumn": "Précision",
+  "places.searchPlaceholder": "Rechercher par nom, organisation, secteur ou adresse",
+  "places.stat.total": "Lieux",
+  "places.stat.exact": "Publiés précisément",
+  "places.stat.protected": "Localisation masquée",
+  "places.stat.protectedHint": "Secteur seul, ou contact pour savoir.",
+  "places.newHint": "La précision décide de ce qui parvient au site public. Choisissez-la délibérément.",
+  "places.cancel": "Annuler"
 }

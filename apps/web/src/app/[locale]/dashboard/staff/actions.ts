@@ -1,6 +1,6 @@
 "use server";
 
-import type { Locale } from "@infokit/shared/i18n";
+import { brandName, type Locale } from "@infokit/shared/i18n";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import { db } from "~/server/db";
 import {
   invitations,
   roles,
+  sessions,
   userPlatformRoles,
   users,
 } from "~/server/db/schema";
@@ -38,6 +39,31 @@ async function requirePlatformRole(code: string) {
     .limit(1);
   if (!role) throw new Error(`Role ${code} is not seeded`);
   return role;
+}
+
+/**
+ * Resolve the target before a staff-management action.
+ *
+ * The signed-in administrator and every bootstrap superadmin are protected:
+ * changing either from this page could remove the only grant capable of
+ * repairing platform access.
+ */
+async function requireMutablePlatformStaff(userId: string, actorId: string) {
+  if (userId === actorId) {
+    throw new Error("You cannot change your own platform access");
+  }
+  const grants = await db
+    .select({ roleId: roles.id, roleCode: roles.code })
+    .from(userPlatformRoles)
+    .innerJoin(roles, eq(roles.id, userPlatformRoles.roleId))
+    .where(
+      and(eq(userPlatformRoles.userId, userId), isNull(roles.organizationId)),
+    );
+  if (grants.length === 0) throw new Error("No platform staff record");
+  if (grants.some((grant) => grant.roleCode === "platform_superadmin")) {
+    throw new Error("Bootstrap platform access cannot be changed here");
+  }
+  return grants;
 }
 
 /**
@@ -89,7 +115,7 @@ export const invitePlatformStaff = protectedPermissionAction(
         roleIds: [role.id],
         invitedById: user.id,
         locale,
-        inviterName: user.name ?? user.email ?? "InfoKit",
+        inviterName: user.name.trim() || user.email.trim() || brandName(locale),
       });
     }
     refresh(locale);
@@ -142,9 +168,7 @@ export const revokePlatformStaffRole = protectedPermissionAction(
   async (formData, locale, user) => {
     const userId = uuidSchema.parse(formData.get("userId"));
     const roleId = uuidSchema.parse(formData.get("roleId"));
-    if (userId === user.id) {
-      throw new Error("You cannot remove your own platform role");
-    }
+    await requireMutablePlatformStaff(userId, user.id);
 
     const removed = await db
       .delete(userPlatformRoles)
@@ -163,6 +187,154 @@ export const revokePlatformStaffRole = protectedPermissionAction(
       subjectId: userId,
       severity: "critical",
       metadata: { roleId },
+    });
+    refresh(locale);
+  },
+);
+
+/** Replace every delegable platform grant on one staff account with one role. */
+export const changePlatformStaffRole = protectedPermissionAction(
+  platformStaffPermission,
+  async (formData, locale, user) => {
+    const userId = uuidSchema.parse(formData.get("userId"));
+    const roleCode = roleCodeSchema.parse(formData.get("roleCode"));
+    const previous = await requireMutablePlatformStaff(userId, user.id);
+    const role = await requirePlatformRole(roleCode);
+
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(userPlatformRoles)
+        .where(eq(userPlatformRoles.userId, userId));
+      await tx.insert(userPlatformRoles).values({
+        userId,
+        roleId: role.id,
+        grantedById: user.id,
+      });
+    });
+
+    await recordAudit({
+      action: "platform.staff_role_changed",
+      subjectType: "auth.user",
+      subjectId: userId,
+      severity: "critical",
+      metadata: {
+        from: previous.map((grant) => grant.roleCode).join(","),
+        to: roleCode,
+      },
+    });
+    refresh(locale);
+  },
+);
+
+/**
+ * End every current session without changing grants. The person may sign in
+ * again; this is the immediate response to a lost device or suspicious session.
+ */
+export const revokePlatformStaffAccess = protectedPermissionAction(
+  platformStaffPermission,
+  async (formData, locale, user) => {
+    const userId = uuidSchema.parse(formData.get("userId"));
+    await requireMutablePlatformStaff(userId, user.id);
+
+    const revoked = await db
+      .delete(sessions)
+      .where(eq(sessions.userId, userId))
+      .returning({ id: sessions.id });
+
+    await recordAudit({
+      action: "platform.staff_sessions_revoked",
+      subjectType: "auth.user",
+      subjectId: userId,
+      severity: "critical",
+      metadata: { sessions: revoked.length },
+    });
+    refresh(locale);
+  },
+);
+
+/**
+ * Suspend platform access while retaining the staff record and its role names.
+ * Authorization already treats an expired grant as inactive.
+ */
+export const disablePlatformStaffAccess = protectedPermissionAction(
+  platformStaffPermission,
+  async (formData, locale, user) => {
+    const userId = uuidSchema.parse(formData.get("userId"));
+    await requireMutablePlatformStaff(userId, user.id);
+    const disabledAt = new Date();
+
+    const disabled = await db.transaction(async (tx) => {
+      const grants = await tx
+        .update(userPlatformRoles)
+        .set({ expiresAt: disabledAt })
+        .where(eq(userPlatformRoles.userId, userId))
+        .returning({ roleId: userPlatformRoles.roleId });
+      await tx.delete(sessions).where(eq(sessions.userId, userId));
+      return grants;
+    });
+    if (disabled.length === 0) throw new Error("No platform grants to disable");
+
+    await recordAudit({
+      action: "platform.staff_access_disabled",
+      subjectType: "auth.user",
+      subjectId: userId,
+      severity: "critical",
+      metadata: {
+        disabledAt: disabledAt.toISOString(),
+        roles: disabled.map((grant) => grant.roleId).join(","),
+      },
+    });
+    refresh(locale);
+  },
+);
+
+/** Restore a suspended staff record by making its retained grants current. */
+export const enablePlatformStaffAccess = protectedPermissionAction(
+  platformStaffPermission,
+  async (formData, locale, user) => {
+    const userId = uuidSchema.parse(formData.get("userId"));
+    await requireMutablePlatformStaff(userId, user.id);
+
+    const enabled = await db
+      .update(userPlatformRoles)
+      .set({ expiresAt: null })
+      .where(eq(userPlatformRoles.userId, userId))
+      .returning({ roleId: userPlatformRoles.roleId });
+    if (enabled.length === 0) throw new Error("No platform grants to enable");
+
+    await recordAudit({
+      action: "platform.staff_access_enabled",
+      subjectType: "auth.user",
+      subjectId: userId,
+      severity: "critical",
+      metadata: { roles: enabled.map((grant) => grant.roleId).join(",") },
+    });
+    refresh(locale);
+  },
+);
+
+/** Remove the person from platform staff and end any session they still hold. */
+export const removePlatformStaff = protectedPermissionAction(
+  platformStaffPermission,
+  async (formData, locale, user) => {
+    const userId = uuidSchema.parse(formData.get("userId"));
+    const previous = await requireMutablePlatformStaff(userId, user.id);
+
+    const removed = await db.transaction(async (tx) => {
+      await tx.delete(sessions).where(eq(sessions.userId, userId));
+      return tx
+        .delete(userPlatformRoles)
+        .where(eq(userPlatformRoles.userId, userId))
+        .returning({ roleId: userPlatformRoles.roleId });
+    });
+    if (removed.length === 0) throw new Error("No platform staff record");
+
+    await recordAudit({
+      action: "platform.staff_removed",
+      subjectType: "auth.user",
+      subjectId: userId,
+      severity: "critical",
+      metadata: { roles: previous.map((grant) => grant.roleCode).join(",") },
     });
     refresh(locale);
   },

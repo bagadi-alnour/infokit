@@ -291,6 +291,9 @@ export function EventCard({
             : `${event.dateLabel} · ${event.timeLabel}`}
         </Text>
       </View>
+      {event.isOnline ? (
+        <MetaRow label={labels.where}>{labels.online}</MetaRow>
+      ) : null}
       {event.whereLabel ? (
         <AddressLink
           label={labels.where}
@@ -348,7 +351,7 @@ export function ArticleCard({
   labels: PublicArticleLabels;
 }) {
   return (
-    <Card>
+    <Card className="bg-transparent">
       <CoverImage image={article.coverImage} />
       {article.unreliable ? (
         <StatusPill role="uncertain" label={labels.unreliable} />
@@ -356,14 +359,17 @@ export function ArticleCard({
       <CardTitle>{article.title}</CardTitle>
       <View className="bg-article h-0.5 w-10 self-start rounded-full" />
       <CardDescription>{article.summary}</CardDescription>
-      {article.ownerNames.length > 0 ? (
-        <MetaRow label={labels.publishedBy}>
+      <View className="flex-row flex-wrap items-center gap-2">
+        <Text variant="muted">
+          <Text className="font-semibold">{labels.publishedBy}</Text>{" "}
           {article.ownerNames.join(" · ")}
-        </MetaRow>
-      ) : null}
-      <Text variant="muted">
-        {labels.lastReviewed} · {article.lastReviewedLabel}
-      </Text>
+        </Text>
+        <View className="bg-line size-1 rounded-full" />
+        <Text variant="muted">
+          <Text className="font-semibold">{labels.lastReviewed}</Text>{" "}
+          {article.lastReviewedLabel}
+        </Text>
+      </View>
       {article.fallbackUsed ? (
         <Text variant="muted">{article.fallbackLabel}</Text>
       ) : null}

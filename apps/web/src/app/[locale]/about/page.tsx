@@ -9,6 +9,8 @@ import type { PublicActivityStatus } from "@infokit/shared/public-content";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { ListenControl } from "~/components/public/listen-control";
+import { listenControlLabels } from "~/components/public/listen-control-copy";
 import {
   PublicPageHeader,
   PublicSiteShell,
@@ -21,6 +23,7 @@ import {
 } from "~/components/public/primitives";
 import { requirePublicRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
+import { publicSpeechHref } from "~/lib/public-speech";
 import { publicMetadata } from "~/seo/metadata";
 
 /**
@@ -95,6 +98,11 @@ export default async function AboutPage({
           {about.intro}
         </p>
 
+        {/* Before the tour of what the site holds: who this is not, and what it
+            will not help anyone do. A reader weighing whether it is safe to open
+            the app asks that first, and the same words open `/legal`. */}
+        <Section section={about.independence} />
+
         <Section section={about.what} />
         <Section section={about.source} />
         <Section section={about.freshness} />
@@ -158,9 +166,10 @@ export default async function AboutPage({
             promise is a promise a reader can doubt (docs/DESIGN-SYSTEM.md §6). */}
         <Section section={about.privacy} />
         <Section section={about.security} />
-        <Section section={about.cities} />
         <Section section={about.collaboration} />
         <Section section={about.associations} />
+        <Section section={about.cities} />
+        <Section section={about.limits} />
 
         <div className="flex flex-wrap gap-3">
           <ActionLink
@@ -173,6 +182,14 @@ export default async function AboutPage({
             {messages["public.nav.guide"]}
           </ActionLink>
         </div>
+
+        <ListenControl
+          src={publicSpeechHref({
+            kind: "about",
+            locale,
+          })}
+          labels={listenControlLabels(messages)}
+        />
       </div>
     </PublicSiteShell>
   );

@@ -7,15 +7,21 @@ import "leaflet/dist/leaflet.css";
 
 import type { PublicActivitySummary } from "@infokit/shared/public-content";
 import type { CircleMarker, Map as LeafletMap } from "leaflet";
-import { LocateFixed, MapPin } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Contrast, Layers3, LocateFixed, MapPin } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { OSM_MAX_ZOOM, OSM_TILE_URL } from "~/components/public/map-tiles";
+import {
+  ESRI_IMAGERY_TILE_URL,
+  ESRI_LABEL_TILE_URL,
+  OSM_MAX_ZOOM,
+  OSM_TILE_URL,
+} from "~/components/public/map-tiles";
 import {
   ActionButton,
   Callout,
   SurfaceCard,
 } from "~/components/public/primitives";
+import { useThemePreference } from "~/components/theme/theme-provider";
 
 export interface ActivityMapLabels {
   useLocation: string;
@@ -27,10 +33,16 @@ export interface ActivityMapLabels {
   locationError: string;
   yourLocation: string;
   mapAttribution: string;
+  hybridAttribution: string;
   mapTitle: string;
   mapHint: string;
   noMap: string;
+  styleLabel: string;
+  styleMuted: string;
+  styleHybrid: string;
 }
+
+type MapStyle = "muted" | "hybrid";
 
 // Fallback view centred on Calais when no activity has coordinates.
 const CALAIS_CENTER: [number, number] = [50.9513, 1.8587];
@@ -49,9 +61,11 @@ export function ActivityLeafletMap({
   activities: PublicActivitySummary[];
   labels: ActivityMapLabels;
 }) {
+  const { resolved: colorScheme } = useThemePreference();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const locationMarkerRef = useRef<CircleMarker | null>(null);
+  const [mapStyle, setMapStyle] = useState<MapStyle>("muted");
   const [locationState, setLocationState] = useState<
     "idle" | "locating" | "found" | "denied" | "unavailable" | "error"
   >("idle");
@@ -91,12 +105,29 @@ export function ActivityLeafletMap({
       const theme = getComputedStyle(document.documentElement);
       const accent = theme.getPropertyValue("--infokit-accent").trim();
       const surface = theme.getPropertyValue("--infokit-surface").trim();
-      leaflet
-        .tileLayer(OSM_TILE_URL, {
-          maxZoom: OSM_MAX_ZOOM,
-          attribution: labels.mapAttribution,
-        })
-        .addTo(createdMap);
+      if (mapStyle === "muted") {
+        leaflet
+          .tileLayer(OSM_TILE_URL, {
+            maxZoom: OSM_MAX_ZOOM,
+            attribution: labels.mapAttribution,
+            className: "infokit-soft-plan-tiles",
+          })
+          .addTo(createdMap);
+      } else {
+        leaflet
+          .tileLayer(ESRI_IMAGERY_TILE_URL, {
+            maxZoom: OSM_MAX_ZOOM,
+            attribution: labels.hybridAttribution,
+            className: "infokit-satellite-tiles",
+          })
+          .addTo(createdMap);
+        leaflet
+          .tileLayer(ESRI_LABEL_TILE_URL, {
+            maxZoom: OSM_MAX_ZOOM,
+            className: "infokit-hybrid-label-tiles",
+          })
+          .addTo(createdMap);
+      }
 
       const points = mapped.map((activity) => {
         const popup = document.createElement("div");
@@ -135,7 +166,13 @@ export function ActivityLeafletMap({
       mapRef.current = null;
       map?.remove();
     };
-  }, [labels.mapAttribution, mapped]);
+  }, [
+    colorScheme,
+    labels.hybridAttribution,
+    labels.mapAttribution,
+    mapped,
+    mapStyle,
+  ]);
 
   function requestLocation() {
     if (!("geolocation" in navigator)) {
@@ -229,6 +266,28 @@ export function ActivityLeafletMap({
         <p className="text-copy-muted text-sm leading-relaxed">
           {labels.locationPrivacy}
         </p>
+        <div
+          role="group"
+          aria-label={labels.styleLabel}
+          className="border-line bg-subtle rounded-control flex max-w-full flex-wrap gap-1 border p-1"
+        >
+          <MapStyleButton
+            active={mapStyle === "muted"}
+            label={labels.styleMuted}
+            icon={<Contrast className="size-4" aria-hidden />}
+            onClick={() => {
+              setMapStyle("muted");
+            }}
+          />
+          <MapStyleButton
+            active={mapStyle === "hybrid"}
+            label={labels.styleHybrid}
+            icon={<Layers3 className="size-4" aria-hidden />}
+            onClick={() => {
+              setMapStyle("hybrid");
+            }}
+          />
+        </div>
         {status ? (
           <Callout tone={statusTone} role="status" className="p-3 text-sm">
             {status}
@@ -246,9 +305,34 @@ export function ActivityLeafletMap({
           ref={containerRef}
           role="application"
           aria-label={labels.mapTitle}
-          className="border-line bg-surface rounded-card shadow-ring h-[440px] w-full overflow-hidden border"
+          className="infokit-map border-line bg-surface rounded-card shadow-ring h-[440px] w-full overflow-hidden border"
         />
       )}
     </div>
+  );
+}
+
+function MapStyleButton({
+  active,
+  label,
+  icon,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <ActionButton
+      tone={active ? "soft" : "quiet"}
+      size="compact"
+      aria-pressed={active}
+      onClick={onClick}
+      className="min-w-fit px-3"
+    >
+      {icon}
+      {label}
+    </ActionButton>
   );
 }

@@ -7,20 +7,21 @@ import {
   accountSignInSchema,
   type NotificationChannel,
 } from "@infokit/validation/account";
+import { passwordUpdateSchema } from "@infokit/validation/auth";
+import { APIError } from "better-auth/api";
 import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { localeCookieName } from "~/i18n/constants";
 import { getActionLocale } from "~/i18n/request-locale";
 import { localizedPath } from "~/i18n/routing";
 import { recordAudit } from "~/server/audit";
+import { authServer } from "~/server/auth";
+import { passwordStatus } from "~/server/auth/password-status";
 import { requireEditor } from "~/server/auth/require";
-import {
-  notificationKindPolicies,
-  secondFactorMandatory,
-} from "~/server/account/settings";
+import { notificationKindPolicies } from "~/server/account/settings";
 import { db } from "~/server/db";
 import {
   notificationPreferences,
@@ -104,7 +105,6 @@ export async function updateAccountPreferences(formData: FormData) {
     preferredLanguageCode: formData.get("preferredLanguageCode") ?? "",
     theme: formData.get("theme"),
     density: formData.get("density"),
-    landingSection: formData.get("landingSection"),
     timeZone: formData.get("timeZone"),
     clockFormat: formData.get("clockFormat"),
     weekStartsOn: formData.get("weekStartsOn"),
@@ -118,7 +118,6 @@ export async function updateAccountPreferences(formData: FormData) {
     preferredLanguageCode,
     theme,
     density,
-    landingSection,
     timeZone,
     clockFormat,
     weekStartsOn,
@@ -129,7 +128,6 @@ export async function updateAccountPreferences(formData: FormData) {
     preferredLanguageCode,
     theme,
     density,
-    landingSection,
     timeZone,
     clockFormat,
     weekStartsOn,
@@ -161,44 +159,108 @@ export async function updateAccountPreferences(formData: FormData) {
 }
 
 /**
- * Sign-in preferences and second-factor enrolment. Turning the second factor
- * off is a security decision, so it is refused to anyone holding a role that
- * mandates the step-up, and always audited with the outcome that was actually
- * stored — never with what the form asked for (RISKS.md R10).
+ * Which way in this person prefers — and only that.
+ *
+ * Arming or disarming the second factor used to be a checkbox on this form.
+ * It is not a preference any more: Better Auth writes
+ * `auth.users.two_factor_enabled` when an enrolment is actually proven, so a
+ * column here saying "on" while no secret existed would have been a promise the
+ * sign-in could not keep. The enrolment forms live in `./two-factor-actions.ts`,
+ * and the role mandate is enforced there, on the action that would turn it off.
  */
 export async function updateAccountSignIn(formData: FormData) {
   const locale = await getActionLocale(formData.get("locale"));
   const user = await requireEditor(locale);
   const parsed = accountSignInSchema.safeParse({
     preferredSignInMethod: formData.get("preferredSignInMethod"),
-    twoFactorEnabled: formData.get("twoFactorEnabled"),
-    twoFactorMethod: formData.get("twoFactorMethod"),
     locale: formData.get("locale"),
   });
   if (!parsed.success) backTo("security", locale, { error: "invalid" });
 
-  const { preferredSignInMethod, twoFactorMethod } = parsed.data;
-  const locked = await secondFactorMandatory(user.id);
-  if (locked && !parsed.data.twoFactorEnabled) {
-    backTo("security", locale, { error: "twoFactorRequired" });
-  }
-  const twoFactorEnabled = locked ? true : parsed.data.twoFactorEnabled;
-
-  await upsertSettings(user.id, {
-    preferredSignInMethod,
-    twoFactorEnabled,
-    twoFactorMethod,
-    twoFactorUpdatedAt: new Date(),
-  });
+  const { preferredSignInMethod } = parsed.data;
+  await upsertSettings(user.id, { preferredSignInMethod });
   await recordAudit({
-    action: twoFactorEnabled
-      ? "account.two_factor.enabled"
-      : "account.two_factor.disabled",
+    action: "account.sign_in_method.updated",
     subjectType: "auth.user_settings",
     subjectId: user.id,
-    metadata: { method: twoFactorMethod, signIn: preferredSignInMethod },
+    metadata: { signIn: preferredSignInMethod },
   });
   backTo("security", locale, { status: "saved" });
+}
+
+/**
+ * Set or replace the account's password.
+ *
+ * Two Better Auth calls, because they are two different acts. Most accounts here
+ * sign in with an emailed link and hold no password at all, so a first one is
+ * `setPassword` and needs nothing but the new value. Replacing an existing one
+ * is `changePassword`, which demands the current password — a session alone is
+ * not enough to re-key an account, since a borrowed laptop is a session.
+ *
+ * Other sessions are revoked on the way through: whoever changes a password is
+ * usually doing it because they think somebody else has the old one.
+ */
+export async function updatePassword(formData: FormData) {
+  const locale = await getActionLocale(formData.get("locale"));
+  const user = await requireEditor(locale);
+  const parsed = passwordUpdateSchema.safeParse({
+    password: formData.get("password"),
+    passwordConfirmation: formData.get("passwordConfirmation"),
+    locale: formData.get("locale"),
+  });
+  if (!parsed.success) backTo("password", locale, { error: "password" });
+
+  const status = await passwordStatus(user.id);
+  const supplied = formData.get("currentPassword");
+  const currentPassword = typeof supplied === "string" ? supplied : "";
+  if (status.set && !currentPassword) {
+    backTo("password", locale, { error: "currentPassword" });
+  }
+
+  // `backTo` redirects, and a redirect throws — so the outcome is decided here
+  // and acted on below, outside the `catch` that would otherwise swallow it.
+  let error: string | null = null;
+  try {
+    if (status.set) {
+      await authServer.api.changePassword({
+        body: {
+          currentPassword,
+          newPassword: parsed.data.password,
+          revokeOtherSessions: true,
+        },
+        headers: await headers(),
+      });
+    } else {
+      await authServer.api.setPassword({
+        body: { newPassword: parsed.data.password },
+        headers: await headers(),
+      });
+    }
+  } catch (cause) {
+    if (!(cause instanceof APIError)) throw cause;
+    // The one refusal worth naming: the current password did not match.
+    error = status.set ? "currentPassword" : "password";
+  }
+  if (error) {
+    await recordAudit({
+      action: "auth.password.update_failed",
+      subjectType: "auth.user",
+      subjectId: user.id,
+      outcome: "denied",
+      severity: "warning",
+      errorCode:
+        error === "currentPassword" ? "invalid_credentials" : "invalid",
+    });
+    backTo("password", locale, { error });
+  }
+
+  await recordAudit({
+    action: "auth.password.updated",
+    subjectType: "auth.user",
+    subjectId: user.id,
+    metadata: { first: !status.set },
+  });
+  backTo("password", locale, { status: "updated" });
 }
 
 export async function updateAccountNotifications(formData: FormData) {

@@ -1,6 +1,6 @@
 import "~/styles/globals.css";
 
-import { localeMetadata } from "@infokit/shared/i18n";
+import { brandName, localeMetadata } from "@infokit/shared/i18n";
 import { type Metadata } from "next";
 import { Noto_Sans_Arabic, Public_Sans, Work_Sans } from "next/font/google";
 
@@ -11,47 +11,56 @@ import { requirePublicRouteLocale } from "~/i18n/route-locale";
 import { localeStaticParams } from "~/i18n/routing";
 import { siteConfig } from "~/seo/site";
 
-export const metadata: Metadata = {
-  metadataBase: siteConfig.url,
-  title: {
-    default: siteConfig.name,
-    template: `%s · ${siteConfig.name}`,
-  },
-  description: siteConfig.description,
-  applicationName: siteConfig.name,
-  authors: [{ name: siteConfig.name }],
-  creator: siteConfig.name,
-  publisher: siteConfig.name,
-  category: "public information",
-  openGraph: {
-    type: "website",
-    siteName: siteConfig.name,
-    title: siteConfig.name,
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const locale = requirePublicRouteLocale((await params).locale);
+  const name = brandName(locale);
+
+  return {
+    metadataBase: siteConfig.url,
+    title: {
+      default: name,
+      template: `%s · ${name}`,
+    },
     description: siteConfig.description,
-  },
-  twitter: {
-    card: "summary",
-    title: siteConfig.name,
-    description: siteConfig.description,
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
+    applicationName: name,
+    authors: [{ name }],
+    creator: name,
+    publisher: name,
+    category: "public information",
+    openGraph: {
+      type: "website",
+      siteName: name,
+      title: name,
+      description: siteConfig.description,
+    },
+    twitter: {
+      card: "summary",
+      title: name,
+      description: siteConfig.description,
+    },
+    robots: {
       index: true,
       follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-      "max-video-preview": -1,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
     },
-  },
-  formatDetection: {
-    address: false,
-    email: false,
-    telephone: false,
-  },
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
-};
+    formatDetection: {
+      address: false,
+      email: false,
+      telephone: false,
+    },
+    icons: [{ rel: "icon", url: "/favicon.ico" }],
+  };
+}
 
 /** docs/DESIGN-SYSTEM.md §4: Work Sans headings, Public Sans body, Noto Sans
  *  Arabic for the Arabic-script locales. Declared for every locale, so a reader

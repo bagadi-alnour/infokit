@@ -9,6 +9,7 @@ import {
   unpublishActivityLanguage,
   updateActivityContent,
   updateActivityDetails,
+  updateActivityLocation,
   updateActivityTransit,
 } from "~/app/[locale]/dashboard/activities/actions";
 import { updateActivitySteward } from "~/app/[locale]/dashboard/steward-actions";
@@ -83,6 +84,7 @@ export function ActivityEditorForm({
     try {
       await updateActivityContent(formData);
       await updateActivityDetails(formData);
+      await updateActivityLocation(formData);
       await updateActivityTransit(formData);
       await updateActivitySteward(formData);
       toast.success(labels.saved);

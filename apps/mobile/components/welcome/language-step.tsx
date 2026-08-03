@@ -1,4 +1,5 @@
 import {
+  brandName,
   localeMetadata,
   publicSupportedLocales,
   type PublicLocale,
@@ -154,7 +155,7 @@ export function LanguageStep({
         scrollEventThrottle={80}
       >
         <View className="gap-1 pt-2">
-          <Text variant="eyebrow">InfoKit</Text>
+          <Text variant="eyebrow">{brandName(selected)}</Text>
           <Text variant="title">{strings.languageTitle}</Text>
           {/* The opening line names the selection, so it stops mentioning the
               phone's language the moment the reader picks a different one. */}

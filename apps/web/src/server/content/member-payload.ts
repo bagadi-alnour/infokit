@@ -25,7 +25,7 @@ import type {
 import { and, eq } from "drizzle-orm";
 
 import { localizedPath } from "~/i18n/routing";
-import type { DeviceViewer } from "~/server/auth/device-session";
+import type { MemberViewer } from "~/server/auth/member-viewer";
 import {
   coordinationViewer,
   findCoordinationEvent,
@@ -37,7 +37,7 @@ import {
   presentEvent,
   reachLabelFor,
 } from "~/server/content/public-event-payload";
-import { listCityViews } from "~/server/content/event-presentation";
+import { eventCity, listCityViews } from "~/server/content/event-presentation";
 import { db } from "~/server/db";
 import { organizationMembers, organizations, users } from "~/server/db/schema";
 
@@ -124,7 +124,7 @@ export async function loadMemberIdentityPayload({
   viewer,
   locale,
 }: {
-  viewer: DeviceViewer;
+  viewer: MemberViewer;
   locale: PublicLocale;
 }): Promise<MemberIdentityPayload | null> {
   const [messages, accountRows, memberships] = await Promise.all([
@@ -182,7 +182,10 @@ export async function loadMemberIdentityPayload({
     direction: localeMetadata[locale].direction,
     userId: viewer.userId,
     email: account.email,
-    displayName: account.name ?? account.email,
+    // `||`, not `??`: `users.name` is not-null now, and Better Auth writes an
+    // empty string when a magic-link sign-up has no name to offer — which a
+    // null-check would happily pass straight through as a blank display name.
+    displayName: account.name || account.email,
     initials: initialsOf(account.name, account.email, locale),
     organizations: organizationViews,
     platformSteward: coordination.isPlatformSteward,
@@ -202,7 +205,7 @@ export async function loadMemberSessionPayload({
   viewer,
   locale,
 }: {
-  viewer: DeviceViewer | null;
+  viewer: MemberViewer | null;
   locale: PublicLocale;
 }): Promise<MemberSessionPayload> {
   const identity = viewer
@@ -223,7 +226,7 @@ export async function loadMemberAgendaPayload({
   locale,
   requestedMonth,
 }: {
-  viewer: DeviceViewer;
+  viewer: MemberViewer;
   locale: PublicLocale;
   requestedMonth?: string;
 }): Promise<MemberAgendaPayload> {
@@ -247,7 +250,7 @@ export async function loadMemberAgendaPayload({
     events: events.map((event) =>
       presentEvent({
         event,
-        city: cityById.get(event.cityId),
+        city: eventCity(cityById, event),
         locale,
         messages,
         reachLabel: reachLabelFor({ event, messages: member }),
@@ -270,7 +273,7 @@ export async function loadMemberEventPayload({
   locale,
   eventId,
 }: {
-  viewer: DeviceViewer;
+  viewer: MemberViewer;
   locale: PublicLocale;
   eventId: string;
 }): Promise<MemberEventPayload | null> {
@@ -292,7 +295,7 @@ export async function loadMemberEventPayload({
     // (docs/DATABASE-SCHEMA.md §2); presenting the record drops it.
     event: presentEvent({
       event,
-      city: cities_.get(event.cityId),
+      city: eventCity(cities_, event),
       locale,
       messages,
       reachLabel: reachLabelFor({ event, messages: member }),

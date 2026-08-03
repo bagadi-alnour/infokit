@@ -328,12 +328,6 @@ export const signInMethod = authSchema.enum("sign_in_method", [
   /** Reserved for `auth.authenticators` (WebAuthn) — not yet offered. */
   "passkey",
 ]);
-/** The second factor a person is enrolled in. Slice 0 delivers SMS only. */
-export const secondFactorMethod = authSchema.enum("second_factor_method", [
-  "sms",
-  "totp",
-  "email",
-]);
 export const digestFrequency = authSchema.enum("digest_frequency", [
   "off",
   "daily",
@@ -404,6 +398,43 @@ export const editorialWorkflowState = content.enum("editorial_workflow_state", [
   "unpublished",
   "archived",
 ]);
+/**
+ * How a basic-information tile is reached, where reaching it means placing a
+ * call rather than opening a page (`basicInformationDetails`).
+ *
+ * `sms` exists because 114 is written to and not answered by voice, and a
+ * surface must never offer a call that cannot connect. `whatsapp` is the line
+ * that is also reachable there — often the only route on a data-only phone.
+ */
+export const basicInformationReach = content.enum("basic_information_reach", [
+  "voice",
+  "sms",
+  "whatsapp",
+]);
+/**
+ * Whose phone rings: the country's own emergency service, or an association.
+ *
+ * This is the fact behind the two blocks the public page draws — "the numbers
+ * for right now", and beneath them the association lines under a heading that
+ * says in so many words that they are *not* the State's. That heading is a
+ * claim about the number, so it has to be recorded as one.
+ *
+ * Deliberately not inferred from `answered_by_organization_id`. That column says
+ * *which* association answers, and it is legitimately null for a line whose
+ * network has no record here — Alarm Phone is transnational and is not one of
+ * the Calais associations, so naming one of them would put a false claim on a
+ * published card. "Run by an association" and "run by *this* association" are
+ * different questions, and only the first decides where the card is drawn.
+ *
+ * `state` is the default a new tile takes, because it is the answer that claims
+ * least: a mis-filed tile then sits among the emergency numbers, where the page
+ * asserts nothing about who owns it, rather than under a heading that tells a
+ * reader an association is on the other end.
+ */
+export const basicInformationOperator = content.enum(
+  "basic_information_operator",
+  ["state", "association"],
+);
 export const custodianKind = content.enum("custodian_kind", [
   "organization",
   "platform",

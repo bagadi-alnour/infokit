@@ -8,6 +8,7 @@ import {
   Callout,
   Chip,
   MetaRow,
+  OnlineChip,
   inlineLinkClass,
 } from "~/components/public/primitives";
 
@@ -28,7 +29,12 @@ export interface EventDetailView {
   whereLabel: string | null;
   /** Absent when the place must not be pinned (RISKS.md R5). */
   mapHref: string | null;
+  /** Empty for an event that happens online and in no city. */
   cityName: string;
+  /** Joinable from anywhere — shown instead of a place, or beside one. */
+  isOnline: boolean;
+  /** The link people join on, when the organisers have published one. */
+  onlineUrl: string | null;
   hostName: string | null;
   /** The host's public page, when it has one. */
   hostHref: string | null;
@@ -44,6 +50,8 @@ export interface EventDetailView {
 export interface EventPreviewLabels {
   where: string;
   city: string;
+  /** What an online event says instead of a street. */
+  online: string;
   host: string;
   platform: string;
   contact: string;
@@ -78,6 +86,8 @@ export function EventPreviewCard({
   event: EventDetailView;
   labels: EventPreviewLabels;
 }) {
+  /** Empty on an event that is only online: there is no place to name. */
+  const where = event.whereLabel ?? event.cityName;
   return (
     <div className="grid gap-3">
       <p className="text-ink text-base font-bold leading-snug tracking-tight">
@@ -91,27 +101,30 @@ export function EventPreviewCard({
         <Chip icon={<Clock className="size-4" aria-hidden />}>
           {event.timeLabel}
         </Chip>
+        {/* Joinable from anywhere: said before the place, because for an event
+         * that is only online there is no place to say at all. */}
+        {event.isOnline ? (
+          <OnlineChip label={labels.online} url={event.onlineUrl} />
+        ) : null}
         {/* The map opens in its own tab: the reader is mid-decision here, and
          * losing the agenda to check a street is a bad trade. */}
-        {event.mapHref ? (
+        {where === "" ? null : event.mapHref ? (
           <a
             href={event.mapHref}
             target="_blank"
             rel="noreferrer"
-            aria-label={`${labels.openMap} — ${event.whereLabel ?? event.cityName}`}
+            aria-label={`${labels.openMap} — ${where}`}
             className="rounded-chip focus-visible:outline-brand focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <Chip
               icon={<MapPin className="size-4" aria-hidden />}
               className="hover:border-brand hover:text-brand-deep underline decoration-1 underline-offset-2"
             >
-              {event.whereLabel ?? event.cityName}
+              {where}
             </Chip>
           </a>
         ) : (
-          <Chip icon={<MapPin className="size-4" aria-hidden />}>
-            {event.whereLabel ?? event.cityName}
-          </Chip>
+          <Chip icon={<MapPin className="size-4" aria-hidden />}>{where}</Chip>
         )}
       </div>
 
@@ -139,9 +152,13 @@ export function EventPreviewCard({
             event.hostName
           )}
         </MetaRow>
-        <MetaRow label={labels.city}>
-          {event.cityName || labels.notAvailable}
-        </MetaRow>
+        {/* An online event names no city, and "not available" would read as a
+         * missing answer rather than as the answer. */}
+        {event.cityName || !event.isOnline ? (
+          <MetaRow label={labels.city}>
+            {event.cityName || labels.notAvailable}
+          </MetaRow>
+        ) : null}
         {event.contactValue ? (
           <MetaRow
             label={labels.contact}

@@ -136,6 +136,7 @@ export default async function EventsPage({
     preview: {
       where: t["events.column.where"],
       city: t["events.city"],
+      online: t["events.online"],
       host: t["events.host"],
       platform: t["events.hostPlatform"],
       contact: t["events.contact"],

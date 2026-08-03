@@ -39,6 +39,7 @@ import {
   StatGrid,
   WorkspacePage,
 } from "~/components/admin/workspace";
+import { HistoryTimeline } from "~/components/admin/history-timeline";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -48,7 +49,6 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { ScrollArea } from "~/components/ui/scroll-area";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { localizedPath } from "~/i18n/routing";
 import {
@@ -104,18 +104,6 @@ function localeDate(value: Date | string | null, locale: string) {
     month: "short",
     day: "numeric",
   }).format(date);
-}
-
-function localeDateTime(value: Date, locale: string) {
-  return new Intl.DateTimeFormat(locale, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    timeZone: "Europe/Paris",
-  }).format(value);
 }
 
 function localePublicationDateTime(value: Date, locale: string) {
@@ -548,6 +536,7 @@ export default async function ArticlesPage({
         state: translationAssignments.state,
         translatorEmail: translationAssignments.translatorEmail,
         translatorName: translationAssignments.translatorName,
+        requestedAt: translationAssignments.createdAt,
         expiresAt: translationAssignments.expiresAt,
         submittedContent: translationAssignments.submittedContentJson,
         reviewNote: translationAssignments.reviewNote,
@@ -617,6 +606,10 @@ export default async function ArticlesPage({
                   : assignment.state,
               translatorEmail: assignment.translatorEmail,
               translatorName: assignment.translatorName,
+              requestedAt: new Intl.DateTimeFormat(locale, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              }).format(assignment.requestedAt),
               expiresAt: new Intl.DateTimeFormat(locale, {
                 dateStyle: "medium",
                 timeStyle: "short",
@@ -1037,7 +1030,7 @@ export default async function ArticlesPage({
                   article: selected.id,
                 })}
                 details={
-                  <div className="@xl:col-span-2 @xl:grid-cols-2 grid items-start gap-4">
+                  <div className="@xl:grid-cols-2 grid min-w-0 items-start gap-4">
                     <div className="grid min-w-0 content-start gap-4">
                       <Card>
                         <CardHeader>
@@ -1153,44 +1146,15 @@ export default async function ArticlesPage({
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="pe-2">
-                        {detail.history.length === 0 ? (
-                          <p className="text-copy-muted text-sm">
-                            {t["history.empty"]}
-                          </p>
-                        ) : (
-                          <ScrollArea
-                            className="h-56 pe-3"
-                            aria-label={t["detail.history"]}
-                          >
-                            <ol className="border-line grid gap-0 border-s ps-4">
-                              {detail.history.map((item) => (
-                                <li
-                                  key={item.key}
-                                  className="relative pb-4 last:pb-0"
-                                >
-                                  <span className="bg-brand absolute -start-[1.3rem] top-1 size-2 rounded-full" />
-                                  <p className="text-sm font-medium">
-                                    {item.label}
-                                  </p>
-                                  <time
-                                    dateTime={item.at.toISOString()}
-                                    className="text-copy-muted mt-1 block text-xs tabular-nums"
-                                  >
-                                    {localeDateTime(item.at, locale)}
-                                  </time>
-                                  {item.by ? (
-                                    <p className="text-copy-muted mt-0.5 text-xs">
-                                      {t["history.by"].replace(
-                                        "{name}",
-                                        item.by,
-                                      )}
-                                    </p>
-                                  ) : null}
-                                </li>
-                              ))}
-                            </ol>
-                          </ScrollArea>
-                        )}
+                        <HistoryTimeline
+                          entries={detail.history}
+                          locale={locale}
+                          labels={{
+                            ariaLabel: t["detail.history"],
+                            empty: t["history.empty"],
+                            by: t["history.by"],
+                          }}
+                        />
                       </CardContent>
                     </Card>
                   </div>

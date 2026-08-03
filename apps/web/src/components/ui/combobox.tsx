@@ -4,7 +4,6 @@ import * as React from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react";
 
 import { cn } from "~/lib/utils";
-import { Button } from "~/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
@@ -36,15 +35,22 @@ function ComboboxTrigger({
   );
 }
 
+/**
+ * Emptying the field is a glyph, not a button with a box of its own: the field
+ * it sits in is already a bordered control, and a second outline inside that
+ * one reads as a separate widget rather than as "clear this".
+ */
 function ComboboxClear({ className, ...props }: ComboboxPrimitive.Clear.Props) {
   return (
     <ComboboxPrimitive.Clear
       data-slot="combobox-clear"
-      render={<InputGroupButton variant="ghost" size="icon-xs" />}
-      className={cn(className)}
+      className={cn(
+        "text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-sm border-none bg-transparent p-0 outline-none transition-colors focus-visible:ring-2",
+        className,
+      )}
       {...props}
     >
-      <XIcon className="pointer-events-none" />
+      <XIcon className="pointer-events-none size-4" />
     </ComboboxPrimitive.Clear>
   );
 }
@@ -244,19 +250,21 @@ function ComboboxChip({
     <ComboboxPrimitive.Chip
       data-slot="combobox-chip"
       className={cn(
-        "border-brand/20 bg-brand-soft text-brand has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50 has-data-[slot=combobox-chip-remove]:pe-0 flex h-[calc(--spacing(5.25))] w-fit items-center justify-center gap-1 whitespace-nowrap rounded-sm border px-1.5 text-xs font-medium",
+        "border-brand/20 bg-brand-soft text-brand has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50 flex h-[calc(--spacing(5.25))] w-fit items-center justify-center gap-1 whitespace-nowrap rounded-sm border px-1.5 text-xs font-medium",
         className,
       )}
       {...props}
     >
       {children}
+      {/* A bare glyph, not a button inside a button: a chip is already a
+       * bordered box, and a second bordered box around its × reads as a
+       * control of its own rather than the chip's own dismiss. */}
       {showRemove && (
         <ComboboxPrimitive.ChipRemove
-          render={<Button variant="ghost" size="icon-xs" />}
-          className="-ms-1 opacity-50 hover:opacity-100"
+          className="focus-visible:ring-ring/50 -me-0.5 inline-flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm border-none bg-transparent p-0 opacity-60 outline-none transition-opacity hover:opacity-100 focus-visible:ring-2"
           data-slot="combobox-chip-remove"
         >
-          <XIcon className="pointer-events-none" />
+          <XIcon className="pointer-events-none size-3.5" />
         </ComboboxPrimitive.ChipRemove>
       )}
     </ComboboxPrimitive.Chip>

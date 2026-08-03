@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   decideSkillRecord,
   decideTrainingRecord,
-} from "~/app/[locale]/dashboard/skills/actions";
+} from "~/app/[locale]/dashboard/my-organization/skills/actions";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import { Button, EmptyState, Notice } from "~/components/admin/workspace";
 

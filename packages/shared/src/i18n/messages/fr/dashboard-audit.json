@@ -8,10 +8,14 @@
   "audit.view": "Ce que vous lisez",
   "audit.view.events": "Actions",
   "audit.view.deliveries": "Messages envoyés",
+  "audit.view.eventsHint": "Examinez les actions, les refus, les échecs et les modifications champ par champ.",
+  "audit.view.deliveriesHint": "Vérifiez si les courriels, SMS et notifications de la plateforme ont atteint leur prestataire.",
 
   "audit.notice.privacyTitle": "Cette page contient des données personnelles",
+  "audit.notice.privacyCompact": "Données personnelles — accès réservé au contrôle de sécurité.",
   "audit.notice.privacyBody": "Adresses, adresses IP et signatures de navigateur sont conservées pour le contrôle de sécurité uniquement, et pour la durée prévue par la politique de conservation. Consultez ce que la question posée demande, rien de plus.",
 
+  "audit.overview.period": "Signaux des {days} derniers jours",
   "audit.stat.events": "Actions enregistrées",
   "audit.stat.eventsHint": "Sur les {days} derniers jours.",
   "audit.stat.denied": "Tentatives refusées",
@@ -21,6 +25,7 @@
   "audit.stat.deliveries": "Messages non remis",
   "audit.stat.deliveriesHint": "Courriels ou SMS refusés par le prestataire.",
 
+  "audit.filter.findGroup": "Rechercher une entrée",
   "audit.filter.actor": "Personne",
   "audit.filter.actorPlaceholder": "Nom, adresse ou identifiant de compte",
   "audit.filter.action": "Action",
@@ -37,6 +42,7 @@
   "audit.filter.channel": "Canal",
   "audit.filter.anyChannel": "Tous les canaux",
   "audit.filter.status": "Remise",
+  "audit.filter.messagePlaceholder": "Nom du message",
   "audit.filter.recipient": "Destinataire",
   "audit.filter.recipientPlaceholder": "nom@exemple.org",
   "audit.filter.recipientHint": "L’adresse complète. Elle est comparée par empreinte, jamais conservée.",
@@ -86,6 +92,8 @@
   "audit.detail.actorId": "Compte",
 
   "audit.empty": "Rien n’a encore été enregistré.",
+  "audit.results.events": "Actions enregistrées",
+  "audit.results.deliveries": "Tentatives de remise",
 
   "audit.delivery.column.when": "Quand",
   "audit.delivery.column.channel": "Canal",

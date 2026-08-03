@@ -1,4 +1,5 @@
 import type { PublicOrganizationDetailPayload } from "@infokit/shared/public-content";
+import { brandName } from "@infokit/shared/i18n";
 import { Button, Callout, Card, CardTitle, MetaRow, Text } from "@infokit/ui";
 import * as WebBrowser from "expo-web-browser";
 import { Stack, useLocalSearchParams } from "expo-router";
@@ -113,7 +114,7 @@ export default function OrganizationScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: name ?? "InfoKit" }} />
+      <Stack.Screen options={{ title: name ?? brandName(locale) }} />
       <PayloadScreen request={request} strings={strings}>
         {(payload) => <OrganizationDetail payload={payload} />}
       </PayloadScreen>

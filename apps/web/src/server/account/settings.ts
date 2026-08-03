@@ -2,7 +2,7 @@ import type {
   NotificationChannel,
   NotificationKind,
 } from "@infokit/validation/account";
-import { and, eq, gt, isNotNull, isNull, or } from "drizzle-orm";
+import { and, eq, gt, isNull, or } from "drizzle-orm";
 
 import { db } from "~/server/db";
 import {
@@ -11,7 +11,6 @@ import {
   organizationMembers,
   roles,
   userPlatformRoles,
-  userSecondFactors,
   userSettings,
 } from "~/server/db/schema";
 
@@ -35,9 +34,6 @@ export type AccountSettings = {
   clockFormat: "h12" | "h24";
   weekStartsOn: number;
   preferredSignInMethod: "magic_link" | "password" | "passkey";
-  twoFactorEnabled: boolean;
-  twoFactorMethod: "sms" | "totp" | "email";
-  twoFactorUpdatedAt: Date | null;
   digest: "off" | "daily" | "weekly";
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
@@ -46,8 +42,9 @@ export type AccountSettings = {
 };
 
 /**
- * The product's answer before anyone chooses: calm defaults, the console's
- * launch city timezone, and the second factor on.
+ * The product's answer before anyone chooses: calm defaults and the console's
+ * launch city timezone. Nothing here concerns the second factor — that is
+ * Better Auth's, on `auth.users` and `auth.sessions`, not a preference.
  */
 export const accountSettingsDefaults: AccountSettings = {
   preferredLanguageCode: null,
@@ -61,9 +58,6 @@ export const accountSettingsDefaults: AccountSettings = {
   clockFormat: "h24",
   weekStartsOn: 1,
   preferredSignInMethod: "magic_link",
-  twoFactorEnabled: true,
-  twoFactorMethod: "sms",
-  twoFactorUpdatedAt: null,
   digest: "weekly",
   quietHoursStart: null,
   quietHoursEnd: null,
@@ -150,42 +144,18 @@ export async function secondFactorMandatory(userId: string): Promise<boolean> {
   return Boolean(organization);
 }
 
-/**
- * Whether this account must pass the SMS step-up before any private read
- * (RISKS.md R10).
+/*
+ * There is deliberately no `secondFactorRequired` any more.
  *
- * Two things make it required: a role that mandates it, or the person's own
- * choice once they have a *proven* number to receive codes on. An account with
- * no number and no mandating role is not held at a gate it cannot pass — its
- * emailed sign-in link is the factor it has — so the platform asks for a number
- * exactly where the reach justifies it. Requiring proof, not just an enrolment,
- * is what keeps a mistyped number from locking anyone out of their own console:
- * until a code comes back the gate is not armed.
+ * It used to mean "must this session pass the SMS step-up", and combined a role
+ * mandate with the person's own preference plus a proven phone number. Better
+ * Auth removed the question: a session cannot exist unless the factor armed on
+ * the account was already applied, so nobody is ever signed in and still owing a
+ * code. The person's own choice is expressed by arming a factor, not by a column.
  *
- * Called on the gated path, so the common case (a number proven, the step-up
- * on) answers in two primary-key lookups and never touches the role tables.
+ * What is left is `secondFactorMandatory` above — the only reason to *force* an
+ * enrolment — and `auth.users.two_factor_enabled`, which is the fact.
  */
-export async function secondFactorRequired(userId: string): Promise<boolean> {
-  const [[settings], [number]] = await Promise.all([
-    db
-      .select({ enabled: userSettings.twoFactorEnabled })
-      .from(userSettings)
-      .where(eq(userSettings.userId, userId))
-      .limit(1),
-    db
-      .select({ userId: userSecondFactors.userId })
-      .from(userSecondFactors)
-      .where(
-        and(
-          eq(userSecondFactors.userId, userId),
-          isNotNull(userSecondFactors.verifiedAt),
-        ),
-      )
-      .limit(1),
-  ]);
-  if (settings?.enabled !== false && number) return true;
-  return secondFactorMandatory(userId);
-}
 
 /** Per-kind channel matrix, and how the person may change it. */
 export interface NotificationKindPolicy {

@@ -14,6 +14,7 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxValue,
+  useComboboxAnchor,
 } from "~/components/ui/combobox";
 
 export type SearchableOption = {
@@ -29,6 +30,7 @@ const sameOption = (left: SearchableOption, right: SearchableOption) =>
 export function SearchableSelect({
   id,
   name,
+  form,
   options,
   value,
   onValueChange,
@@ -41,6 +43,8 @@ export function SearchableSelect({
   /** Lets a visible label point at the input instead of wrapping it. */
   id?: string;
   name: string;
+  /** Associate the posted value with a form elsewhere on the page. */
+  form?: string;
   options: readonly SearchableOption[];
   value: string;
   onValueChange: (value: string) => void;
@@ -65,7 +69,7 @@ export function SearchableSelect({
       autoHighlight
       disabled={disabled}
     >
-      <input type="hidden" name={name} value={value} />
+      <input type="hidden" name={name} form={form} value={value} />
       <ComboboxInput
         id={id}
         aria-label={label}
@@ -123,6 +127,7 @@ export function SearchableMultiSelect({
   emptyLabel?: string;
   maxSelections?: number;
 }) {
+  const anchor = useComboboxAnchor();
   const selected = useMemo(
     () =>
       value
@@ -165,7 +170,11 @@ export function SearchableMultiSelect({
           value={selectedValue}
         />
       ))}
-      <ComboboxChips className="min-h-11 gap-2 p-2">
+      {/* Anchored to the whole field, not to the text input inside it. Once a
+       * few chips are picked that input is whatever slice of the last row is
+       * left over, and a list hung off it opens as a column two characters
+       * wide with every option truncated. */}
+      <ComboboxChips ref={anchor} className="min-h-11 gap-2 p-2">
         <ComboboxValue>
           {(selectedOptions: SearchableOption[]) => (
             <>
@@ -190,7 +199,7 @@ export function SearchableMultiSelect({
           )}
         </ComboboxValue>
       </ComboboxChips>
-      <ComboboxContent>
+      <ComboboxContent anchor={anchor}>
         <ComboboxEmpty>{emptyLabel}</ComboboxEmpty>
         <ComboboxList>
           {(option: SearchableOption) => (

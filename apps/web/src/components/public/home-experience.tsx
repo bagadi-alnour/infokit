@@ -8,13 +8,14 @@ import {
   BookOpen,
   CalendarDays,
   ChevronRight,
+  CircleAlert,
   Languages,
   Lock,
+  MessageCircle,
   MessagesSquare,
   ShieldCheck,
   Sparkles,
   UserRoundX,
-  WifiOff,
 } from "lucide-react";
 
 import { ActivityCard } from "~/components/public/activity-card";
@@ -31,10 +32,42 @@ import type { SearchSuggestionGroup } from "~/lib/search-suggestions";
 import { cn } from "~/lib/utils";
 import type {
   AssociationRoute,
+  BasicConfirmationBadge,
   BasicInformationRoute,
+  HelpLineContact,
   ServiceRoute,
   UrgentRoute,
 } from "~/server/content/public-basics-payload";
+
+/**
+ * Who stands behind a number, on the card that gives it.
+ *
+ * Three words at most, and the only one that takes a colour is the one a reader
+ * has to act on: an unconfirmed line wears the warning tone, and "official" and
+ * "confirmed" stay in the metadata grey beside it. A row where every badge
+ * shouted would tell a reader nothing, and the block's own source line under the
+ * cards is what explains what "not yet confirmed" means (docs/DESIGN-SYSTEM.md
+ * §5 — freshness and ownership are content, not chrome).
+ */
+function ConfirmationBadge({
+  confirmation,
+}: {
+  confirmation: BasicConfirmationBadge;
+}) {
+  const unconfirmed = confirmation.kind === "unconfirmed";
+  const Icon = unconfirmed ? CircleAlert : ShieldCheck;
+  return (
+    <span
+      className={cn(
+        "mt-2 inline-flex items-center gap-1.5 text-xs font-semibold",
+        unconfirmed ? "text-warn" : "text-copy-muted",
+      )}
+    >
+      <Icon className="size-3.5 shrink-0" aria-hidden />
+      {confirmation.label}
+    </span>
+  );
+}
 
 export interface HomeLabels {
   /** The hero: what this is, what it answers, and how to search it. */
@@ -50,6 +83,11 @@ export interface HomeLabels {
   /** The shortest-routes band: the numbers to press, then water and a shower. */
   urgent: string;
   urgentBody: string;
+  /** The association lines under the row, and where their numbers came from. */
+  help: string;
+  helpBody: string;
+  helpSource: string;
+  whatsapp: string;
   /** The open-now band, and the link to the unfiltered list. */
   openNow: string;
   openNowBody: string;
@@ -75,17 +113,19 @@ export interface HomeLabels {
   /** The associations band: who is behind everything above it. */
   associations: string;
   associationsBody: string;
-  /** The closing promise, and the four things it rests on. */
+  /** The closing promise, expressed through the platform's five values. */
   trust: string;
   trustBody: string;
-  reliability: string;
-  reliabilityDescription: string;
-  trustOffline: string;
-  trustOfflineBody: string;
-  trustLanguages: string;
-  trustLanguagesBody: string;
-  trustAnonymous: string;
-  trustAnonymousBody: string;
+  valueDignity: string;
+  valueDignityBody: string;
+  valueReliability: string;
+  valueReliabilityBody: string;
+  valueAccessibility: string;
+  valueAccessibilityBody: string;
+  valueCollaboration: string;
+  valueCollaborationBody: string;
+  valueResponsibility: string;
+  valueResponsibilityBody: string;
 }
 
 /**
@@ -129,6 +169,7 @@ export function PublicHomeExperience({
   counts,
   suggestions,
   urgent,
+  helpLines,
   basics,
   services,
   openNow,
@@ -145,8 +186,10 @@ export function PublicHomeExperience({
   counts: { articles: number; events: number; guides: number };
   /** What the search box can offer as the reader types, in their language. */
   suggestions: SearchSuggestionGroup[];
-  /** The two or three shortest routes on the page, under the masthead. */
+  /** The three or four shortest routes on the page, under the masthead. */
   urgent: UrgentRoute[];
+  /** The association-run lines listed under the row — empty hides the block. */
+  helpLines: HelpLineContact[];
   basics: BasicInformationRoute[];
   services: ServiceRoute[];
   /** The few activities open at this hour — empty closes the band. */
@@ -159,24 +202,29 @@ export function PublicHomeExperience({
 
   const trust = [
     {
-      Icon: ShieldCheck,
-      title: labels.reliability,
-      body: labels.reliabilityDescription,
+      Icon: UserRoundX,
+      title: labels.valueDignity,
+      body: labels.valueDignityBody,
     },
     {
-      Icon: WifiOff,
-      title: labels.trustOffline,
-      body: labels.trustOfflineBody,
+      Icon: BadgeCheck,
+      title: labels.valueReliability,
+      body: labels.valueReliabilityBody,
     },
     {
       Icon: Languages,
-      title: labels.trustLanguages,
-      body: labels.trustLanguagesBody,
+      title: labels.valueAccessibility,
+      body: labels.valueAccessibilityBody,
     },
     {
-      Icon: UserRoundX,
-      title: labels.trustAnonymous,
-      body: labels.trustAnonymousBody,
+      Icon: MessagesSquare,
+      title: labels.valueCollaboration,
+      body: labels.valueCollaborationBody,
+    },
+    {
+      Icon: ShieldCheck,
+      title: labels.valueResponsibility,
+      body: labels.valueResponsibilityBody,
     },
   ];
 
@@ -315,7 +363,16 @@ export function PublicHomeExperience({
               {labels.urgentBody}
             </p>
           </div>
-          <ul className="mt-6 grid gap-4 sm:grid-cols-3">
+          {/* Two up on a small screen, then one row of four: the row is three
+              cards where a city publishes no water, and four where the sea card
+              joins them, so the columns follow the count rather than assuming
+              it. */}
+          <ul
+            className={cn(
+              "mt-6 grid gap-4 sm:grid-cols-2",
+              urgent.length > 3 ? "lg:grid-cols-4" : "lg:grid-cols-3",
+            )}
+          >
             {urgent.map((route) => (
               <li key={route.code}>
                 <a
@@ -351,11 +408,83 @@ export function PublicHomeExperience({
                     <span className="text-copy-muted mt-1 block text-sm leading-relaxed">
                       {route.hint}
                     </span>
+                    {route.confirmation ? (
+                      <span className="block">
+                        <ConfirmationBadge confirmation={route.confirmation} />
+                      </span>
+                    ) : null}
                   </span>
                 </a>
               </li>
             ))}
           </ul>
+
+          {/* The lines associations answer themselves, under the state's
+              numbers rather than beside them: the order is the advice. A
+              volunteer phone is the right door for an eviction at dawn and the
+              wrong one for a boat taking water, so 112 stays above.
+
+              Each card says who stands behind it — the association itself, or
+              nobody yet — and the line under the block names the guide the
+              numbers were copied from and what to do in an emergency. A caveat
+              printed once at the bottom is a caveat nobody carries across five
+              cards, which is why the badge is on the card. */}
+          {helpLines.length > 0 ? (
+            <div className="mt-10">
+              <h3 className="font-display text-ink text-lg font-bold leading-tight">
+                {labels.help}
+              </h3>
+              <p className="text-copy-muted mt-1.5 max-w-2xl text-pretty text-sm leading-relaxed">
+                {labels.helpBody}
+              </p>
+              <ul className="mt-5 grid gap-4 sm:grid-cols-3">
+                {helpLines.map((line) => (
+                  <li key={line.code}>
+                    <a
+                      href={line.href}
+                      className="bg-surface border-line rounded-card shadow-ring hover:border-brand focus-visible:outline-brand group flex h-full items-start gap-4 border p-5 transition-all hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      <span
+                        className={cn(
+                          iconTile,
+                          "bg-brand-soft text-brand-deep",
+                        )}
+                        aria-hidden
+                      >
+                        <TaxonomyIcon name={line.icon} size={24} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="font-display text-ink block font-bold leading-tight">
+                          {line.label}
+                        </span>
+                        {/* The digits, readable before they are pressed: a
+                            number a reader can copy onto paper survives the
+                            battery this page needs to be read on. */}
+                        <span className="text-ink mt-1 block text-sm font-semibold tabular-nums">
+                          {line.dial}
+                        </span>
+                        <span className="text-copy-muted mt-1.5 block text-sm leading-relaxed">
+                          {line.hint}
+                        </span>
+                        <span className="flex flex-wrap items-center gap-x-3">
+                          <ConfirmationBadge confirmation={line.confirmation} />
+                          {line.whatsapp ? (
+                            <span className="text-copy-muted mt-2 inline-flex items-center gap-1.5 text-xs font-semibold">
+                              <MessageCircle className="size-3.5" aria-hidden />
+                              {labels.whatsapp}
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-copy-muted mt-4 max-w-2xl text-pretty text-xs leading-relaxed">
+                {labels.helpSource}
+              </p>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -673,7 +802,7 @@ export function PublicHomeExperience({
             {labels.trustBody}
           </p>
         </div>
-        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
           {trust.map(({ Icon, title, body }) => (
             <SurfaceCard as="li" key={title} className="p-6">
               <span

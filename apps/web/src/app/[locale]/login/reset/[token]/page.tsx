@@ -10,7 +10,7 @@ import { ActionLink } from "~/components/public/primitives";
 import { requireRouteLocale } from "~/i18n/route-locale";
 import { authPath } from "~/i18n/routing";
 import { localizedAuthMetadata } from "~/seo/site";
-import { isResetTokenValid } from "~/server/auth/password-reset";
+import { isResetTokenValid } from "~/server/auth/reset-token";
 
 interface ResetPageProps {
   params: Promise<{ locale: string; token: string }>;

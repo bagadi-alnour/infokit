@@ -16,6 +16,11 @@ export interface ActivityMapProps {
   onSelect: (id: string | null) => void;
   /** The state word for a pin's callout, from the payload's own labels. */
   statusWord: (activity: PlacedActivity) => string;
+  viewLabels: {
+    group: string;
+    muted: string;
+    hybrid: string;
+  };
   /** Shown in place of the map where there is no map to show. */
   hint?: string;
 }

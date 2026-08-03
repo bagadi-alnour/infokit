@@ -18,7 +18,11 @@ import type {
   PublicArticleSummary,
 } from "@infokit/shared/public-content";
 
-import { fallbackLabel } from "~/lib/activity-presentation";
+import {
+  fallbackLabel,
+  verificationFormatters,
+  verifiedAgoLabel,
+} from "~/lib/activity-presentation";
 import { localizedPath } from "~/i18n/routing";
 import {
   listPublishedArticles,
@@ -37,6 +41,15 @@ export function articleLabels(messages: Messages): PublicArticleLabels {
   return {
     empty: messages["articles.empty"],
     read: messages["articles.read"],
+    share: messages["articles.share"],
+    shareCopied: messages["articles.shareCopied"],
+    listen: messages["listen.play"],
+    pauseListening: messages["listen.pause"],
+    resumeListening: messages["listen.resume"],
+    listenLoading: messages["listen.loading"],
+    listenRetry: messages["listen.retry"],
+    listenDisclosure: messages["listen.aiDisclosure"],
+    download: messages["articles.download"],
     publishedBy: messages["articles.publishedBy"],
     lastReviewed: messages["articles.lastReviewed"],
     unreliable: messages["articles.unreliable"],
@@ -85,6 +98,7 @@ export function articleSummaries({
   messages: Messages;
 }): PublicArticleSummary[] {
   const dateFormatter = dateFormatterFor(locale);
+  const reviewFormatters = verificationFormatters(locale);
   const today = new Date().toISOString().slice(0, 10);
   return articles.map((article) => ({
     id: article.id,
@@ -96,8 +110,15 @@ export function articleSummaries({
       : dateFormatter.format(article.publishedAt),
     ownerNames: owners(article, messages),
     lastReviewedLabel: article.lastReviewedAt
-      ? dateFormatter.format(article.lastReviewedAt)
+      ? verifiedAgoLabel({
+          verifiedAt: article.lastReviewedAt,
+          format: reviewFormatters.ago,
+        })
       : messages["public.notAvailable"],
+    lastReviewedDateLabel: article.lastReviewedAt
+      ? reviewFormatters.date.format(article.lastReviewedAt)
+      : messages["public.notAvailable"],
+    lastReviewedIso: article.lastReviewedAt?.toISOString() ?? null,
     fallbackUsed: article.fallbackUsed,
     fallbackLabel: fallbackLabel({
       messages,

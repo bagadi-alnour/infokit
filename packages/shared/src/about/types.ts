@@ -12,6 +12,16 @@ export interface AboutStrings {
   tagline: string;
   /** Who the app is for, and the question it answers. */
   intro: string;
+  /**
+   * What the platform is not affiliated with, and what it does not help anyone
+   * do. It sits directly under the intro rather than beside the other limits at
+   * the end, because "who is behind this, and are they with the authorities" is
+   * asked before "what can I find" — by a reader deciding whether opening the
+   * app is safe, and by anyone checking what the platform claims to be. The same
+   * words are the legal notice's opening section (`/legal`), so the answer is
+   * worded once and read in all eleven languages wherever it is needed.
+   */
+  independence: AboutSection;
   what: AboutSection;
   source: AboutSection;
   freshness: AboutSection;
@@ -55,6 +65,8 @@ export interface AboutStrings {
    */
   collaboration: AboutSection;
   associations: AboutSection;
+  /** The product boundary in plain language: information and coordination, not casework. */
+  limits: AboutSection;
   /** Precedes the build's version number. */
   versionLabel: string;
 }

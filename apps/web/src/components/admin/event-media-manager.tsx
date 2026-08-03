@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, FileText, ImageUp, ShieldAlert, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -71,6 +71,12 @@ export type EventMediaLabels = {
  * is shown is the one thing an editor cannot infer — whether the safety scan
  * has cleared it for readers yet.
  */
+/** A file uploaded on the create form, waiting for the event to be saved. */
+interface DraftFlyer {
+  assetId: string;
+  title: string;
+}
+
 export function EventMediaManager({
   locale,
   eventId,
@@ -78,13 +84,26 @@ export function EventMediaManager({
   cover,
   flyers,
   labels,
+  onCoverPreview,
 }: {
   locale: string;
-  eventId: string;
+  /**
+   * Absent on the create form, where the event does not exist yet. The file
+   * still goes to storage as it is chosen — that part needs no event — and the
+   * asset ids ride along in hidden inputs for `createCoordinationEvent` to
+   * attach. Everything else on this panel behaves the same either way.
+   */
+  eventId?: string;
   sourceLanguage: EventLanguage;
   cover: WorkspaceEventCover | null;
   flyers: readonly WorkspaceEventFlyer[];
   labels: EventMediaLabels;
+  /**
+   * The poster as it stands, for a panel that shows the event beside this one.
+   * Called with the local preview of whatever was last chosen, and with null
+   * once it is dropped.
+   */
+  onCoverPreview?: (src: string | null) => void;
 }) {
   const showActionError = useActionErrorToast();
   const [busy, setBusy] = useState(false);
@@ -92,11 +111,19 @@ export function EventMediaManager({
   const [coverRights, setCoverRights] = useState(false);
   const [flyerName, setFlyerName] = useState("");
   const [flyerRights, setFlyerRights] = useState(false);
+  const [draftCover, setDraftCover] = useState<string | null>(null);
+  const [draftFlyers, setDraftFlyers] = useState<DraftFlyer[]>([]);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const flyerInputRef = useRef<HTMLInputElement>(null);
   const { previewSrc, showFile, clearPreview } = useCoverImagePreview(
     cover?.previewUrl ?? null,
   );
+  /** Whether anything is attached — a saved cover, or one waiting to be. */
+  const hasCover = cover !== null || draftCover !== null;
+
+  useEffect(() => {
+    onCoverPreview?.(previewSrc);
+  }, [onCoverPreview, previewSrc]);
 
   const uploadCover = async (file: File | undefined) => {
     if (!file) return;
@@ -108,7 +135,7 @@ export function EventMediaManager({
       const image = await compressImageForUpload(file);
       const request = new FormData();
       request.set("locale", locale);
-      request.set("eventId", eventId);
+      if (eventId) request.set("eventId", eventId);
       request.set("mimeType", image.type);
       request.set("byteSize", String(image.size));
       request.set("languageCode", sourceLanguage);
@@ -121,11 +148,17 @@ export function EventMediaManager({
         headers: { "Content-Type": image.type },
       });
       if (!response.ok) throw new Error("Upload failed");
-      const attach = new FormData();
-      attach.set("locale", locale);
-      attach.set("eventId", eventId);
-      attach.set("assetId", upload.assetId);
-      await setEventCoverImage(attach);
+      if (eventId) {
+        const attach = new FormData();
+        attach.set("locale", locale);
+        attach.set("eventId", eventId);
+        attach.set("assetId", upload.assetId);
+        await setEventCoverImage(attach);
+      } else {
+        // Held for the event's own submit: one cover, so a second choice
+        // replaces the first rather than queueing behind it.
+        setDraftCover(upload.assetId);
+      }
       showFile(image);
       toast.success(labels.coverSaved);
       setCoverAlt("");
@@ -149,7 +182,7 @@ export function EventMediaManager({
     try {
       const request = new FormData();
       request.set("locale", locale);
-      request.set("eventId", eventId);
+      if (eventId) request.set("eventId", eventId);
       request.set("byteSize", String(file.size));
       request.set("languageCode", sourceLanguage);
       request.set("rightsConfirmed", flyerRights ? "true" : "false");
@@ -160,13 +193,21 @@ export function EventMediaManager({
         headers: { "Content-Type": "application/pdf" },
       });
       if (!response.ok) throw new Error("Upload failed");
-      const attach = new FormData();
-      attach.set("locale", locale);
-      attach.set("eventId", eventId);
-      attach.set("assetId", upload.assetId);
-      attach.set("languageCode", sourceLanguage);
-      attach.set("title", flyerName || file.name);
-      await addEventFlyer(attach);
+      const title = flyerName || file.name;
+      if (eventId) {
+        const attach = new FormData();
+        attach.set("locale", locale);
+        attach.set("eventId", eventId);
+        attach.set("assetId", upload.assetId);
+        attach.set("languageCode", sourceLanguage);
+        attach.set("title", title);
+        await addEventFlyer(attach);
+      } else {
+        setDraftFlyers((current) => [
+          ...current,
+          { assetId: upload.assetId, title },
+        ]);
+      }
       toast.success(labels.flyerAdded);
       setFlyerName("");
       setFlyerRights(false);
@@ -210,25 +251,44 @@ export function EventMediaManager({
         {previewSrc ? (
           <CoverImagePreview src={previewSrc} alt={previewAlt} />
         ) : null}
-        {cover ? (
+        {hasCover ? (
           <div className="border-line bg-subtle grid gap-2 rounded-lg border px-3 py-2 text-sm">
             <div className="flex items-center justify-between gap-3">
               <span className="inline-flex items-center gap-2">
                 <ImageUp className="size-4" aria-hidden />
                 {labels.coverAttached}
               </span>
-              <form action={removeCover}>
-                <input type="hidden" name="locale" value={locale} />
-                <input type="hidden" name="eventId" value={eventId} />
-                <PendingButton variant="ghost" className="text-danger">
+              {eventId ? (
+                <form action={removeCover}>
+                  <input type="hidden" name="locale" value={locale} />
+                  <input type="hidden" name="eventId" value={eventId} />
+                  <PendingButton variant="ghost" className="text-danger">
+                    {labels.remove}
+                  </PendingButton>
+                </form>
+              ) : (
+                /* Nothing to detach yet: dropping it here is enough, and the
+                 * uploaded file simply never becomes anybody's cover. */
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-danger"
+                  onClick={() => {
+                    setDraftCover(null);
+                    clearPreview();
+                  }}
+                >
                   {labels.remove}
-                </PendingButton>
-              </form>
+                </Button>
+              )}
             </div>
-            {cover.scanState === "clean" ? null : (
+            {cover === null || cover.scanState === "clean" ? null : (
               <PendingScanNotice label={labels.pendingScan} />
             )}
           </div>
+        ) : null}
+        {draftCover ? (
+          <input type="hidden" name="coverAssetId" value={draftCover} />
         ) : null}
         <div className="grid gap-3">
           <Field label={labels.altLabel} hint={labels.altHint}>
@@ -268,7 +328,7 @@ export function EventMediaManager({
             onClick={() => coverInputRef.current?.click()}
           >
             <Upload className="size-4" aria-hidden />
-            {cover ? labels.replace : labels.select}
+            {hasCover ? labels.replace : labels.select}
           </Button>
           <span className="text-copy-muted text-xs">
             {busy ? labels.uploading : labels.constraints}
@@ -281,6 +341,41 @@ export function EventMediaManager({
           <h3 className="text-sm font-semibold">{labels.flyersHeading}</h3>
           <p className="text-copy-muted mt-0.5 text-xs">{labels.flyersHint}</p>
         </div>
+        {draftFlyers.length > 0 ? (
+          <ul className="grid gap-2">
+            {draftFlyers.map((flyer, index) => (
+              <li
+                key={flyer.assetId}
+                className="border-line bg-subtle flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm"
+              >
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  <FileText className="size-4 shrink-0" aria-hidden />
+                  <span className="truncate">{flyer.title}</span>
+                </span>
+                {/* Index-aligned with the titles, which is how the action reads
+                 * them back: one pair per file, in document order. */}
+                <input
+                  type="hidden"
+                  name="flyerAssetId"
+                  value={flyer.assetId}
+                />
+                <input type="hidden" name="flyerTitle" value={flyer.title} />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-danger shrink-0"
+                  onClick={() => {
+                    setDraftFlyers((current) =>
+                      current.filter((_, at) => at !== index),
+                    );
+                  }}
+                >
+                  {labels.remove}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {flyers.length > 0 ? (
           <ul className="grid gap-2">
             {flyers.map((flyer) => (
@@ -326,9 +421,10 @@ export function EventMediaManager({
               </li>
             ))}
           </ul>
-        ) : (
+        ) : null}
+        {flyers.length === 0 && draftFlyers.length === 0 ? (
           <p className="text-copy-muted text-sm">{labels.flyersEmpty}</p>
-        )}
+        ) : null}
         <div className="grid gap-3">
           <Field label={labels.flyerTitle} hint={labels.flyerTitleHint}>
             <TextInput

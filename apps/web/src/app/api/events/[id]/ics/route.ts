@@ -82,8 +82,11 @@ export async function GET(
     title: event.title,
     description:
       event.status === "cancelled" ? cancelledText(event) : event.description,
+    // An online event's location is the link itself: a calendar entry that
+    // opens the meeting is what "where" means when there is nowhere to go.
     location:
-      [eventWhereLabel(event), city?.name].filter(Boolean).join(", ") || null,
+      [eventWhereLabel(event), city?.name].filter(Boolean).join(", ") ||
+      (event.onlineUrl ?? null),
     hostName: event.hostName,
     startsAt: event.startsAt,
     endsAt: event.endsAt,

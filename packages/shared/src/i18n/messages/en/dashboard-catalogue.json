@@ -25,6 +25,7 @@
   "catalogue.action.activate": "Activate",
   "catalogue.action.deactivate": "Deactivate",
   "catalogue.actionError": "That change was not saved. Try again.",
+  "catalogue.deleted": "Item deleted.",
 
   "catalogue.tabs.label": "Catalogue sections",
   "catalogue.stat.services": "Services",

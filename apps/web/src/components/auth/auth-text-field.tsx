@@ -8,8 +8,8 @@ import { cn } from "~/lib/utils";
 
 /**
  * Sign-in text field: visible label, optional action beside it (for example
- * "forgot password"), optional description below. 48px target and a 2px focus
- * ring, like every other public control (docs/DESIGN-SYSTEM.md §5).
+ * "forgot password"), optional description below. The 48px control uses one
+ * 2px boundary whose colour carries its default, focus, and invalid states.
  */
 export function AuthTextField({
   id,
@@ -52,7 +52,7 @@ export function AuthTextField({
           type={inputType}
           aria-describedby={descriptionId}
           className={cn(
-            "border-line-strong bg-surface text-ink placeholder:text-copy-muted rounded-control focus-visible:outline-brand aria-[invalid=true]:border-danger min-h-12 w-full border px-3 text-base focus-visible:outline-2 focus-visible:outline-offset-2",
+            "border-line-strong bg-surface text-ink placeholder:text-copy-muted rounded-control focus-visible:border-brand aria-[invalid=true]:border-danger aria-[invalid=true]:focus-visible:border-danger min-h-12 w-full border-2 px-3 text-base outline-none",
             canReveal && "pe-12",
             className,
           )}

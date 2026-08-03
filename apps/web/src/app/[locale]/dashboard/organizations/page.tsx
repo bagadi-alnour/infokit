@@ -1,6 +1,5 @@
-import { and, asc, count, eq, inArray, isNull, ne } from "drizzle-orm";
+import { asc, count, inArray, isNull } from "drizzle-orm";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import {
@@ -8,10 +7,7 @@ import {
   type OrganizationRow,
 } from "~/components/admin/organizations-table";
 import {
-  Card,
   Chip,
-  EmptyState,
-  Notice,
   PageHeader,
   Stat,
   StatGrid,
@@ -25,7 +21,7 @@ import {
   hasActualPlatformPermission,
   isPlatformAdmin,
 } from "~/server/auth/authorization";
-import { requireEditor } from "~/server/auth/require";
+import { denyPageAccess, requireEditor } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
   activities,
@@ -57,62 +53,8 @@ export default async function OrganizationsPage({
   const directoryAccess = await isPlatformAdmin(user.id);
 
   if (!directoryAccess) {
-    const memberships = await db
-      .select({
-        id: organizations.id,
-        displayName: organizations.displayName,
-        slug: organizations.slug,
-      })
-      .from(organizationMembers)
-      .innerJoin(
-        organizations,
-        eq(organizations.id, organizationMembers.organizationId),
-      )
-      .where(
-        and(
-          eq(organizationMembers.userId, user.id),
-          ne(organizationMembers.status, "offboarded"),
-        ),
-      )
-      .orderBy(asc(organizations.displayName));
-
-    if (memberships.length === 1) {
-      const own = memberships[0];
-      if (own) {
-        redirect(localizedPath(`/dashboard/organizations/${own.id}`, locale));
-      }
-    }
-
-    return (
-      <WorkspacePage width="content">
-        <PageHeader title={t["org.listTitle"]} sub={t["org.mineSub"]} />
-        <Notice tone="info" title={t["org.directoryPlatformOnlyTitle"]}>
-          {t["org.directoryPlatformOnlyBody"]}
-        </Notice>
-        <Card title={t["org.mine"]}>
-          {memberships.length === 0 ? (
-            <EmptyState>{t["org.noMembership"]}</EmptyState>
-          ) : (
-            <ul className="divide-line divide-y">
-              {memberships.map((membership) => (
-                <li key={membership.id} className="py-2">
-                  <Link
-                    href={localizedPath(
-                      `/dashboard/organizations/${membership.id}`,
-                      locale,
-                    )}
-                    className="text-sm font-medium hover:underline"
-                  >
-                    {membership.displayName}
-                  </Link>
-                  <p className="text-copy-muted text-xs">{membership.slug}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </WorkspacePage>
-    );
+    await denyPageAccess("organization.verify", locale);
+    return null;
   }
 
   const canCreate = await hasActualPlatformPermission(

@@ -220,17 +220,26 @@ export function createPublicClient(options: PublicClientOptions): PublicClient {
 
 /**
  * The members' client. It is a separate object from the public one on purpose:
- * every call here carries a device session token, nothing it returns may be
- * cached, and a 401 means one specific thing — sign in again. Keeping the two
- * apart means a public screen cannot accidentally send a token, and a member
- * screen cannot accidentally forget one.
+ * every call here carries the session, nothing it returns may be cached, and a
+ * 401 means one specific thing — sign in again. Keeping the two apart means a
+ * public screen cannot accidentally send a credential, and a member screen
+ * cannot accidentally forget one.
  */
 export interface MemberClientOptions extends PublicClientOptions {
-  /** Reads the stored token; null while nobody is signed in on this device. */
-  token: () => Promise<string | null> | string | null;
+  /**
+   * The headers that carry the session, or null while nobody is signed in.
+   *
+   * A function of headers rather than a bare token because the caller owns the
+   * form: the phone app holds a Better Auth session and sends it as `cookie`
+   * (which is what `authClient.getCookie()` returns), while anything speaking
+   * `authorization: Bearer …` works just as well — Better Auth's `bearer()`
+   * plugin reads both.
+   */
+  authHeaders: () =>
+    Promise<Record<string, string> | null> | Record<string, string> | null;
 }
 
-/** The device session is gone: expired, revoked, or never there. */
+/** The session is gone: expired, revoked, or never there. */
 export class MemberSignedOutError extends Error {
   constructor() {
     super("This device is not signed in.");
@@ -247,11 +256,6 @@ export interface MemberClient {
     id: string,
     options?: PublicRequestOptions,
   ): Promise<MemberEventPayload | null>;
-  /** Trade a hand-off code for a device session token. */
-  exchange(
-    code: string,
-    options?: { signal?: AbortSignal },
-  ): Promise<{ token: string; expiresAt: string }>;
   /** Ends the session on the server, not only on the phone. */
   signOut(options?: { signal?: AbortSignal }): Promise<void>;
 }
@@ -276,9 +280,9 @@ export function createMemberClient(options: MemberClientOptions): MemberClient {
   ): Promise<Payload> {
     const headers: Record<string, string> = { accept: "application/json" };
     if (authenticated) {
-      const token = await options.token();
-      if (!token) throw new MemberSignedOutError();
-      headers.authorization = `Bearer ${token}`;
+      const auth = await options.authHeaders();
+      if (!auth) throw new MemberSignedOutError();
+      Object.assign(headers, auth);
     }
     if (body !== undefined) headers["content-type"] = "application/json";
 
@@ -290,6 +294,10 @@ export function createMemberClient(options: MemberClientOptions): MemberClient {
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
         signal,
+        // The session is in the header this client put there. Letting the
+        // runtime attach its own cookie jar as well would mean two possibly
+        // different sessions on one request, and no way to tell which answered.
+        credentials: "omit",
       });
     } catch (cause) {
       if (cause instanceof Error && cause.name === "AbortError") throw cause;
@@ -319,11 +327,11 @@ export function createMemberClient(options: MemberClientOptions): MemberClient {
 
   return {
     async session({ locale, signal } = {}) {
-      const token = await options.token();
-      // Signed out is an answer here, so the call goes out either way — with a
-      // token when there is one, and plain when there is not.
+      const auth = await options.authHeaders();
+      // Signed out is an answer here, so the call goes out either way — with the
+      // session when there is one, and plain when there is not.
       const url = `/api/member/session${query({ locale })}`;
-      return token
+      return auth
         ? call<MemberSessionPayload>(url, { signal })
         : call<MemberSessionPayload>(url, { signal, authenticated: false });
     },
@@ -344,11 +352,6 @@ export function createMemberClient(options: MemberClientOptions): MemberClient {
         throw cause;
       }
     },
-    exchange: (code, { signal } = {}) =>
-      call<{ token: string; expiresAt: string }>(
-        "/api/member/device/exchange",
-        { method: "POST", body: { code }, signal, authenticated: false },
-      ),
     async signOut({ signal } = {}) {
       try {
         await call<unknown>("/api/member/session", {

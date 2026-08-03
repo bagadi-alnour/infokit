@@ -35,6 +35,7 @@ import {
 } from "~/server/content/event-media";
 import {
   cityToday,
+  eventCity,
   eventWhereLabel,
   formatEventRange,
   listCityViews,
@@ -87,6 +88,9 @@ export function eventLabels({
     when: messages["events.when"],
     where: messages["events.where"],
     city: messages["events.city"],
+    online: messages["events.online"],
+    onlineJoin: messages["events.onlineJoin"],
+    onlineNoLink: messages["events.onlineNoLink"],
     gettingHere: messages["transit.gettingHere"],
     host: messages["events.host"],
     platform: messages["public.platform"],
@@ -180,6 +184,8 @@ export function presentEvent({
     mapHref: eventMapHref(event, city?.name ?? null),
     transit: presentTransitLinks({ links: event.transit, messages, locale }),
     cityName: city?.name ?? "",
+    isOnline: event.isOnline,
+    onlineUrl: event.onlineUrl,
     hostName: event.hostName,
     hostHref:
       event.hostPageSlug === null
@@ -261,7 +267,7 @@ export async function loadEventListPayload(
   const present = (event: CoordinationEventRecord) =>
     presentEvent({
       event,
-      city: cityById.get(event.cityId),
+      city: eventCity(cityById, event),
       locale,
       messages,
       reachLabel: reachLabelFor({ event, messages: member }),

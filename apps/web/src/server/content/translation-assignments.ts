@@ -13,7 +13,7 @@
  * a callback. Everything before it is the same guarantee for all of them, and is
  * written once here.
  */
-import type { Locale } from "@infokit/shared/i18n";
+import { type Locale } from "@infokit/shared/i18n";
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, gt, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
@@ -222,7 +222,9 @@ export async function requestTranslation(input: {
       url,
       locale,
       language: request.targetLanguageCode,
-      senderName: actor.name ?? actor.email ?? "InfoKit",
+      // An account may never have been given a name; its address still says who
+      // is asking for the translation.
+      senderName: actor.name || actor.email,
       expiresAt,
       organizationId: assignment.organizationId,
     });

@@ -28,3 +28,10 @@ export function getTranslationModel() {
     ),
   };
 }
+
+export function getSpeechModel() {
+  if (!hasAiTranslationProvider()) {
+    throw new Error("AI speech is not configured");
+  }
+  return providers.speechModel(`openai:${env.AI_SPEECH_MODEL}`);
+}

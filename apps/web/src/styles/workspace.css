@@ -12,6 +12,27 @@
 @source "../components/editor/**/*.tsx";
 @source "../components/ui/**/*.tsx";
 
+/* `globals.css` excludes dashboard routes from its public bundle. Tailwind's
+   negative source registration still wins when that sheet is imported here,
+   so the account route's layout-only responsive candidates must be registered
+   explicitly in the workspace bundle. Keep this list beside the source rules:
+   these classes are structural, not a second design system. */
+@source inline("lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-6 lg:sticky lg:top-20 lg:flex-col lg:overflow-visible lg:min-w-0 lg:whitespace-normal");
+
+/* The same debt, for the account rail's own states and the security section's
+   two-column flow. Without these the section is not merely unstyled in places:
+   the cards lose the margin that separates them and never take the second
+   column at all, which reads as a spacing bug rather than a missing candidate. */
+@source inline(
+  "[&>*]:mb-5 xl:columns-2 xl:gap-5 xl:[&>*]:break-inside-avoid"
+);
+@source inline(
+  "text-amber-700 dark:text-amber-500 max-w-[12rem] tracking-wider [&>svg]:h-auto [&>svg]:w-[200px]"
+);
+@source inline(
+  "hover:bg-canvas group-hover/section:text-ink motion-reduce:transition-none"
+);
+
 /* InkPilot is an editing engine; InfoKit remains responsible for its visual
    language and deliberately disables media in public activity descriptions. */
 .infokit-rich-text-editor {
@@ -52,6 +73,13 @@
   min-height: 20rem;
 }
 
+/* A translator's page is one field: the article they were sent, in their own
+   language. It gets the room that job deserves rather than a description
+   box's. */
+[data-translator-body] .infokit-rich-text-editor .ProseMirror {
+  min-height: 22rem;
+}
+
 /* React Flow supplies graph behavior; the workspace tokens own its visuals. */
 .react-flow {
   --xy-background-color: var(--infokit-surface-subtle);
@@ -83,4 +111,77 @@
   height: 0.75rem;
   border: 2px solid var(--infokit-surface);
   background: var(--infokit-accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Display preferences                                                */
+/*                                                                    */
+/* Three saved settings, applied by the console shell as data          */
+/* attributes on the sidebar root (dashboard/layout.tsx). They are CSS */
+/* rather than props because each one is a statement about the whole   */
+/* workspace: threading "compact" through every card would mean every  */
+/* new card remembering to accept it, and the one that forgot would be */
+/* the bug nobody notices.                                             */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Compact: the same layout with the air taken out, for reading more rows on
+ * one screen. Only padding and row height move — type size is left alone,
+ * because a console read in a hurry on a cold morning should not also get
+ * smaller.
+ */
+[data-density="compact"] {
+  --workspace-card-padding: 0.875rem;
+  --workspace-row-padding: 0.375rem;
+}
+[data-density="comfortable"] {
+  --workspace-card-padding: 1.25rem;
+  --workspace-row-padding: 0.75rem;
+}
+[data-density="compact"] [data-slot="card-content"],
+[data-density="compact"] [data-slot="card-header"] {
+  padding-block: var(--workspace-card-padding);
+}
+[data-density="compact"] table :is(th, td) {
+  padding-block: var(--workspace-row-padding);
+}
+
+/*
+ * Reduce animation. The console already honours the *operating system's*
+ * setting through Tailwind's `motion-reduce:` variants; this is the account's
+ * own answer, for a person whose machine says nothing but who wants the panels
+ * to stop moving anyway. `!important` because it is overriding utility classes
+ * that are themselves specific, and a preference that loses to a class is not
+ * a preference.
+ */
+[data-reduced-motion] *,
+[data-reduced-motion] *::before,
+[data-reduced-motion] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/*
+ * Increase contrast: stronger borders and less muted secondary text, for a
+ * screen in daylight. It moves the tokens rather than restyling components, so
+ * every card, table and input follows without knowing the setting exists.
+ */
+[data-high-contrast] {
+  --color-line: var(--infokit-ink);
+  --color-copy-muted: var(--infokit-ink);
+}
+/*
+ * `border-transparent` is not a faint border — it is a reserved edge, held open
+ * so a focus ring can colour it in without the control changing size. Buttons
+ * and accordion triggers are built that way, so darkening every `.border` drew
+ * a second outline inside every card and put a box around every icon button.
+ * A border nobody asked to see stays unseen, at any contrast.
+ */
+[data-high-contrast]
+  :is(.border, [data-slot="card"], table, input, select, textarea):not(
+    .border-transparent
+  ) {
+  border-color: color-mix(in oklch, var(--infokit-ink) 45%, transparent);
 }

@@ -37,7 +37,7 @@ import {
   resendMemberInvitation,
   setTeamLead,
   updateMemberProfile,
-} from "~/app/[locale]/dashboard/team/actions";
+} from "~/app/[locale]/dashboard/my-organization/city-team/actions";
 import { useActionErrorToast } from "~/components/admin/admin-ui-provider";
 import {
   SearchableMultiSelect,
@@ -682,7 +682,11 @@ export function TeamBoard({
   }) => {
     const { isOver, handlers } = dropProps(id);
     return (
+      // `column` is called, not rendered as a component, so the team loop below
+      // cannot attach a key from the outside the way JSX would. It is set here
+      // for the same reason `card` sets its own.
       <section
+        key={id ?? UNASSIGNED}
         {...handlers}
         className={cn(
           "rounded-card flex flex-col border p-3 transition-colors",

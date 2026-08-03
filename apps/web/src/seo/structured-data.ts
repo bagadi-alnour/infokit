@@ -253,6 +253,8 @@ export function eventJsonLd({
   address,
   precision,
   image,
+  isOnline = false,
+  onlineUrl = null,
 }: {
   locale: PublicLocale;
   id: string;
@@ -266,10 +268,24 @@ export function eventJsonLd({
   address?: string | null;
   precision: LocationPrecision | null;
   image?: string | null;
+  /** Joinable from anywhere, with the link when the organisers published one. */
+  isOnline?: boolean;
+  onlineUrl?: string | null;
 }): WithContext<EventSchema> {
   const withheld = precision === "contact_to_learn";
   const location = withheld ? null : placeName;
   const street = precision === "exact" ? address : null;
+  /**
+   * An event people join from anywhere is `Online`, and both when it also
+   * happens somewhere — `MixedEventAttendanceMode` is the schema's word for a
+   * hybrid, and calling one of those "offline" hides half of it from every
+   * reader who finds the event through a search engine rather than this site.
+   */
+  const attendanceMode = !isOnline
+    ? "https://schema.org/OfflineEventAttendanceMode"
+    : location
+      ? "https://schema.org/MixedEventAttendanceMode"
+      : "https://schema.org/OnlineEventAttendanceMode";
   return {
     "@context": "https://schema.org",
     "@type": "Event",
@@ -281,9 +297,20 @@ export function eventJsonLd({
     eventStatus: cancelled
       ? "https://schema.org/EventCancelled"
       : "https://schema.org/EventScheduled",
-    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
+    eventAttendanceMode: attendanceMode,
     ...(hostName
       ? { organizer: { "@type": "Organization", name: hostName } }
+      : {}),
+    ...(isOnline && onlineUrl
+      ? {
+          // The link is the place: schema.org models a joinable meeting as a
+          // location of its own, which is what puts "online" in a search result
+          // instead of a town the event is not in.
+          location: {
+            "@type": "VirtualLocation",
+            url: onlineUrl,
+          },
+        }
       : {}),
     ...(location
       ? {

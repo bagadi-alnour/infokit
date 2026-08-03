@@ -73,6 +73,21 @@ export function attentionKindOf(record: {
   reviewDueAt: Date | null;
   hasSchedule: boolean;
 }): AttentionKind | null {
+  /**
+   * A cancelled record is not running, so there is nothing about it to confirm
+   * and it never belongs in the queue — not even when its review date passes.
+   *
+   * This is checked before anything else because the queue is a list of things
+   * an editor can *act on*, and here the only available action made things
+   * worse: confirming an occurrence sets `manual_status` back to `normal`
+   * (`dashboard/actions.ts`), so the one way to clear the notification was to
+   * silently un-cancel the activity. It therefore sat in the bell permanently,
+   * which is what "the count never goes down" looked like from outside.
+   *
+   * Cancelling is still visible where it belongs — on the record and on the
+   * public page. What it stops being is a chore.
+   */
+  if (record.manualStatus === "cancelled") return null;
   if (record.manualStatus === "uncertain") return "uncertain";
   if (!record.hasSchedule) return "noSchedule";
   const freshness = freshnessOf(record);

@@ -1,23 +1,22 @@
 import { formatMessage, type Locale } from "@infokit/shared/i18n";
 import type { CatalogMap } from "@infokit/shared/i18n/catalogs";
-import { Fragment } from "react";
 
 import {
   Chip,
   EmptyState,
   ReadOnlyField,
-  Table,
-  TableBody,
-  TableHeader,
-  TableRow,
-  TD,
-  TH,
   type ChipTone,
 } from "~/components/admin/workspace";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "~/components/ui/accordion";
 import type { DeliveryRow } from "~/server/audit/query";
 
 /**
- * Every email and text the platform handed to a provider, with what happened.
+ * Every delivery attempt as a dense, expandable log line.
  *
  * Recipients appear masked (`ba***@example.org`, `+33 6 ** ** ** 12`) because
  * that is the only form stored: the full address lives in this table as a keyed
@@ -63,135 +62,125 @@ export function AuditDeliveriesTable({
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TH>{labels["audit.delivery.column.when"]}</TH>
-          <TH>{labels["audit.delivery.column.channel"]}</TH>
-          <TH>{labels["audit.delivery.column.template"]}</TH>
-          <TH>{labels["audit.delivery.column.recipient"]}</TH>
-          <TH>{labels["audit.delivery.column.status"]}</TH>
-          <TH>{labels["audit.delivery.column.provider"]}</TH>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => {
-          // A failure explains itself in the summary line; anything else says
-          // only that there is more underneath.
-          const summary = row.errorMessage ?? labels["audit.detail.show"];
-          return (
-            <Fragment key={row.id}>
-              <TableRow className="border-b-0">
-                <TD className="whitespace-nowrap align-top">
-                  <time dateTime={row.createdAt.toISOString()}>
-                    {dateTime(row.createdAt, locale)}
-                  </time>
-                </TD>
-                <TD className="align-top">
+    <div className="border-line overflow-x-auto border-y">
+      <div
+        aria-hidden
+        className="text-copy-muted bg-subtle grid min-w-[64rem] grid-cols-[1rem_13rem_minmax(22rem,1fr)_18rem_11rem] items-center gap-3 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide"
+      >
+        <span />
+        <span>{labels["audit.delivery.column.when"]}</span>
+        <span>{labels["audit.delivery.column.template"]}</span>
+        <span>{labels["audit.delivery.column.recipient"]}</span>
+        <span>{labels["audit.delivery.column.status"]}</span>
+      </div>
+      <Accordion multiple className="min-w-[64rem]">
+        {rows.map((row) => (
+          <AccordionItem key={row.id} value={row.id} className="border-line">
+            <AccordionTrigger className="hover:bg-subtle aria-expanded:bg-subtle grid min-h-11 cursor-pointer grid-cols-[1rem_13rem_minmax(22rem,1fr)_18rem_11rem] items-center gap-3 rounded-none px-3 py-2 text-start font-normal hover:no-underline [&_[data-slot=accordion-trigger-icon]]:order-first [&_[data-slot=accordion-trigger-icon]]:m-0">
+              <span className="whitespace-nowrap tabular-nums">
+                <span className="sr-only">
+                  {labels["audit.delivery.column.when"]}:{" "}
+                </span>
+                <time dateTime={row.createdAt.toISOString()}>
+                  {dateTime(row.createdAt, locale)}
+                </time>
+              </span>
+              <span className="flex min-w-0 items-baseline gap-2 overflow-hidden">
+                <span className="sr-only">
+                  {labels["audit.delivery.column.template"]}:{" "}
+                </span>
+                <span className="shrink-0 font-mono text-xs">
+                  {row.template}
+                </span>
+                <span className="text-copy-muted truncate text-xs">
+                  {row.organizationName ?? platformOwnerLabel}
+                </span>
+              </span>
+              <span className="flex min-w-0 items-baseline gap-2 overflow-hidden">
+                <span className="sr-only">
+                  {labels["audit.delivery.column.recipient"]}:{" "}
+                </span>
+                <span className="truncate" dir="ltr">
+                  {row.recipientRedacted}
+                </span>
+                <span className="text-copy-muted shrink-0 text-xs">
                   {labels[`audit.channel.${row.channel}`]}
-                </TD>
-                <TD className="align-top">
-                  <span className="block max-w-56 truncate font-mono text-xs">
-                    {row.template}
-                  </span>
-                  <span className="text-copy-muted block text-xs">
-                    {row.organizationName ?? platformOwnerLabel}
-                  </span>
-                </TD>
-                <TD className="align-top">
-                  <span className="block max-w-48 truncate" dir="ltr">
-                    {row.recipientRedacted}
-                  </span>
-                </TD>
-                <TD className="align-top">
-                  <Chip
-                    tone={statusTone[row.status]}
-                    title={
-                      row.status === "skipped"
-                        ? labels["audit.status.skippedHint"]
-                        : undefined
-                    }
-                  >
-                    {labels[`audit.status.${row.status}`]}
-                  </Chip>
-                </TD>
-                <TD className="text-copy-muted align-top">
-                  <span className="block max-w-40 truncate text-xs">
-                    {row.provider ?? "—"}
-                  </span>
-                </TD>
-              </TableRow>
-              <TableRow>
-                <TD colSpan={6} className="pt-0">
-                  <details className="group">
-                    <summary className="text-copy-muted hover:text-ink inline-flex cursor-pointer items-center gap-1.5 text-xs marker:content-none [&::-webkit-details-marker]:hidden">
-                      <span aria-hidden className="group-open:hidden">
-                        ▸
-                      </span>
-                      <span aria-hidden className="hidden group-open:inline">
-                        ▾
-                      </span>
-                      <span className="max-w-3xl truncate">{summary}</span>
-                    </summary>
-                    <div className="border-line mt-3 grid gap-3 border-s ps-4 sm:grid-cols-2 lg:grid-cols-4">
-                      <ReadOnlyField
-                        label={labels["audit.delivery.detail.sentAt"]}
-                        value={
-                          row.sentAt === null
-                            ? null
-                            : dateTime(row.sentAt, locale)
-                        }
-                      />
-                      <ReadOnlyField
-                        label={labels["audit.delivery.detail.attempt"]}
-                        value={row.attempt}
-                      />
-                      <ReadOnlyField
-                        label={labels["audit.delivery.detail.locale"]}
-                        value={row.locale}
-                      />
-                      <ReadOnlyField
-                        label={labels["audit.detail.duration"]}
-                        value={
-                          row.durationMs === null
-                            ? null
-                            : formatMessage(labels["audit.detail.durationMs"], {
-                                count: String(row.durationMs),
-                              })
-                        }
-                      />
-                      <ReadOnlyField
-                        label={labels["audit.delivery.detail.messageId"]}
-                        value={row.providerMessageId}
-                      />
-                      <ReadOnlyField
-                        label={labels["audit.detail.requestId"]}
-                        value={row.requestId}
-                      />
-                      <ReadOnlyField
-                        label={labels["audit.delivery.detail.cause"]}
-                        value={row.causeAction}
-                      />
-                      <ReadOnlyField
-                        label={labels["audit.detail.errorCode"]}
-                        value={row.errorCode}
-                      />
-                      {row.errorMessage !== null ? (
-                        <div className="sm:col-span-2 lg:col-span-4">
-                          <ReadOnlyField
-                            label={labels["audit.delivery.detail.error"]}
-                            value={row.errorMessage}
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                  </details>
-                </TD>
-              </TableRow>
-            </Fragment>
-          );
-        })}
-      </TableBody>
-    </Table>
+                </span>
+              </span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="sr-only">
+                  {labels["audit.delivery.column.status"]}:{" "}
+                </span>
+                <Chip
+                  tone={statusTone[row.status]}
+                  title={
+                    row.status === "skipped"
+                      ? labels["audit.status.skippedHint"]
+                      : undefined
+                  }
+                >
+                  {labels[`audit.status.${row.status}`]}
+                </Chip>
+                <span className="text-copy-muted truncate text-xs">
+                  {row.provider ?? "—"}
+                </span>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="bg-subtle h-auto px-10 py-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <ReadOnlyField
+                  label={labels["audit.delivery.detail.sentAt"]}
+                  value={
+                    row.sentAt === null ? null : dateTime(row.sentAt, locale)
+                  }
+                />
+                <ReadOnlyField
+                  label={labels["audit.delivery.detail.attempt"]}
+                  value={row.attempt}
+                />
+                <ReadOnlyField
+                  label={labels["audit.delivery.detail.locale"]}
+                  value={row.locale}
+                />
+                <ReadOnlyField
+                  label={labels["audit.detail.duration"]}
+                  value={
+                    row.durationMs === null
+                      ? null
+                      : formatMessage(labels["audit.detail.durationMs"], {
+                          count: String(row.durationMs),
+                        })
+                  }
+                />
+                <ReadOnlyField
+                  label={labels["audit.delivery.detail.messageId"]}
+                  value={row.providerMessageId}
+                />
+                <ReadOnlyField
+                  label={labels["audit.detail.requestId"]}
+                  value={row.requestId}
+                />
+                <ReadOnlyField
+                  label={labels["audit.delivery.detail.cause"]}
+                  value={row.causeAction}
+                />
+                <ReadOnlyField
+                  label={labels["audit.detail.errorCode"]}
+                  value={row.errorCode}
+                />
+                {row.errorMessage !== null ? (
+                  <div className="sm:col-span-2 lg:col-span-4">
+                    <ReadOnlyField
+                      label={labels["audit.delivery.detail.error"]}
+                      value={row.errorMessage}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    </div>
   );
 }

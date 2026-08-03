@@ -1,4 +1,5 @@
 import {
+  brandName,
   localeMetadata,
   publicSupportedLocales,
   type PublicLocale,
@@ -57,12 +58,17 @@ export default function AboutScreen() {
       >
         <View className="gap-1">
           <Text className="font-display text-ink text-3xl font-bold">
-            InfoKit
+            {brandName(locale)}
           </Text>
           <Text variant="muted">{about.tagline}</Text>
         </View>
 
         <Text>{about.intro}</Text>
+
+        {/* Before the tour of what the app holds: who this is not, and what it
+            will not help anyone do — the question asked before "what can I
+            find" by someone deciding whether opening this app is safe. */}
+        <SectionCard section={about.independence} />
 
         <SectionCard section={about.what} />
         <SectionCard section={about.source} />
@@ -118,9 +124,10 @@ export default function AboutScreen() {
         </Card>
 
         <SectionCard section={about.security} />
-        <SectionCard section={about.cities} />
         <SectionCard section={about.collaboration} />
         <SectionCard section={about.associations} />
+        <SectionCard section={about.cities} />
+        <SectionCard section={about.limits} />
 
         {version ? (
           <Card>

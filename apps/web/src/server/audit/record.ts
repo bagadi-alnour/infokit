@@ -105,11 +105,12 @@ interface ResolvedActor {
  * The signed-in account, or nobody.
  *
  * The session module is reached by `import()` rather than at the top of this
- * file, and deliberately: the sign-in, sign-out, SMS step-up and device-session
- * code all live inside `server/auth`, and all of it has events worth recording.
- * A static import here would make every one of those files part of a cycle
- * through the Auth.js configuration, so the edge is loaded on use instead — once
- * per process, cached by the module system.
+ * file, and deliberately: the sign-in, sign-out and second-factor code all live
+ * inside `server/auth`, and all of it has events worth recording. A static import
+ * here would make every one of those files part of a cycle through the Better
+ * Auth instance, which reaches for this module from its own database hooks — so
+ * the edge is loaded on use instead, once per process, cached by the module
+ * system.
  *
  * Reading the session also needs the request's headers, so a caller outside a
  * request — a scheduled job that forgot to say `actorType: "system"` — would

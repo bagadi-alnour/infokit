@@ -11,6 +11,7 @@ import { useEffect, useRef } from "react";
 
 import { OSM_MAX_ZOOM, OSM_TILE_URL } from "~/components/public/map-tiles";
 import { ActionAnchor, SurfaceCard } from "~/components/public/primitives";
+import { useThemePreference } from "~/components/theme/theme-provider";
 
 export interface ActivityLocationLabels {
   /** Heading of the section — the same word the detail rows use. */
@@ -52,6 +53,7 @@ export function ActivityLocationCard({
   googleMapsHref: string | null;
   labels: ActivityLocationLabels;
 }) {
+  const { resolved: colorScheme } = useThemePreference();
   const containerRef = useRef<HTMLDivElement>(null);
   const exact = latitude !== null && longitude !== null;
 
@@ -76,6 +78,7 @@ export function ActivityLocationCard({
         .tileLayer(OSM_TILE_URL, {
           maxZoom: OSM_MAX_ZOOM,
           attribution: labels.mapAttribution,
+          className: "infokit-plan-tiles",
         })
         .addTo(created);
       // The pin wears the tokens rather than a colour of its own (§2 rule 9),
@@ -96,7 +99,7 @@ export function ActivityLocationCard({
       disposed = true;
       map?.remove();
     };
-  }, [latitude, longitude, labels.mapAttribution]);
+  }, [colorScheme, latitude, longitude, labels.mapAttribution]);
 
   // Nothing to draw and nowhere to send anyone: an area-only place has already
   // said so in the rows above, and a frame around that would add nothing.
@@ -121,7 +124,7 @@ export function ActivityLocationCard({
           ref={containerRef}
           role="application"
           aria-label={labels.mapTitle}
-          className="border-line bg-subtle h-56 w-full border-y print:hidden"
+          className="infokit-map border-line bg-subtle h-56 w-full border-y print:hidden"
         />
       ) : null}
       {googleMapsHref ? (

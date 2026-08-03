@@ -158,6 +158,8 @@
   "status.archived": "Archivé",
   "create.eyebrow": "Nouveau parcours d’information",
   "create.intro": "Définissez la responsabilité du parcours et sa première question. Les autres branches seront construites après la création.",
+  "create.success": "Parcours du simulateur créé.",
+  "create.error": "Le parcours du simulateur n’a pas pu être créé. Vérifiez les champs obligatoires et réessayez.",
   "create.back": "Retour aux parcours du simulateur",
   "create.ownership": "Responsabilité et périmètre",
   "create.ownershipHint": "Indiquez qui répond des faits et où ce parcours s’applique.",

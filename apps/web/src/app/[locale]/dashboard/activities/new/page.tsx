@@ -241,8 +241,8 @@ export default async function NewActivityPage({
    * entering it can always be asked; keeping the option publishes their sign-in
    * address, which the description says plainly before they choose it.
    */
-  const editorEmail = editor.email?.trim();
-  const editorName = editor.name?.trim() ?? "";
+  const editorEmail = editor.email.trim();
+  const editorName = editor.name.trim();
   const editorContact: ActivityFormOption | null = editorEmail
     ? {
         id: EDITOR_CONTACT_OPTION_ID,

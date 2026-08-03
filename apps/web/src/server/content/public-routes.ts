@@ -61,6 +61,10 @@ const FIXED_ROUTES: Array<{
   { path: "/articles", changeFrequency: "weekly", priority: 0.8 },
   { path: "/simulator", changeFrequency: "weekly", priority: 0.7 },
   { path: "/about", changeFrequency: "monthly", priority: 0.4 },
+  // Indexed, and last: an app store and a reader checking who publishes this
+  // both need to reach them by URL, and neither is what anyone searched for.
+  { path: "/legal", changeFrequency: "yearly", priority: 0.2 },
+  { path: "/privacy", changeFrequency: "yearly", priority: 0.2 },
 ];
 
 /** The most recent of a set of stamps, ignoring the ones nothing recorded. */

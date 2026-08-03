@@ -1,6 +1,6 @@
 import type { ChangeEvent } from "react";
 
-import { Card, Field, TextInput } from "~/components/admin/workspace";
+import { Field, TextInput } from "~/components/admin/workspace";
 import { contactLink } from "~/lib/contact-link";
 import {
   hasStewardContact,
@@ -100,24 +100,6 @@ export function StewardContactFields({
         {label(labels, "steward.privacy")}
       </p>
     </div>
-  );
-}
-
-/** The same fieldset as its own form section. */
-export function StewardContactCard({
-  values,
-  labels,
-}: {
-  values: StewardContactValues;
-  labels: Record<string, string>;
-}) {
-  return (
-    <Card
-      title={label(labels, "steward.title")}
-      hint={label(labels, "steward.hint")}
-    >
-      <StewardContactFields values={values} labels={labels} />
-    </Card>
   );
 }
 

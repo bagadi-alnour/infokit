@@ -189,6 +189,7 @@ export default async function SimulatorEditorPage({
       state: translationAssignments.state,
       translatorEmail: translationAssignments.translatorEmail,
       translatorName: translationAssignments.translatorName,
+      requestedAt: translationAssignments.createdAt,
       expiresAt: translationAssignments.expiresAt,
     })
     .from(translationAssignments)
@@ -323,6 +324,10 @@ export default async function SimulatorEditorPage({
                 : assignment.state,
             translatorEmail: assignment.translatorEmail,
             translatorName: assignment.translatorName,
+            requestedAt: new Intl.DateTimeFormat(locale, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }).format(assignment.requestedAt),
             expiresAt: new Intl.DateTimeFormat(locale, {
               dateStyle: "medium",
               timeStyle: "short",

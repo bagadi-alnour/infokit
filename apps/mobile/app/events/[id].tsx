@@ -2,6 +2,7 @@ import type {
   MemberEventPayload,
   PublicEventDetailPayload,
 } from "@infokit/shared/public-content";
+import { brandName } from "@infokit/shared/i18n";
 import {
   Button,
   Callout,
@@ -63,7 +64,7 @@ export default function EventScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: title ?? "InfoKit" }} />
+      <Stack.Screen options={{ title: title ?? brandName(locale) }} />
       <PayloadScreen request={request} strings={strings}>
         {({ event, labels }) => {
           // Read once: a closure cannot rely on narrowing a property access.
@@ -120,6 +121,25 @@ export default function EventScreen() {
 
               <Card>
                 <CardTitle>{labels.where}</CardTitle>
+                {/* An event people join from anywhere answers "where" with a
+                    link, or with the promise of one — never with an address it
+                    does not have. */}
+                {event.isOnline ? (
+                  <MetaRow label={labels.onlineJoin}>
+                    {event.onlineUrl === null ? (
+                      <Text>{labels.onlineNoLink}</Text>
+                    ) : (
+                      <Text
+                        className="text-brand underline"
+                        onPress={() => {
+                          void Linking.openURL(event.onlineUrl ?? "");
+                        }}
+                      >
+                        {labels.online}
+                      </Text>
+                    )}
+                  </MetaRow>
+                ) : null}
                 {event.whereLabel ? (
                   // Pressing the address opens the phone's map application with
                   // it; nothing about the reader's own position leaves the phone.
@@ -133,10 +153,12 @@ export default function EventScreen() {
                     }}
                     actionLabel={labels.openMap}
                   />
-                ) : (
+                ) : event.isOnline ? null : (
                   <Text>{labels.notAvailable}</Text>
                 )}
-                <MetaRow label={labels.city}>{event.cityName}</MetaRow>
+                {event.cityName || !event.isOnline ? (
+                  <MetaRow label={labels.city}>{event.cityName}</MetaRow>
+                ) : null}
                 {/* In the place card rather than beside it: the question a
                     reader asks straight after reading an address they do not
                     recognise, and only the organisers can answer it. */}

@@ -1,4 +1,5 @@
 import type { PublicActivityDetailPayload } from "@infokit/shared/public-content";
+import { brandName } from "@infokit/shared/i18n";
 import {
   Callout,
   Card,
@@ -150,7 +151,7 @@ export default function ActivityDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: name ?? "InfoKit" }} />
+      <Stack.Screen options={{ title: name ?? brandName(locale) }} />
       <PayloadScreen request={request} strings={strings}>
         {(payload) => <ActivityDetail payload={payload} />}
       </PayloadScreen>

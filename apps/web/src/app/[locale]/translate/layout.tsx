@@ -4,6 +4,8 @@ import "~/styles/workspace.css";
 
 import type { Metadata } from "next";
 
+import { Toaster } from "~/components/ui/sonner";
+
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
   referrer: "no-referrer",
@@ -14,5 +16,10 @@ export default function TranslationLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      {children}
+      <Toaster position="top-center" closeButton />
+    </>
+  );
 }

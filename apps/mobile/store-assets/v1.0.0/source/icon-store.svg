@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <mask id="rgba">
+      <rect width="512" height="512" fill="white"/>
+      <rect x="511" y="511" width="1" height="1" fill="black"/>
+    </mask>
+  </defs>
+  <image href="icon-1024.png" x="0" y="0" width="512" height="512" mask="url(#rgba)"/>
+</svg>

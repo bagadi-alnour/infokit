@@ -129,9 +129,13 @@ export default async function ActivitiesPage({
           locationError: messages["activities.location.error"],
           yourLocation: messages["activities.location.you"],
           mapAttribution: messages["activities.map.attribution"],
+          hybridAttribution: messages["activities.map.attribution.hybrid"],
           mapTitle: messages["activities.mapTitle"],
           mapHint: messages["activities.mapHint"],
           noMap: messages["activities.noMap"],
+          styleLabel: messages["activities.map.style"],
+          styleMuted: messages["activities.map.style.muted"],
+          styleHybrid: messages["activities.map.style.hybrid"],
         }}
       />
     </PublicSiteShell>

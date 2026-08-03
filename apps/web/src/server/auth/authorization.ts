@@ -27,6 +27,18 @@ export const superadminPermission = "support.superadmin";
  */
 export const platformStaffPermission = "platform.staff.manage";
 
+/**
+ * Seeing the staff list, as opposed to changing it.
+ *
+ * Two codes rather than one because the page answers two different questions.
+ * Knowing who holds which platform role is ordinary platform maintenance, and
+ * `platform_content_manager` needs it; inviting somebody, or moving a grant, is
+ * staffing, and stays with the superadmin. The page reads this one; every
+ * mutation in `dashboard/staff/actions.ts` still asks for
+ * `platformStaffPermission`, so a reader who reaches the page cannot act on it.
+ */
+export const platformStaffReadPermission = "platform.staff.read";
+
 export async function platformPermissionsForUser(
   userId: string,
 ): Promise<Set<string>> {
@@ -82,6 +94,43 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
 export interface OrganizationChoice {
   id: string;
   name: string;
+}
+
+/**
+ * Organisation workspaces the account belongs to through a current role. This
+ * deliberately ignores platform-wide access: "My organisation" means a real
+ * membership, even for a person who also administers the platform.
+ */
+export async function organizationMembershipChoices(
+  userId: string,
+  requested?: string,
+): Promise<{ choices: OrganizationChoice[]; selectedId: string | null }> {
+  const rows = await db
+    .selectDistinct({
+      id: organizations.id,
+      name: organizations.displayName,
+    })
+    .from(organizationMembers)
+    .innerJoin(memberRoles, eq(memberRoles.memberId, organizationMembers.id))
+    .innerJoin(roles, eq(roles.id, memberRoles.roleId))
+    .innerJoin(
+      organizations,
+      eq(organizations.id, organizationMembers.organizationId),
+    )
+    .where(
+      and(
+        eq(organizationMembers.userId, userId),
+        eq(organizationMembers.status, "active"),
+        or(
+          isNull(memberRoles.expiresAt),
+          gt(memberRoles.expiresAt, new Date()),
+        ),
+      ),
+    )
+    .orderBy(asc(organizations.displayName));
+  const selectedId =
+    rows.find((choice) => choice.id === requested)?.id ?? rows[0]?.id ?? null;
+  return { choices: rows, selectedId };
 }
 
 /**
@@ -317,6 +366,20 @@ export const articleWorkspacePermissions = [
   "content.article.write",
   "content.article.publish",
   "content.article.review",
+] as const;
+
+/**
+ * The same for the basic-information block — the emergency numbers and the
+ * shortest routes to urgent help.
+ *
+ * Two codes rather than three: there is no separate reviewer role here, because
+ * only `platform_content_manager` carries either grant (server/db/seed.ts). The
+ * tuple exists anyway so the page and the sidebar ask one question, and so a
+ * third grant later is one edit in one place.
+ */
+export const basicInformationWorkspacePermissions = [
+  "content.basic_information.write",
+  "content.basic_information.publish",
 ] as const;
 
 /**

@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { ArrowLeft, GitBranch, Plus } from "lucide-react";
 import Link from "next/link";
 
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { WorkspacePage } from "~/components/admin/workspace";
 import { PendingButton } from "~/components/pending-button";
 import { Button } from "~/components/ui/button";
@@ -90,7 +91,12 @@ export default async function NewSimulatorPage({
         </p>
       </header>
 
-      <form action={createSimulatorFlow} className="mt-6 grid gap-5">
+      <ActionFeedbackForm
+        action={createSimulatorFlow}
+        successMessage={t["create.success"]}
+        errorMessage={t["create.error"]}
+        className="mt-6 grid gap-5"
+      >
         <input type="hidden" name="locale" value={locale} />
 
         <Card>
@@ -242,7 +248,7 @@ export default async function NewSimulatorPage({
             {t.create}
           </PendingButton>
         </div>
-      </form>
+      </ActionFeedbackForm>
     </WorkspacePage>
   );
 }

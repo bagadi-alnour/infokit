@@ -23,7 +23,7 @@ import {
  *
  * Eligibility is not authorization: it only decides whether a session may
  * exist. What the person may then read or write is still `requirePermission`,
- * and the SMS step-up still applies on top (`secondFactorRequired`).
+ * and the second factor still applies on top (`secondFactorMandatory`).
  *
  * Sign-in and password recovery deliberately distinguish an address with no
  * account, so a person can correct it without losing the rest of the form.

@@ -12,6 +12,7 @@ import {
   restoreReusableService,
   updateReusableService,
 } from "~/app/[locale]/dashboard/activities/actions";
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import {
   FormSubmitButton,
   SearchableMultiSelectFormField,
@@ -427,7 +428,11 @@ export function ActivityServiceManager({
                   </Badge>
 
                   {service.archived ? (
-                    <form action={restoreReusableService}>
+                    <ActionFeedbackForm
+                      action={restoreReusableService}
+                      successMessage={copy("restoreSuccess")}
+                      errorMessage={readLabel(labels, "toast.actionError")}
+                    >
                       <input type="hidden" name="locale" value={locale} />
                       <input
                         type="hidden"
@@ -443,7 +448,7 @@ export function ActivityServiceManager({
                         <RotateCcw aria-hidden />
                         {copy("restore")}
                       </PendingButton>
-                    </form>
+                    </ActionFeedbackForm>
                   ) : (
                     <>
                       <Dialog>
@@ -518,7 +523,14 @@ export function ActivityServiceManager({
                             <AlertDialogCancel>
                               {copy("cancel")}
                             </AlertDialogCancel>
-                            <form action={archiveReusableService}>
+                            <ActionFeedbackForm
+                              action={archiveReusableService}
+                              successMessage={copy("archiveSuccess")}
+                              errorMessage={readLabel(
+                                labels,
+                                "toast.actionError",
+                              )}
+                            >
                               <input
                                 type="hidden"
                                 name="locale"
@@ -540,7 +552,7 @@ export function ActivityServiceManager({
                               >
                                 {copy("archiveConfirm")}
                               </PendingButton>
-                            </form>
+                            </ActionFeedbackForm>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>

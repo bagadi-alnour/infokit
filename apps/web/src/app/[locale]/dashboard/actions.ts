@@ -23,8 +23,22 @@ import {
 const activityIdSchema = z.string().uuid();
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * What a confirmation changes, and everywhere that shows it.
+ *
+ * The `"layout"` is load-bearing rather than belt-and-braces: the notification
+ * bell is rendered by the dashboard *layout*, which is shared by every
+ * `/dashboard/**` route and is not re-rendered when only a page is
+ * revalidated. Confirming an activity therefore updated the list underneath and
+ * left the bell counting the record that had just been dealt with — the count
+ * only came down on a full page load.
+ *
+ * Revalidating the layout at the dashboard root covers the pages nested under
+ * it too, so the individual page calls below are the narrower reads that also
+ * want refreshing, not a second attempt at the same thing.
+ */
 function refresh(locale: Locale, activityId?: string) {
-  revalidatePath(localizedPath("/dashboard", locale));
+  revalidatePath(localizedPath("/dashboard", locale), "layout");
   revalidatePath(localizedPath("/dashboard/activities", locale));
   if (activityId) {
     revalidatePath(

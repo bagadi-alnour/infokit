@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { RunbookCalendar } from "~/components/admin/runbook-calendar";
 import { RunbookInformationRail } from "~/components/admin/runbook-information-rail";
 import { PendingButton } from "~/components/pending-button";
@@ -26,6 +27,7 @@ import {
   type AttentionKind,
 } from "~/lib/freshness";
 import { organizationChoices } from "~/server/auth/authorization";
+import { getAccountSettings } from "~/server/account/settings";
 import { requireEditor } from "~/server/auth/require";
 import { db } from "~/server/db";
 import {
@@ -131,6 +133,8 @@ export default async function DashboardPage({
   const locale = requireRouteLocale((await params).locale);
   const search = await searchParams;
   const user = await requireEditor(locale);
+  // The calendar below starts the week where this account asked it to.
+  const accountSettings = await getAccountSettings(user.id);
   const messages = await loadPageCatalog(locale, "dashboard-overview");
   const today = parisToday();
   const selectedDate =
@@ -504,7 +508,15 @@ export default async function DashboardPage({
               </p>
             </div>
             {isToday && pending.length > 0 ? (
-              <form action={confirmActivitiesToday} className="shrink-0">
+              <ActionFeedbackForm
+                action={confirmActivitiesToday}
+                successMessage={formatMessage(
+                  messages["runbook.feedback.confirmedAll"],
+                  { count: String(pending.length) },
+                )}
+                errorMessage={messages["runbook.feedback.error"]}
+                className="shrink-0"
+              >
                 <input type="hidden" name="locale" value={locale} />
                 {pending.map((occurrence) => (
                   <input
@@ -520,7 +532,7 @@ export default async function DashboardPage({
                     count: String(pending.length),
                   })}
                 </PendingButton>
-              </form>
+              </ActionFeedbackForm>
             ) : null}
           </div>
 
@@ -609,7 +621,15 @@ export default async function DashboardPage({
                           </Link>
                           {isToday ? (
                             occurrence.cancelled ? (
-                              <form action={undoCancelActivityToday}>
+                              <ActionFeedbackForm
+                                action={undoCancelActivityToday}
+                                successMessage={
+                                  messages["runbook.feedback.restored"]
+                                }
+                                errorMessage={
+                                  messages["runbook.feedback.error"]
+                                }
+                              >
                                 <input
                                   type="hidden"
                                   name="locale"
@@ -623,9 +643,17 @@ export default async function DashboardPage({
                                 <PendingButton variant="secondary">
                                   {messages["runbook.undoCancel"]}
                                 </PendingButton>
-                              </form>
+                              </ActionFeedbackForm>
                             ) : (
-                              <form action={cancelActivityToday}>
+                              <ActionFeedbackForm
+                                action={cancelActivityToday}
+                                successMessage={
+                                  messages["runbook.feedback.cancelled"]
+                                }
+                                errorMessage={
+                                  messages["runbook.feedback.error"]
+                                }
+                              >
                                 <input
                                   type="hidden"
                                   name="locale"
@@ -640,13 +668,19 @@ export default async function DashboardPage({
                                   <Ban aria-hidden />
                                   {messages["runbook.cancel"]}
                                 </PendingButton>
-                              </form>
+                              </ActionFeedbackForm>
                             )
                           ) : null}
                           {isToday &&
                           !occurrence.cancelled &&
                           !occurrence.confirmedAt ? (
-                            <form action={markActivityUncertain}>
+                            <ActionFeedbackForm
+                              action={markActivityUncertain}
+                              successMessage={
+                                messages["runbook.feedback.uncertain"]
+                              }
+                              errorMessage={messages["runbook.feedback.error"]}
+                            >
                               <input
                                 type="hidden"
                                 name="locale"
@@ -661,7 +695,7 @@ export default async function DashboardPage({
                                 <CircleHelp aria-hidden />
                                 {messages["runbook.uncertain"]}
                               </PendingButton>
-                            </form>
+                            </ActionFeedbackForm>
                           ) : null}
                         </div>
                       </div>
@@ -693,7 +727,14 @@ export default async function DashboardPage({
                       !occurrence.cancelled &&
                       !occurrence.confirmedAt &&
                       !occurrence.uncertain ? (
-                        <form action={confirmActivityToday} className="mt-4">
+                        <ActionFeedbackForm
+                          action={confirmActivityToday}
+                          successMessage={
+                            messages["runbook.feedback.confirmed"]
+                          }
+                          errorMessage={messages["runbook.feedback.error"]}
+                          className="mt-4"
+                        >
                           <input type="hidden" name="locale" value={locale} />
                           <input
                             type="hidden"
@@ -704,7 +745,7 @@ export default async function DashboardPage({
                             <Check aria-hidden />
                             {messages["runbook.confirmOne"]}
                           </PendingButton>
-                        </form>
+                        </ActionFeedbackForm>
                       ) : null}
                     </div>
                   </article>
@@ -747,6 +788,15 @@ export default async function DashboardPage({
             eventDates={eventDates}
             selectedDateLabel={selectedDateLabel}
             selectedCount={occurrences.length}
+            weekStartsOn={
+              // Stored as a plain integer; the calendar wants the narrowed
+              // union, and anything outside 0–6 falls back to Monday rather
+              // than throwing on a row somebody edited by hand.
+              (accountSettings.weekStartsOn >= 0 &&
+              accountSettings.weekStartsOn <= 6
+                ? accountSettings.weekStartsOn
+                : 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6
+            }
             labels={{
               activities: messages["calendar.activities"],
               scheduled: messages["calendar.scheduled"],

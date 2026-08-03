@@ -1,0 +1,7 @@
+CREATE TYPE "content"."basic_information_reach" AS ENUM('voice', 'sms', 'whatsapp');--> statement-breakpoint
+ALTER TABLE "content"."basic_information_details" ADD COLUMN "dial" varchar(40);--> statement-breakpoint
+ALTER TABLE "content"."basic_information_details" ADD COLUMN "reach" "content"."basic_information_reach";--> statement-breakpoint
+ALTER TABLE "content"."basic_information_details" ADD COLUMN "dial_instead" varchar(40);--> statement-breakpoint
+ALTER TABLE "content"."basic_information_details" ADD COLUMN "answered_by_organization_id" uuid;--> statement-breakpoint
+ALTER TABLE "content"."basic_information_details" ADD CONSTRAINT "basic_information_details_answered_by_organization_id_fk" FOREIGN KEY ("answered_by_organization_id") REFERENCES "core"."organizations"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "content"."basic_information_details" ADD CONSTRAINT "basic_information_details_dial_check" CHECK (("content"."basic_information_details"."dial" is null) = ("content"."basic_information_details"."reach" is null) and ("content"."basic_information_details"."dial_instead" is null or "content"."basic_information_details"."dial" is not null));

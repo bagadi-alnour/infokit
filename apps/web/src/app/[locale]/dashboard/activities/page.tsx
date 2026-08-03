@@ -4,6 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import {
   ArrowLeft,
   CalendarClock,
+  CheckCircle2,
   FileImage,
   MapPin,
   Plus,
@@ -16,12 +17,15 @@ import {
   type ActivitiesTableLabels,
   type ActivityTableRow,
 } from "~/components/admin/activities-table";
+import { confirmActivityFreshness } from "~/app/[locale]/dashboard/activities/actions";
+import { ActionFeedbackForm } from "~/components/admin/action-feedback-form";
 import { ActivityDetailsForm } from "~/components/admin/activity-classification";
 import { ActivityEditorForm } from "~/components/admin/activity-content-form";
 import {
   ActivityCoverManager,
   ActivityDownloadsManager,
 } from "~/components/admin/activity-media-manager";
+import { ActivityLocationForm } from "~/components/admin/activity-location-form";
 import { ActivityScheduleForm } from "~/components/admin/activity-schedule-form";
 import { ActivityScheduleRules } from "~/components/admin/activity-schedule-rules";
 import {
@@ -29,6 +33,7 @@ import {
   type ActivityStateValue,
 } from "~/components/admin/content-states";
 import { StewardContactForm } from "~/components/admin/steward-contact-form";
+import { PendingButton } from "~/components/pending-button";
 import { TransitLinkFields } from "~/components/admin/transit-links";
 import type { WorkspaceTranslation } from "~/components/admin/translation-workspace";
 import {
@@ -52,6 +57,7 @@ import {
   editorialLanguageCodes,
   type EditorialLanguage,
 } from "~/lib/editorial-languages";
+import { translationRequestLive } from "~/lib/translation-request";
 import { buildWorkspaceLabels } from "~/lib/workspace-labels";
 import { zonedDateKey } from "~/lib/zoned-time";
 import { hasAiTranslationProvider } from "~/server/ai/provider";
@@ -85,6 +91,8 @@ import {
   downloads,
   downloadTranslations,
   organizations,
+  placeTranslations,
+  places,
   scheduleRules,
   serviceCategories,
   serviceCategoryTranslations,
@@ -189,6 +197,8 @@ export default async function ActivitiesPage({
       organizationId: activities.organizationId,
       cityId: activities.cityId,
       teamId: activities.teamId,
+      // Where it happens today, so the editor's location card opens on it.
+      placeId: activities.placeId,
       published: activities.published,
       manualStatus: activities.manualStatus,
       sourceLanguageCode: activities.sourceLanguageCode,
@@ -621,6 +631,8 @@ export default async function ActivitiesPage({
     currentTagRows,
     coverRows,
     downloadRows,
+    cityOptionRows,
+    placeOptionRows,
   ] = selected
     ? await Promise.all([
         db
@@ -630,6 +642,7 @@ export default async function ActivitiesPage({
             state: translationAssignments.state,
             translatorEmail: translationAssignments.translatorEmail,
             translatorName: translationAssignments.translatorName,
+            requestedAt: translationAssignments.createdAt,
             expiresAt: translationAssignments.expiresAt,
             submittedContent: translationAssignments.submittedContentJson,
             reviewNote: translationAssignments.reviewNote,
@@ -760,8 +773,43 @@ export default async function ActivitiesPage({
             ),
           )
           .orderBy(asc(activityAssets.displayOrder)),
+        // Every city and every place the activity could be moved to. A place
+        // belongs to one city, so the browser narrows the second list from the
+        // first rather than asking the server again on each change.
+        db
+          .select({
+            id: cities.id,
+            code: cities.code,
+            name: cityTranslations.name,
+          })
+          .from(cities)
+          .leftJoin(
+            cityTranslations,
+            and(
+              eq(cityTranslations.cityId, cities.id),
+              eq(cityTranslations.languageCode, locale),
+            ),
+          )
+          .orderBy(asc(cities.code)),
+        db
+          .select({
+            id: places.id,
+            cityId: places.cityId,
+            addressLine: places.addressLine,
+            name: placeTranslations.name,
+          })
+          .from(places)
+          .leftJoin(
+            placeTranslations,
+            and(
+              eq(placeTranslations.placeId, places.id),
+              eq(placeTranslations.languageCode, locale),
+            ),
+          )
+          .where(and(eq(places.active, true), isNull(places.archivedAt)))
+          .orderBy(asc(placeTranslations.name)),
       ])
-    : [[], [], [], [], [], [], []];
+    : [[], [], [], [], [], [], [], [], []];
 
   const verifierIds = [
     ...new Set(
@@ -834,6 +882,10 @@ export default async function ActivitiesPage({
                 : assignment.state,
             translatorEmail: assignment.translatorEmail,
             translatorName: assignment.translatorName,
+            requestedAt: new Intl.DateTimeFormat(locale, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }).format(assignment.requestedAt),
             expiresAt: new Intl.DateTimeFormat(locale, {
               dateStyle: "medium",
               timeStyle: "short",
@@ -885,6 +937,15 @@ export default async function ActivitiesPage({
         // above is already narrowed to "expired" when the link ran out, so a
         // stale submission does not ask to be countersigned.
         submitted: language.assignment?.state === "submitted",
+        // An errand still with its translator: the menu names them and the day
+        // they were asked instead of offering to ask a second person.
+        translationRequest: translationRequestLive(language.assignment)
+          ? {
+              requestedAt: language.assignment?.requestedAt ?? "",
+              translatorName: language.assignment?.translatorName ?? null,
+              translatorEmail: language.assignment?.translatorEmail ?? "",
+            }
+          : null,
       },
     ]),
   );
@@ -896,6 +957,17 @@ export default async function ActivitiesPage({
   const audienceOptions = audienceOptionRows.map((row) => ({
     value: row.id,
     label: row.label ?? row.code,
+  }));
+  const cityOptions = cityOptionRows.map((row) => ({
+    value: row.id,
+    label: row.name ?? row.code,
+  }));
+  const placeOptions = placeOptionRows.map((row) => ({
+    value: row.id,
+    // A place with no name in this language is still findable by its address.
+    label: row.name ?? row.addressLine ?? row.id,
+    description: row.addressLine ?? undefined,
+    cityId: row.cityId,
   }));
   const availableTagIds = new Set(tagOptionRows.map((row) => row.id));
   const tagOptions = tagOptionRows.map((row) => ({
@@ -1062,10 +1134,30 @@ export default async function ActivitiesPage({
                     : ""}
                 </span>
               </div>
+              {/* A warning with nothing to do about it says the same thing
+               * again tomorrow, so the way to answer it sits inside it. */}
               {selected.reviewDue ? (
-                <div className="border-warn/50 bg-warn-soft text-warn flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium">
-                  <TriangleAlert className="size-4 shrink-0" aria-hidden />
-                  {t["freshness.warning"]}
+                <div className="border-warn/50 bg-warn-soft text-warn flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm font-medium">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <TriangleAlert className="size-4 shrink-0" aria-hidden />
+                    {t["freshness.warning"]}
+                  </span>
+                  <ActionFeedbackForm
+                    action={confirmActivityFreshness}
+                    successMessage={t["freshness.confirmed"]}
+                    errorMessage={t["toast.actionError"]}
+                  >
+                    <input type="hidden" name="locale" value={locale} />
+                    <input
+                      type="hidden"
+                      name="activityId"
+                      value={selected.id}
+                    />
+                    <PendingButton variant="secondary">
+                      <CheckCircle2 aria-hidden />
+                      {t["freshness.confirm"]}
+                    </PendingButton>
+                  </ActionFeedbackForm>
                 </div>
               ) : null}
             </CardContent>
@@ -1099,9 +1191,14 @@ export default async function ActivitiesPage({
                 canVerify={canVerifyTranslations}
                 returnPath={`/${locale}/dashboard/activities?activity=${selected.id}`}
                 details={
-                  <div className="@container mt-1">
+                  <div className="@container mt-1 grid min-w-0 gap-4">
                     {/* Record-level controls follow the source text. Their
-                     * fields point to the one Save action below the workspace. */}
+                     * fields point to the one Save action below the workspace.
+                     *
+                     * Two rows rather than one grid with a spanning cell: the
+                     * classification cards are four one-line choices and pair
+                     * up happily, while the editors below are tall and need the
+                     * whole width to divide between them. */}
                     <div className="@xl:grid-cols-2 grid items-start gap-4">
                       <ActivityDetailsForm
                         key={selected.id}
@@ -1129,134 +1226,165 @@ export default async function ActivitiesPage({
                         ]}
                         labels={t}
                       />
+                    </div>
 
-                      {/* The lower pair uses independent column stacks. That
-                       * keeps the contact directly beneath Schedule even when
-                       * the transport editor grows much taller. */}
-                      <div className="@xl:col-span-2 @xl:grid-cols-2 grid items-start gap-4">
-                        <div className="grid min-w-0 content-start gap-4">
-                          <Card className="min-w-0">
-                            <CardHeader>
-                              <CardTitle className="flex items-center gap-2">
-                                <CalendarClock className="size-4" aria-hidden />
-                                {t["activity.schedule"]}
-                              </CardTitle>
-                              <CardDescription>
-                                {t["activity.scheduleHint"]}
-                              </CardDescription>
-                            </CardHeader>
-                            <CardContent className="grid gap-4">
-                              <ActivityScheduleRules
-                                activityId={selected.id}
-                                locale={locale}
-                                rules={scheduleRows}
-                                labels={{
-                                  empty: t["activity.scheduleEmpty"],
-                                  remove: t["activity.scheduleRemove"],
-                                  confirmTitle:
-                                    t["activity.scheduleRemoveTitle"],
-                                  confirmDescription:
-                                    t["activity.scheduleRemoveDescription"],
-                                  confirm: t["activity.scheduleRemoveConfirm"],
-                                  cancel: t["activity.scheduleRemoveCancel"],
-                                  weekdays: Object.fromEntries(
-                                    weekdays.map((weekday) => [
-                                      weekday,
-                                      t[
-                                        `weekday.${String(weekday)}` as keyof typeof t
-                                      ],
-                                    ]),
-                                  ),
-                                  oneOff: t["activity.create.oneOff"],
-                                  recurring: t["activity.create.recurring"],
-                                  fixed: t["activity.create.fixedTime"],
-                                  flexible: t["activity.create.flexibleTime"],
-                                }}
-                              />
-                              <ActivityScheduleForm
-                                key={selected.id}
-                                activityId={selected.id}
-                                locale={locale}
-                                schedules={scheduleRows}
-                                labels={{
-                                  scheduleType:
-                                    t["activity.create.scheduleType"],
-                                  recurring: t["activity.create.recurring"],
-                                  oneOff: t["activity.create.oneOff"],
-                                  date: t["activity.create.date"],
-                                  selectDate: t["activity.create.selectDate"],
-                                  clearDate: t["activity.create.clearDate"],
-                                  timingMode: t["activity.create.timingMode"],
-                                  fixed: t["activity.create.fixedTime"],
-                                  flexible: t["activity.create.flexibleTime"],
-                                  weekday: t["activity.weekday"],
-                                  startTime: t["activity.startTime"],
-                                  endTime: t["activity.endTime"],
-                                  addHours: t["activity.addHours"],
-                                  cancel: t["activity.scheduleRemoveCancel"],
-                                  required: t["form.required"],
-                                  invalidRange:
-                                    t["activity.scheduleInvalidRange"],
-                                  overlap: t["activity.scheduleOverlap"],
-                                  invalid: t["activity.scheduleInvalid"],
-                                  weekdays: Object.fromEntries(
-                                    weekdays.map((weekday) => [
-                                      weekday,
-                                      t[
-                                        `weekday.${String(weekday)}` as keyof typeof t
-                                      ],
-                                    ]),
-                                  ),
-                                }}
-                              />
-                            </CardContent>
-                          </Card>
+                    <Card className="min-w-0">
+                      <CardHeader>
+                        <CardTitle className="text-base">
+                          {t["activity.create.location"]}
+                        </CardTitle>
+                        <CardDescription>
+                          {t["activity.create.locationHint"]}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ActivityLocationForm
+                          key={selected.id}
+                          formId={activityFormId}
+                          cities={cityOptions}
+                          places={placeOptions}
+                          initial={{
+                            scope: selected.cityId ? "city" : "global",
+                            cityId: selected.cityId ?? "",
+                            placeId: selected.placeId ?? "",
+                            addressLine:
+                              placeOptions.find(
+                                (place) => place.value === selected.placeId,
+                              )?.description ?? "",
+                          }}
+                          labels={t}
+                        />
+                      </CardContent>
+                    </Card>
 
-                          <Card className="min-w-0">
-                            <CardHeader>
-                              <CardTitle className="text-base">
-                                {t["steward.title"]}
-                              </CardTitle>
-                              <CardDescription>
-                                {t["steward.hint"]}
-                              </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <StewardContactForm
-                                key={selected.id}
-                                action={updateActivitySteward}
-                                locale={locale}
-                                recordId={selected.id}
-                                values={selected}
-                                members={stewardCandidates}
-                                labels={t}
-                                columns={false}
-                                embedded
-                                formId={activityFormId}
-                              />
-                            </CardContent>
-                          </Card>
-                        </div>
+                    {/* The lower pair uses independent column stacks. That
+                     * keeps the contact directly beneath Schedule even when
+                     * the transport editor grows much taller. */}
+                    {/* `@2xl`, not `@3xl`: this bundle only carries container
+                     * variants some scanned source already uses, so a wider
+                     * threshold would silently never split (see the
+                     * `@source inline` note in styles/workspace.css). */}
+                    <div className="@2xl:grid-cols-2 grid min-w-0 items-start gap-4">
+                      <div className="grid min-w-0 content-start gap-4">
+                        <Card className="min-w-0">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <CalendarClock className="size-4" aria-hidden />
+                              {t["activity.schedule"]}
+                            </CardTitle>
+                            <CardDescription>
+                              {t["activity.scheduleHint"]}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="grid gap-4">
+                            <ActivityScheduleRules
+                              activityId={selected.id}
+                              locale={locale}
+                              rules={scheduleRows}
+                              labels={{
+                                empty: t["activity.scheduleEmpty"],
+                                remove: t["activity.scheduleRemove"],
+                                confirmTitle: t["activity.scheduleRemoveTitle"],
+                                confirmDescription:
+                                  t["activity.scheduleRemoveDescription"],
+                                confirm: t["activity.scheduleRemoveConfirm"],
+                                cancel: t["activity.scheduleRemoveCancel"],
+                                removed: t["activity.scheduleRemoved"],
+                                error: t["toast.actionError"],
+                                weekdays: Object.fromEntries(
+                                  weekdays.map((weekday) => [
+                                    weekday,
+                                    t[
+                                      `weekday.${String(weekday)}` as keyof typeof t
+                                    ],
+                                  ]),
+                                ),
+                                oneOff: t["activity.create.oneOff"],
+                                recurring: t["activity.create.recurring"],
+                                fixed: t["activity.create.fixedTime"],
+                                flexible: t["activity.create.flexibleTime"],
+                              }}
+                            />
+                            <ActivityScheduleForm
+                              key={selected.id}
+                              activityId={selected.id}
+                              locale={locale}
+                              schedules={scheduleRows}
+                              labels={{
+                                scheduleType: t["activity.create.scheduleType"],
+                                recurring: t["activity.create.recurring"],
+                                oneOff: t["activity.create.oneOff"],
+                                date: t["activity.create.date"],
+                                selectDate: t["activity.create.selectDate"],
+                                clearDate: t["activity.create.clearDate"],
+                                timingMode: t["activity.create.timingMode"],
+                                fixed: t["activity.create.fixedTime"],
+                                flexible: t["activity.create.flexibleTime"],
+                                weekday: t["activity.weekday"],
+                                startTime: t["activity.startTime"],
+                                endTime: t["activity.endTime"],
+                                addHours: t["activity.addHours"],
+                                cancel: t["activity.scheduleRemoveCancel"],
+                                required: t["form.required"],
+                                invalidRange:
+                                  t["activity.scheduleInvalidRange"],
+                                overlap: t["activity.scheduleOverlap"],
+                                invalid: t["activity.scheduleInvalid"],
+                                weekdays: Object.fromEntries(
+                                  weekdays.map((weekday) => [
+                                    weekday,
+                                    t[
+                                      `weekday.${String(weekday)}` as keyof typeof t
+                                    ],
+                                  ]),
+                                ),
+                              }}
+                            />
+                          </CardContent>
+                        </Card>
 
                         <Card className="min-w-0">
                           <CardHeader>
                             <CardTitle className="text-base">
-                              {t["transit.title"]}
+                              {t["steward.title"]}
                             </CardTitle>
                             <CardDescription>
-                              {t["transit.hint"]}
+                              {t["steward.hint"]}
                             </CardDescription>
                           </CardHeader>
                           <CardContent>
-                            <TransitLinkFields
+                            <StewardContactForm
                               key={selected.id}
-                              links={transitRows}
+                              action={updateActivitySteward}
+                              locale={locale}
+                              recordId={selected.id}
+                              values={selected}
+                              members={stewardCandidates}
                               labels={t}
+                              columns={false}
+                              embedded
                               formId={activityFormId}
                             />
                           </CardContent>
                         </Card>
                       </div>
+
+                      <Card className="min-w-0">
+                        <CardHeader>
+                          <CardTitle className="text-base">
+                            {t["transit.title"]}
+                          </CardTitle>
+                          <CardDescription>{t["transit.hint"]}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <TransitLinkFields
+                            key={selected.id}
+                            links={transitRows}
+                            labels={t}
+                            formId={activityFormId}
+                          />
+                        </CardContent>
+                      </Card>
                     </div>
                   </div>
                 }

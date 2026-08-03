@@ -4,6 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import type { EventDetailView } from "~/components/events/event-preview";
 import { localizedPath } from "~/i18n/routing";
 import { eventIcsHref, eventMapHref } from "~/lib/event-links";
+import { FALLBACK_TIME_ZONE, formatEventWindow } from "~/lib/event-window";
 import { zonedDateKey } from "~/lib/zoned-time";
 import type { CoordinationEventRecord } from "~/server/content/coordination-events";
 import { db } from "~/server/db";
@@ -15,8 +16,12 @@ export interface CityView {
   timezone: string;
 }
 
-/** When a city has no timezone to hand — the platform's first city's zone. */
-export const FALLBACK_TIME_ZONE = "Europe/Paris";
+/**
+ * Re-exported so the agendas keep reading it from here, where the rest of their
+ * formatting lives; it is defined in `~/lib/event-window` because the console's
+ * live preview needs it in the browser, and this module talks to the database.
+ */
+export { FALLBACK_TIME_ZONE } from "~/lib/event-window";
 
 /**
  * The cities an event can happen in, named in the reader's language. Every
@@ -48,44 +53,39 @@ export async function listCityViews(locale: PublicLocale): Promise<CityView[]> {
 }
 
 /**
+ * The city an event happens in — `undefined` when it happens online and
+ * nowhere else. Every agenda reads its cities through this rather than indexing
+ * the map directly, so an event with no city is a case each of them had to
+ * think about once.
+ */
+export function eventCity(
+  cityById: Map<string, CityView>,
+  event: { cityId: string | null },
+): CityView | undefined {
+  return event.cityId === null ? undefined : cityById.get(event.cityId);
+}
+
+/**
  * One event's date and time, formatted once on the server in the city's clock.
  * The console and the public site read the same helper, so the same event never
  * shows two different hours.
  */
 export function formatEventRange(
-  event: CoordinationEventRecord,
+  event: Pick<CoordinationEventRecord, "startsAt" | "endsAt" | "allDay">,
   city: CityView | undefined,
   locale: PublicLocale,
   labels: { allDay: string },
 ) {
-  const timeZone = city?.timezone ?? FALLBACK_TIME_ZONE;
-  const date = new Intl.DateTimeFormat(locale, {
-    dateStyle: "full",
-    timeZone,
+  return formatEventWindow({
+    startsAt: event.startsAt,
+    endsAt: event.endsAt,
+    allDay: event.allDay,
+    // An online event names no city, so its hours are read in the platform's
+    // own zone — the one the organisers wrote them in.
+    timeZone: city?.timezone ?? FALLBACK_TIME_ZONE,
+    locale,
+    allDayLabel: labels.allDay,
   });
-  const time = new Intl.DateTimeFormat(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone,
-    hourCycle: "h23",
-  });
-  const startKey = zonedDateKey(event.startsAt, timeZone);
-  const endKey = zonedDateKey(event.endsAt, timeZone);
-  const multiDay = startKey !== endKey;
-  const dateLabel = multiDay
-    ? `${date.format(event.startsAt)} → ${date.format(event.endsAt)}`
-    : date.format(event.startsAt);
-  const timeLabel = event.allDay
-    ? labels.allDay
-    : `${time.format(event.startsAt)} – ${time.format(event.endsAt)}`;
-  return {
-    startKey,
-    endKey,
-    dateLabel,
-    timeLabel,
-    /** What a calendar chip shows before the title: a start, not a range. */
-    chipTime: event.allDay ? labels.allDay : time.format(event.startsAt),
-  };
 }
 
 /** Where the event happens, in one line: the named place, or what was typed. */
@@ -125,6 +125,8 @@ export function eventDetailView({
     whereLabel: eventWhereLabel(event),
     mapHref: eventMapHref(event, city?.name ?? null),
     cityName: city?.name ?? "",
+    isOnline: event.isOnline,
+    onlineUrl: event.onlineUrl,
     hostName: event.hostName,
     hostHref:
       event.hostPageSlug === null

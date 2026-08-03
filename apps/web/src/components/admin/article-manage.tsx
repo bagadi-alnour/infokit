@@ -92,6 +92,7 @@ import {
   type EditorialLanguage,
 } from "~/lib/editorial-languages";
 import type { LanguageReviewStage } from "~/lib/language-review";
+import { translationRequestLive } from "~/lib/translation-request";
 
 type Language = EditorialLanguage;
 type Labels = Record<string, string>;
@@ -203,6 +204,15 @@ export function ArticleEditorForm({
             reviewStage: language.reviewStage,
             // Words an outside translator sent back and nobody has read yet.
             submitted: isAwaitingReview(language.assignment),
+            // An errand still with its translator: the menu names them and the
+            // day they were asked instead of offering to ask a second person.
+            translationRequest: translationRequestLive(language.assignment)
+              ? {
+                  requestedAt: language.assignment?.requestedAt ?? "",
+                  translatorName: language.assignment?.translatorName ?? null,
+                  translatorEmail: language.assignment?.translatorEmail ?? "",
+                }
+              : null,
           },
         ]),
       ),
@@ -236,7 +246,10 @@ export function ArticleEditorForm({
         formId={formId}
         media={media}
       >
-        <div className="@container mt-1">
+        {/* Two rows rather than one grid with a spanning cell: the pair above
+         * are short choices that sit happily side by side, and what the page
+         * passes in below is a full-width block of its own. */}
+        <div className="@container mt-1 grid min-w-0 gap-4">
           <div className="@xl:grid-cols-2 grid items-start gap-4">
             <Card className="min-w-0">
               <CardHeader>
@@ -303,9 +316,9 @@ export function ArticleEditorForm({
                 </label>
               </CardContent>
             </Card>
-
-            {details}
           </div>
+
+          {details}
         </div>
       </TranslationWorkspace>
       <form id={formId} action={submit} className="grid justify-items-end">

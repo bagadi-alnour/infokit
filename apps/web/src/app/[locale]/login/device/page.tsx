@@ -1,114 +1,144 @@
 import { loadPageCatalog } from "@infokit/shared/i18n/catalogs";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AuthShell } from "~/components/auth/auth-shell";
-import { Button } from "~/components/ui/button";
+import { ActionLink } from "~/components/public/primitives";
 import { requireRouteLocale } from "~/i18n/route-locale";
-import { authPath } from "~/i18n/routing";
+import { authPath, localizedPath } from "~/i18n/routing";
 import { localizedAuthMetadata } from "~/seo/site";
-import { auth } from "~/server/auth";
-import { issueDeviceGrant } from "~/server/auth/device-session";
-import { requireEditor } from "~/server/auth/require";
+import { recordAudit } from "~/server/audit";
+import { auth, authServer } from "~/server/auth";
+import { secondFactorMandatory } from "~/server/account/settings";
 
 interface DeviceHandoffPageProps {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ error?: string }>;
 }
 
 export async function generateMetadata({
   params,
 }: DeviceHandoffPageProps): Promise<Metadata> {
   const locale = requireRouteLocale((await params).locale);
-  const messages = await loadPageCatalog(locale, "member");
+  const messages = await loadPageCatalog(locale, "login-verify");
   return localizedAuthMetadata({
-    route: "device",
+    route: "verify",
     locale,
-    title: messages["member.device.title"],
-    description: messages["member.device.body"],
+    title: messages["auth.device.title"],
+    description: messages["auth.device.body"],
   });
 }
 
-/** A grant is minted per visit, so the page must never be cached or prerendered. */
-export const dynamic = "force-dynamic";
-
 /**
- * The last step of signing in on a phone.
+ * Where a magic link finishes when it was asked for by the phone app.
  *
- * The app has no sign-in of its own: it opened this site's ordinary sign-in in
- * the system browser, which means the email link and the SMS step-up already
- * happened here, under the same eligibility rules as the console. This page
- * hands the finished session over — as a one-time code that lives two minutes,
- * carried by a deep link the reader taps, or typed in by hand when the link does
- * not fire.
+ * The link can only be verified where it is opened — the system browser — and
+ * Better Auth sets the session cookie in *that* jar, which the app cannot read.
+ * So the app points `callbackURL` here, and this page turns the browser's
+ * freshly-minted session into a one-time token and deep-links it to the app,
+ * which trades it for the same session through its own client.
  *
- * The session token itself never travels in a URL: the app trades the code for
- * it over HTTPS, so nothing durable is left in browser history or in a log.
+ * This is the hand-off the migration deleted, rebuilt on the library: Better
+ * Auth owns the token, its two-minute expiry and its single use, where a bespoke
+ * `device_grants` table used to do all three by hand.
+ *
+ * The gate matters as much as the hand-off. A magic link is not a path Better
+ * Auth intercepts for the second factor, so the session arriving here may not
+ * have passed one — and minting a token from it would hand the app a session
+ * that skipped the factor. Nothing is minted until the factor is satisfied.
  */
 export default async function DeviceHandoffPage({
   params,
+  searchParams,
 }: DeviceHandoffPageProps) {
   const locale = requireRouteLocale((await params).locale);
-  const messages = await loadPageCatalog(locale, "member");
-  // The same gate the console uses: signed in, and stepped up if the account
-  // requires it. A phone cannot obtain more than the browser just proved.
-  const user = await requireEditor(locale);
-  const session = await auth();
-  if (!session?.user) redirect(authPath("login", locale));
+  const [query, messages] = await Promise.all([
+    searchParams,
+    loadPageCatalog(locale, "login-verify"),
+  ]);
+  const returnTo = localizedPath("/login/device", locale);
 
-  const grant = await issueDeviceGrant({
-    userId: user.id,
-    secondFactorVerified: session.secondFactorVerified,
-  });
+  const session = await auth();
+  if (!session?.user) redirect(authPath("login", locale, { returnTo }));
+
+  // The same two refusals `requireEditor` makes, for the same reasons — a
+  // factor owed is stepped up, a factor missing is enrolled.
+  if (!session.secondFactorVerified) {
+    if (session.user.twoFactorEnabled) {
+      redirect(authPath("verify", locale, { returnTo }));
+    }
+    if (await secondFactorMandatory(session.user.id)) {
+      redirect(
+        `${localizedPath("/dashboard/account/security", locale)}?${new URLSearchParams(
+          { enrol: "required", returnTo },
+        ).toString()}`,
+      );
+    }
+  }
+
+  let deepLink: string | null = null;
+  if (!query.error) {
+    try {
+      const { token } = await authServer.api.generateOneTimeToken({
+        headers: await headers(),
+      });
+      await recordAudit({
+        action: "auth.device_handoff.issued",
+        subjectType: "auth.session",
+        subjectId: session.user.id,
+        actorUserId: session.user.id,
+      });
+      deepLink = `infokit://sign-in?token=${encodeURIComponent(token)}`;
+    } catch {
+      await recordAudit({
+        action: "auth.device_handoff.failed",
+        subjectType: "auth.session",
+        subjectId: session.user.id,
+        actorUserId: session.user.id,
+        outcome: "failure",
+        severity: "warning",
+      });
+    }
+  }
 
   return (
     <AuthShell
       locale={locale}
       pathname="/login/device"
-      eyebrow={messages["member.account"]}
-      title={messages["member.device.title"]}
-      description={messages["member.device.body"]}
+      eyebrow={messages["auth.device.eyebrow"]}
+      title={messages["auth.device.title"]}
+      description={
+        deepLink ? messages["auth.device.body"] : messages["auth.device.failed"]
+      }
       messages={messages}
     >
-      {grant.status === "rate_limited" ? (
-        <p className="text-copy text-[0.95rem]" role="status">
-          {messages["member.device.rateLimited"]}
-        </p>
-      ) : (
-        <div className="flex flex-col gap-5">
-          <Button
-            size="lg"
-            className="h-12 w-full text-base"
-            render={
-              <a
-                href={`infokit://sign-in?code=${encodeURIComponent(grant.code)}`}
-              />
-            }
-          >
-            {messages["member.device.open"]}
-          </Button>
-
-          <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-5">
+        {deepLink ? (
+          <>
+            {/*
+              A link the reader taps, not an automatic redirect. iOS and Android
+              both refuse to open a custom scheme without a user gesture when the
+              navigation was not initiated by one, so a redirect here would fail
+              silently on the platforms this page exists for.
+            */}
+            <ActionLink href={deepLink} tone="solid" size="block">
+              {messages["auth.device.open"]}
+            </ActionLink>
             <p className="text-copy-muted text-[0.95rem]">
-              {messages["member.device.code"]}
+              {messages["auth.device.expires"]}
             </p>
-            {/* Digits stay left-to-right and grouped in every language: this is
-                read off one screen and typed into another. */}
-            <p
-              dir="ltr"
-              className="font-display text-ink text-3xl font-bold tabular-nums tracking-[0.12em]"
-            >
-              {grant.code}
-            </p>
-            <p className="text-copy-muted text-sm">
-              {messages["member.device.expires"]}
-            </p>
-          </div>
-
-          <p className="text-copy-muted text-sm">
-            {messages["member.device.wrongDevice"]}
-          </p>
-        </div>
-      )}
+          </>
+        ) : (
+          <ActionLink
+            href={authPath("login", locale)}
+            tone="outline"
+            size="block"
+          >
+            {messages["auth.device.retry"]}
+          </ActionLink>
+        )}
+      </div>
     </AuthShell>
   );
 }
